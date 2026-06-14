@@ -2,3 +2,15 @@
 target
 mipsel-sony-psp
 *.zip
+dist
+.pspjs-*.workflow.js
+dist-3ds
+web/games.generated.js
+runtime-3ds/build
+runtime-3ds/source/game_js.h
+runtime-3ds/*.3dsx
+runtime-3ds/*.elf
+runtime-3ds/*.map
+framework/node_modules
+runtime/src/game/fw-*.js
+node_modules

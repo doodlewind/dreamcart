@@ -1,0 +1,21 @@
+{
+  "name": "psp-js",
+  "private": true,
+  "type": "module",
+  "description": "Isomorphic JS game runtime + framework for PSP, Web and 3DS. All scripts run on Bun.",
+  "scripts": {
+    "setup": "bun scripts/setup.ts",
+    "serve": "bun web/serve.ts",
+    "web": "bun web/build-games.ts",
+    "bake": "bun framework/bake/bake-font.ts && bun framework/bake/bake-sprites.ts",
+    "typecheck": "bunx tsc -p framework/tsconfig.json --noEmit",
+    "bundle": "bun framework/build.ts",
+    "test": "bun framework/test/golden.ts",
+    "build": "bun run bake && bun run typecheck && bun run bundle && bun run web",
+    "psp": "bun runtime/build.ts",
+    "3ds": "bun runtime-3ds/build.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
