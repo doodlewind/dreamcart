@@ -34,7 +34,7 @@ export async function startServer(port = Number(process.env.PORT ?? 8123)) {
   });
 
   console.log("psp-js Playground -> http://localhost:" + server.port + "/");
-  console.log("  pick a game:        http://localhost:" + server.port + "/?game=fw-rpg.js");
+  console.log("  pick a game:        http://localhost:" + server.port + "/?game=rpg.js");
   return server;
 }
 

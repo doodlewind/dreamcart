@@ -1,12 +1,11 @@
-// fw-dodge.ts — arena survival / dodge game.
+// @ts-check
+// dodge.js — arena survival / dodge game.
 // Move the hero with the d-pad. Dodge red hazards (slimes) flying across the
 // arena; survive as long as you can. Grab yellow coins for bonus score.
 // Game over freezes the field; press Start to restart.
 import {
   start,
   Scene,
-  UpdateContext,
-  Graphics,
   Btn,
   Colors,
   rgb,
@@ -15,53 +14,40 @@ import {
   SPRITES,
 } from '../src/index';
 
+/** @import { UpdateContext, Graphics } from '../src/index' */
+
 // Hero sprite is 8x10 px; drawn at scale 2 => 16x20 on screen.
 const HERO_W = 16;
 const HERO_H = 20;
 const HERO_SPEED = 2.4;
 
 // A flying hazard (rendered as a slime sprite over a red glow).
-interface Hazard {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  r: number; // collision radius
-}
+/** @typedef {{x:number, y:number, vx:number, vy:number, r:number}} Hazard */
 
 // A collectible coin.
-interface Coin {
-  x: number;
-  y: number;
-  r: number;
-}
+/** @typedef {{x:number, y:number, r:number}} Coin */
 
 // A short-lived particle for death/collect bursts.
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  color: number;
-}
+/** @typedef {{x:number, y:number, vx:number, vy:number, life:number, color:number}} Particle */
 
 class RootScene extends Scene {
   px = 0;
   py = 0;
-  hazards: Hazard[] = [];
-  coins: Coin[] = [];
-  particles: Particle[] = [];
+  /** @type {Hazard[]} */ hazards = [];
+  /** @type {Coin[]} */ coins = [];
+  /** @type {Particle[]} */ particles = [];
   bonus = 0; // bonus score from coins (in "frames" units)
   startFrame = 0; // frame the current run began
   deathFrame = -1; // frame of death, -1 while alive
   over = false;
 
-  override onEnter(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  onEnter(ctx) {
     this.reset(ctx);
   }
 
-  reset(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  reset(ctx) {
     this.px = (SCREEN_W - HERO_W) / 2;
     this.py = (SCREEN_H - HERO_H) / 2;
     this.hazards = [];
@@ -74,16 +60,19 @@ class RootScene extends Scene {
   }
 
   // Survival time in seconds plus coin bonus.
-  score(ctx: UpdateContext): number {
+  /** @param {UpdateContext} ctx */
+  score(ctx) {
     const aliveFrames = (this.over ? this.deathFrame : ctx.frame) - this.startFrame;
     return (aliveFrames + this.bonus) / 60;
   }
 
   // Spawn one hazard from a random edge aimed roughly inward.
-  spawnHazard(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  spawnHazard(ctx) {
     const speed = ctx.rng.range(1.4, 3.2);
     const edge = ctx.rng.int(4);
-    const h: Hazard = { x: 0, y: 0, vx: 0, vy: 0, r: 7 };
+    /** @type {Hazard} */
+    const h = { x: 0, y: 0, vx: 0, vy: 0, r: 7 };
     if (edge === 0) {
       // top
       h.x = ctx.rng.range(0, SCREEN_W);
@@ -113,7 +102,14 @@ class RootScene extends Scene {
   }
 
   // Burst of small rect particles at (x,y).
-  burst(ctx: UpdateContext, x: number, y: number, color: number, n: number): void {
+  /**
+   * @param {UpdateContext} ctx
+   * @param {number} x
+   * @param {number} y
+   * @param {number} color
+   * @param {number} n
+   */
+  burst(ctx, x, y, color, n) {
     for (let i = 0; i < n; i++) {
       this.particles.push({
         x,
@@ -126,7 +122,8 @@ class RootScene extends Scene {
     }
   }
 
-  override update(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  update(ctx) {
     // Always advance particles so the death burst animates.
     for (const p of this.particles) {
       p.x += p.vx;
@@ -180,7 +177,8 @@ class RootScene extends Scene {
     const pr = 8; // forgiving player radius
 
     // Coin collection.
-    const kept: Coin[] = [];
+    /** @type {Coin[]} */
+    const kept = [];
     for (const c of this.coins) {
       const dx = c.x - cx;
       const dy = c.y - cy;
@@ -207,7 +205,8 @@ class RootScene extends Scene {
     }
   }
 
-  override draw(g: Graphics): void {
+  /** @param {Graphics} g */
+  draw(g) {
     // Background: dark arena with a subtle border.
     g.clear(rgb(18, 18, 28));
     g.rectOutline(2, 2, SCREEN_W - 4, SCREEN_H - 4, rgb(60, 60, 90), 2);
@@ -256,7 +255,8 @@ class RootScene extends Scene {
   lastScore = 0;
   blinkClock = 0;
 
-  override updateTree(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  updateTree(ctx) {
     super.updateTree(ctx);
     this.lastScore = this.score(ctx);
     this.blinkClock = ctx.frame;

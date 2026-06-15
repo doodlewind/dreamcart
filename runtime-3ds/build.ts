@@ -4,7 +4,7 @@ import { $ } from "bun";
 
 const here = new URL(".", import.meta.url).pathname; // .../runtime-3ds/
 const root = new URL("..", import.meta.url).pathname; // repo root
-const game = process.env.PSPJS_GAME ?? "snake.js";
+const game = process.env.PSPJS_GAME ?? "raw-snake.js";
 const IMG = "devkitpro/devkitarm:latest";
 
 console.log("3DS build: " + game);

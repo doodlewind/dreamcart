@@ -18,21 +18,31 @@ once per frame with a fixed controller bitmask — so games in
 ![Snake running on PPSSPP](docs/snake.png)
 
 ## Games
-Each game is a single self-contained `.js` file using only `gfx.clear`,
-`gfx.fillRect`, `log`, and a `frame(buttons)` loop (numbers are drawn with a tiny
-rectangle pixel-font). Select which one to embed at build time with `PSPJS_GAME`:
+There are two kinds of games, by naming convention:
+
+- **`raw-*` — raw low-level demos.** Each is a single self-contained `.js` file
+  that uses only the bare native contract (`gfx.clear`, `gfx.fillRect`, `log`, and
+  a `frame(buttons)` loop; numbers drawn with a tiny rectangle pixel-font). They
+  exist to exercise the low-level API directly, with no framework.
+- **Unprefixed — framework games.** Authored against the framework (see
+  [Framework](#framework-typescript-sdk-javascript-games) below) and bundled into
+  the same runtime.
+
+The raw low-level demos live in [`runtime/src/game/`](runtime/src/game/):
 
 | Game | File | Controls |
 |------|------|----------|
-| Snake (default) | `snake.js` | D-pad steer; walls wrap; START restart |
-| Pong | `pong.js` | UP/DOWN move paddle (vs AI) |
-| 2048 | `g2048.js` | D-pad slide; START restart |
-| Breakout | `breakout.js` | LEFT/RIGHT paddle, CROSS launch |
-| Tetris | `tetris.js` | LEFT/RIGHT move, DOWN soft-drop, CROSS/UP rotate, START restart |
-| Platformer | `platformer.js` | LEFT/RIGHT run, CROSS jump, START restart |
+| Snake (default) | `raw-snake.js` | D-pad steer; walls wrap; START restart |
+| Pong | `raw-pong.js` | UP/DOWN move paddle (vs AI) |
+| 2048 | `raw-g2048.js` | D-pad slide; START restart |
+| Breakout | `raw-breakout.js` | LEFT/RIGHT paddle, CROSS launch |
+| Tetris | `raw-tetris.js` | LEFT/RIGHT move, DOWN soft-drop, CROSS/UP rotate, START restart |
+| Platformer | `raw-platformer.js` | LEFT/RIGHT run, CROSS jump, START restart |
+
+Select which one to embed at build time with `PSPJS_GAME`:
 
 ``` sh
-PSPJS_GAME=tetris.js bun run psp     # builds EBOOT.PBP for Tetris
+PSPJS_GAME=raw-tetris.js bun run psp     # builds EBOOT.PBP for Tetris
 ```
 
 ## Play (one command)
@@ -41,9 +51,9 @@ matching emulator:
 
 ``` sh
 bun run play web              # open the playground (pick a game from the list)
-bun run play web fw-maze      # playground, jump straight to a game
-bun run play psp tetris       # build EBOOT + launch PPSSPP
-bun run play 3ds fw-rpg       # build .3dsx + launch a 3DS emulator (Azahar/Citra/…)
+bun run play web maze         # playground, jump straight to a game
+bun run play psp raw-tetris   # build EBOOT + launch PPSSPP
+bun run play 3ds rpg          # build .3dsx + launch a 3DS emulator (Azahar/Citra/…)
 ```
 
 Run `bun run play` with no args to see the game list. For Web you don't need a
@@ -51,11 +61,15 @@ game arg — the playground has a dropdown. PSP needs PPSSPP
 (`brew install --cask ppsspp`); 3DS needs a 3DS emulator in `/Applications`
 (it prints the built `.3dsx` path + install hint if none is found).
 
-## Framework (TypeScript)
+## Framework (TypeScript SDK, JavaScript games)
 The raw `gfx`/`frame` contract is deliberately tiny. On top of it lives a small,
-**isomorphic, TypeScript** game framework ([`framework/`](framework/)) that the
-same way runs on **all three platforms** — it's plain JS compiled from TS and
-bundled into each game, so PSP/Web/3DS all execute the identical code.
+**isomorphic** game framework ([`framework/`](framework/)) that runs the same on
+**all three platforms**. The SDK ([`framework/src/`](framework/src)) is written in
+**TypeScript**, but games themselves are authored in **plain JavaScript** — the
+project's firm boundary is that game business logic is JS. Games still get full
+editor/CI type-checking via `// @ts-check` + JSDoc types imported from the SDK
+(see [`framework/games/tsconfig.json`](framework/games/tsconfig.json)). Each game
+is bundled (framework inlined) per platform, so PSP/Web/3DS execute identical code.
 
 It provides: a scene/entity tree (`Scene`/`Node` with `update`/`draw`), the game
 loop, edge-detecting `Input`, a seeded deterministic `Rng`, `Graphics`
@@ -63,33 +77,37 @@ loop, edge-detecting `Input`, a seeded deterministic `Rng`, `Graphics`
 sprites, a `TileMap` with camera, and a `DialogueBox`. Assets are *baked* to TS
 data modules (`framework/bake/`).
 
-Five framework games live in [`framework/games/`](framework/games/), including a
-Jin-Yong-flavoured **wuxia story game** — start in your room, walk out the door,
-and roam the village talking to villagers and the elder:
+Six framework games live in [`framework/games/`](framework/games/), including a
+Jin-Yong-flavoured **wuxia story game** (`rpg.js`) — start in your room, walk out
+the door, and roam the village talking to villagers and the elder:
 
 ![Wuxia village (framework RPG)](docs/village.png)
 
 The browser **Playground** lets you switch all games (raw + framework) and view
-their source (TypeScript for framework games):
+their JavaScript source:
 
 ![Playground](docs/playground.png)
 
 ``` sh
 bun install
 bun run build          # bake assets -> typecheck -> bundle games -> web manifest
-bun run test           # golden tests
+bun run test           # golden + smoke tests
 ```
 
-`bun run build` bundles each `framework/games/*.ts` (framework inlined, via
+`bun run build` bundles each `framework/games/*.js` (framework inlined, via
 `Bun.build`) to `runtime/src/game/<name>.js`, so the PSP/Web/3DS build steps embed
-them exactly like the raw games (e.g. `PSPJS_GAME=fw-rpg.js bun run psp`).
+them exactly like the raw demos (e.g. `PSPJS_GAME=rpg.js bun run psp`).
 
 ### Golden tests
-`framework/test/golden.mjs` renders each game's bundle **headlessly in Node**
-(a gfx mock → RGBA framebuffer), runs a deterministic seeded sequence with
+`framework/test/golden.ts` renders each framework game's bundle **headlessly under
+Bun** (a gfx mock → RGBA framebuffer), runs a deterministic seeded sequence with
 scripted input, and byte-compares the framebuffer to a committed golden
-(`framework/test/goldens/*.png`). Because the same bundle runs on every platform,
-this catches crashes and visual regressions in the shared code. Run with
+(`framework/test/goldens/*.png`); it also runs a no-crash **smoke pass** over the
+`raw-*` demos (seeded `Math.random`). A sibling
+[`framework/test/contract.ts`](framework/test/contract.ts) asserts the controller
+button bitmask is identical across the Web and 3DS hosts and the framework SDK.
+Because the same bundle runs on every platform, this catches crashes and visual
+regressions in the shared code. Run with
 `bun run test`; regenerate goldens with `UPDATE=1 bun framework/test/golden.ts`.
 
 ## Architecture
@@ -157,7 +175,7 @@ games, view source, on-screen + keyboard controls):
 bun run serve        # -> http://localhost:8123  (PORT=3000 to change)
 ```
 
-Open <http://localhost:8123/> (or `?game=fw-rpg.js` to pick one). The server
+Open <http://localhost:8123/> (or `?game=rpg.js` to pick one). The server
 ([`web/serve.ts`](web/serve.ts)) regenerates the game manifest on startup. The
 Playground implements the identical `gfx`/`input`/`frame` contract on Canvas
 ([`web/engine.js`](web/engine.js)), so the same game files run in the browser.
@@ -167,7 +185,7 @@ Builds a `.3dsx` homebrew app using the `devkitpro/devkitarm` Docker image — n
 host toolchain install or sudo needed (just Docker, e.g. OrbStack/Docker Desktop):
 
 ``` sh
-PSPJS_GAME=tetris.js bun run 3ds   # -> runtime-3ds/psp-js-3ds.3dsx
+PSPJS_GAME=raw-tetris.js bun run 3ds   # -> runtime-3ds/psp-js-3ds.3dsx
 ```
 
 Run the `.3dsx` in [Azahar](https://azahar-emu.org/) (the maintained Citra fork)

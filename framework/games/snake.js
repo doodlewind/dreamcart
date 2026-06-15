@@ -1,25 +1,26 @@
+// @ts-check
 // Snake rebuilt on the framework — the reference game for golden tests
 // (deterministic: walls wrap, food via the seeded rng, no input needed).
-import { Btn, Colors, Graphics, Scene, UpdateContext, start } from '../src/index';
+import { Btn, Colors, Scene, start } from '../src/index';
+
+/** @import { Graphics, UpdateContext } from '../src/index' */
 
 const CELL = 16;
 const COLS = 30; // 30*16 = 480
 const ROWS = 17; // 17*16 = 272
 
-interface Cell {
-  x: number;
-  y: number;
-}
+/** @typedef {{x:number, y:number}} Cell */
 
 class SnakeScene extends Scene {
-  snake: Cell[] = [];
-  dir: Cell = { x: 1, y: 0 };
-  next: Cell = { x: 1, y: 0 };
-  food: Cell = { x: 0, y: 0 };
+  /** @type {Cell[]} */ snake = [];
+  /** @type {Cell} */ dir = { x: 1, y: 0 };
+  /** @type {Cell} */ next = { x: 1, y: 0 };
+  /** @type {Cell} */ food = { x: 0, y: 0 };
   ticks = 0;
   score = 0;
 
-  override onEnter(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  onEnter(ctx) {
     this.snake = [
       { x: 10, y: 8 },
       { x: 9, y: 8 },
@@ -32,7 +33,8 @@ class SnakeScene extends Scene {
     this.placeFood(ctx);
   }
 
-  placeFood(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  placeFood(ctx) {
     for (;;) {
       const fx = ctx.rng.int(COLS);
       const fy = ctx.rng.int(ROWS);
@@ -43,7 +45,8 @@ class SnakeScene extends Scene {
     }
   }
 
-  override update(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  update(ctx) {
     const i = ctx.input;
     if (i.pressed(Btn.Up) && this.dir.y === 0) this.next = { x: 0, y: -1 };
     else if (i.pressed(Btn.Down) && this.dir.y === 0) this.next = { x: 0, y: 1 };
@@ -74,7 +77,8 @@ class SnakeScene extends Scene {
     }
   }
 
-  override draw(g: Graphics): void {
+  /** @param {Graphics} g */
+  draw(g) {
     g.clear(0x0f141e);
     g.rect(this.food.x * CELL, this.food.y * CELL, CELL - 1, CELL - 1, Colors.red);
     for (let k = 0; k < this.snake.length; k++) {

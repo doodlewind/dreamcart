@@ -1,7 +1,7 @@
 //! Selects which JS game gets embedded into the EBOOT at build time.
 //!
-//! Set `PSPJS_GAME` to a filename in `src/game/` (default `snake.js`):
-//!   PSPJS_GAME=pong.js ./build.sh
+//! Set `PSPJS_GAME` to a filename in `src/game/` (default `raw-snake.js`):
+//!   PSPJS_GAME=raw-pong.js bun runtime/build.ts
 //!
 //! The chosen file is copied to `$OUT_DIR/game.js` with a trailing NUL byte so
 //! `JS_Eval` (which requires `input[len] == '\0'`) can use it directly.
@@ -10,7 +10,9 @@ use std::path::Path;
 use std::{env, fs};
 
 fn main() {
-    let game = env::var("PSPJS_GAME").unwrap_or_else(|_| "snake.js".to_string());
+    // Default to the raw low-level Snake demo (a tracked file; framework game
+    // bundles are gitignored and require `bun framework/build.ts` first).
+    let game = env::var("PSPJS_GAME").unwrap_or_else(|_| "raw-snake.js".to_string());
 
     let game_dir = Path::new("src/game");
     let src = game_dir.join(&game);

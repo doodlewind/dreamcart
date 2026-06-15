@@ -24,7 +24,7 @@ const env = {
   RANLIB_mipsel_sony_psp: `${llvm}/llvm-ranlib`,
 };
 
-const game = process.env.PSPJS_GAME ?? "snake.js";
+const game = process.env.PSPJS_GAME ?? "raw-snake.js";
 console.log("PSP build: " + game);
 // Invoke the pinned toolchain's cargo by ABSOLUTE path: Bun's $ resolves command
 // names against the original process PATH (not .env), so a bare `cargo` would hit

@@ -9,7 +9,8 @@
 
   var W = 480, H = 272;          // logical screen, identical to PSP
 
-  // Button bits — identical to psp::sys::CtrlButtons used by the games.
+  // Button bits — canonical source is framework/src/input.ts (Btn); this plain
+  // script can't import it, so the copy is enforced by framework/test/contract.ts.
   var BTN = {
     SELECT: 0x01, START: 0x08,
     UP: 0x10, RIGHT: 0x20, DOWN: 0x40, LEFT: 0x80,

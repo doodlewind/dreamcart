@@ -1,3 +1,4 @@
+// @ts-check
 // A small Jin-Yong-flavoured wuxia story game: you wake in your room, walk out
 // the door into the village, and roam — talking to villagers and the elder,
 // opening a chest. Shows scene transitions, a scrolling tilemap + camera, AABB
@@ -7,29 +8,33 @@ import {
   Btn,
   Colors,
   DialogueBox,
-  Graphics,
   SCREEN_H,
   SCREEN_W,
   SPRITES,
   Scene,
   TileMap,
-  UpdateContext,
   rgb,
   start,
 } from '../src/index';
+
+/** @import { UpdateContext, Graphics } from '../src/index' */
 
 const TILE = 16;
 const HERO_W = 12;
 const HERO_H = 14;
 const SPEED = 2;
 
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-function aabb(ax: number, ay: number, aw: number, ah: number, b: Rect): boolean {
+/** @typedef {{x:number, y:number, w:number, h:number}} Rect */
+
+/**
+ * @param {number} ax
+ * @param {number} ay
+ * @param {number} aw
+ * @param {number} ah
+ * @param {Rect} b
+ * @returns {boolean}
+ */
+function aabb(ax, ay, aw, ah, b) {
   return ax < b.x + b.w && ax + aw > b.x && ay < b.y + b.h && ay + ah > b.y;
 }
 
@@ -38,27 +43,47 @@ class Hero {
   x = 0;
   y = 0;
   facing = 1; // 1 right, -1 left
-  draw(g: Graphics, cam: { x: number; y: number }): void {
+  /**
+   * @param {Graphics} g
+   * @param {{ x: number; y: number }} cam
+   * @returns {void}
+   */
+  draw(g, cam) {
     g.sprite(SPRITES.hero, this.x - cam.x - 2, this.y - cam.y - 6, { scale: 2, flipX: this.facing < 0 });
   }
 }
 
 // Base scene with axis-separated AABB movement against a solid predicate.
-abstract class WorldScene extends Scene {
-  hero: Hero;
+class WorldScene extends Scene {
+  /** @type {Hero} */
+  hero;
   cam = { x: 0, y: 0 };
-  talking: DialogueBox | null = null;
+  /** @type {DialogueBox | null} */
+  talking = null;
   worldW = SCREEN_W;
   worldH = SCREEN_H;
 
-  constructor(hero: Hero) {
+  /** @param {Hero} hero */
+  constructor(hero) {
     super();
     this.hero = hero;
   }
 
-  abstract solid(px: number, py: number): boolean;
+  /**
+   * @param {number} px
+   * @param {number} py
+   * @returns {boolean}
+   */
+  solid(px, py) {
+    throw new Error('abstract');
+  }
 
-  blocked(x: number, y: number): boolean {
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @returns {boolean}
+   */
+  blocked(x, y) {
     return (
       this.solid(x, y) ||
       this.solid(x + HERO_W - 1, y) ||
@@ -67,7 +92,12 @@ abstract class WorldScene extends Scene {
     );
   }
 
-  moveHero(dx: number, dy: number): void {
+  /**
+   * @param {number} dx
+   * @param {number} dy
+   * @returns {void}
+   */
+  moveHero(dx, dy) {
     const h = this.hero;
     if (dx !== 0 && !this.blocked(h.x + dx, h.y)) h.x += dx;
     if (dy !== 0 && !this.blocked(h.x, h.y + dy)) h.y += dy;
@@ -75,12 +105,17 @@ abstract class WorldScene extends Scene {
     else if (dx > 0) h.facing = 1;
   }
 
-  updateCamera(): void {
+  /** @returns {void} */
+  updateCamera() {
     this.cam.x = Math.max(0, Math.min(this.worldW - SCREEN_W, this.hero.x - SCREEN_W / 2));
     this.cam.y = Math.max(0, Math.min(this.worldH - SCREEN_H, this.hero.y - SCREEN_H / 2));
   }
 
-  say(lines: string[]): void {
+  /**
+   * @param {string[]} lines
+   * @returns {void}
+   */
+  say(lines) {
     if (this.talking) return;
     const box = new DialogueBox(lines, () => {
       this.talking = null;
@@ -98,7 +133,8 @@ class RoomScene extends WorldScene {
   ox = 0;
   oy = 0;
 
-  override onEnter(_ctx: UpdateContext): void {
+  /** @param {UpdateContext} _ctx */
+  onEnter(_ctx) {
     this.worldW = SCREEN_W;
     this.worldH = SCREEN_H;
     this.ox = Math.floor((SCREEN_W - this.cols * TILE) / 2);
@@ -107,12 +143,18 @@ class RoomScene extends WorldScene {
     this.hero.y = this.oy + 40;
   }
 
-  doorRect(): Rect {
+  /** @returns {Rect} */
+  doorRect() {
     // door in the bottom wall, centered
     return { x: this.ox + Math.floor(this.cols / 2) * TILE - TILE, y: this.oy + (this.rows - 1) * TILE, w: TILE * 2, h: TILE };
   }
 
-  override solid(px: number, py: number): boolean {
+  /**
+   * @param {number} px
+   * @param {number} py
+   * @returns {boolean}
+   */
+  solid(px, py) {
     const cx = Math.floor((px - this.ox) / TILE);
     const cy = Math.floor((py - this.oy) / TILE);
     if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) return true;
@@ -124,7 +166,8 @@ class RoomScene extends WorldScene {
     return true;
   }
 
-  override update(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  update(ctx) {
     if (this.talking) return;
     const dir = ctx.input.dir();
     this.moveHero(dir.x * SPEED, dir.y * SPEED);
@@ -135,7 +178,8 @@ class RoomScene extends WorldScene {
     }
   }
 
-  override draw(g: Graphics): void {
+  /** @param {Graphics} g */
+  draw(g) {
     g.clear(0x1a1410);
     // floor + walls
     for (let cy = 0; cy < this.rows; cy++) {
@@ -157,28 +201,32 @@ class RoomScene extends WorldScene {
   }
 }
 
-interface Npc {
-  x: number;
-  y: number;
-  sprite: 'villager' | 'elder';
-  lines: string[];
-}
+/** @typedef {{x:number, y:number, sprite:'villager'|'elder', lines:string[]}} Npc */
+
+/** @typedef {{kind:'npc'|'chest'|'home', data:any}} Interactable */
 
 // --- The village (exterior) ---
 class VillageScene extends WorldScene {
   cols = 40;
   rows = 26;
-  ground!: TileMap;
-  solids: Rect[] = [];
-  npcs: Npc[] = [];
-  homeDoor!: Rect;
-  chest: { x: number; y: number; opened: boolean } | null = null;
+  /** @type {TileMap} */
+  ground = /** @type {any} */ (null);
+  /** @type {Rect[]} */
+  solids = [];
+  /** @type {Npc[]} */
+  npcs = [];
+  /** @type {Rect} */
+  homeDoor = /** @type {any} */ (null);
+  /** @type {{ x: number; y: number; opened: boolean } | null} */
+  chest = null;
 
-  constructor(hero: Hero) {
+  /** @param {Hero} hero */
+  constructor(hero) {
     super(hero);
   }
 
-  override onEnter(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  onEnter(ctx) {
     this.worldW = this.cols * TILE;
     this.worldH = this.rows * TILE;
     this.ground = new TileMap(this.cols, this.rows, TILE);
@@ -198,7 +246,8 @@ class VillageScene extends WorldScene {
     this.solids.push({ x: hx, y: hy, w: SPRITES.house.w * 3, h: SPRITES.house.h * 3 });
     this.homeDoor = { x: hx + SPRITES.house.w * 3 * 0.4, y: hy + SPRITES.house.h * 3 - 8, w: 24, h: 12 };
     // a few trees (solid)
-    const treeCells: [number, number][] = [
+    /** @type {[number, number][]} */
+    const treeCells = [
       [6, 6],
       [10, 18],
       [26, 16],
@@ -238,33 +287,41 @@ class VillageScene extends WorldScene {
     this.updateCamera();
   }
 
-  override solid(px: number, py: number): boolean {
+  /**
+   * @param {number} px
+   * @param {number} py
+   * @returns {boolean}
+   */
+  solid(px, py) {
     if (px < 0 || py < 0 || px >= this.worldW || py >= this.worldH) return true;
     if (this.ground.solidAt(px, py, new Set([2]))) return true; // water
     for (const r of this.solids) if (aabb(px, py, 1, 1, r)) return true;
     return false;
   }
 
-  private nearestInteractable(): { kind: 'npc' | 'chest' | 'home'; data: any } | null {
+  /** @returns {Interactable | null} */
+  nearestInteractable() {
     const hx = this.hero.x + HERO_W / 2;
     const hy = this.hero.y + HERO_H / 2;
-    const near = (x: number, y: number, r = 26) => Math.abs(hx - x) < r && Math.abs(hy - y) < r;
+    /** @param {number} x @param {number} y @param {number} r */
+    const near = (x, y, r = 26) => Math.abs(hx - x) < r && Math.abs(hy - y) < r;
     for (const n of this.npcs) if (near(n.x + 8, n.y + 8)) return { kind: 'npc', data: n };
     if (this.chest && !this.chest.opened && near(this.chest.x + 8, this.chest.y + 8)) return { kind: 'chest', data: this.chest };
     if (near(this.homeDoor.x + this.homeDoor.w / 2, this.homeDoor.y, 22)) return { kind: 'home', data: null };
     return null;
   }
 
-  override update(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  update(ctx) {
     if (this.talking) return;
     const dir = ctx.input.dir();
     this.moveHero(dir.x * SPEED, dir.y * SPEED);
     this.updateCamera();
     if (ctx.input.pressed(Btn.Cross)) {
       const it = this.nearestInteractable();
-      if (it?.kind === 'npc') this.say((it.data as Npc).lines);
+      if (it?.kind === 'npc') this.say(/** @type {Npc} */ (it.data).lines);
       else if (it?.kind === 'chest') {
-        (it.data as { opened: boolean }).opened = true;
+        /** @type {{ opened: boolean }} */ (it.data).opened = true;
         this.say(['You found a tattered manual:', '"Nine Yin Manual, vol. I".']);
       } else if (it?.kind === 'home') {
         ctx.engine.replace(new RoomScene(this.hero));
@@ -272,7 +329,8 @@ class VillageScene extends WorldScene {
     }
   }
 
-  override draw(g: Graphics): void {
+  /** @param {Graphics} g */
+  draw(g) {
     g.clear(Colors.grass);
     this.ground.drawSprites(g, [SPRITES.grass, SPRITES.path, SPRITES.water], this.cam);
     // house

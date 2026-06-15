@@ -1,7 +1,7 @@
 // Bitmap font: each glyph is `height` row-bitmasks; bit (1<<col) set => pixel,
 // column 0 is the leftmost. This matches the classic font8x8 encoding the baker
 // imports. A minimal fallback font lives in assets-font.ts (generated/overwritten
-// by `npm run bake`) so the framework always builds.
+// by `bun run bake`) so the framework always builds.
 export interface Glyph {
   w: number;
   rows: number[]; // length === Font.height

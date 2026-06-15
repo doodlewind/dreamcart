@@ -127,7 +127,7 @@
     var g = games[currentKey];
     if (!g) return;
     // raw JS games run the (editable) editor text; framework games run the
-    // prebuilt bundle while the editor shows their TypeScript source.
+    // prebuilt bundle while the editor shows their authored JS source.
     var js = g.kind === 'fw' ? g.run : code.value;
     var err = PSPJS.load(js);
     if (!err) PSPJS.start();
@@ -139,7 +139,7 @@
     code.value = g ? g.src : '';
     code.readOnly = !!(g && g.kind === 'fw');
     if (noteEl) noteEl.textContent = g && g.kind === 'fw'
-      ? 'TypeScript source (read-only) — runs the compiled bundle'
+      ? 'Framework game source (JavaScript, read-only) — runs the bundled build'
       : 'JavaScript — edit then Run (Ctrl/Cmd+Enter)';
     runCurrent();
   }

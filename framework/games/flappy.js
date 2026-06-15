@@ -1,11 +1,10 @@
-// fw-flappy.ts — a Flappy-Bird clone for the psp-js framework.
+// @ts-check
+// flappy.js — a Flappy-Bird clone for the psp-js framework.
 // Bird stays at a fixed x with gravity; CROSS/Up flaps. Pipes scroll left;
 // passing a pipe scores. Hitting a pipe / ground / ceiling ends the game.
 import {
   start,
   Scene,
-  UpdateContext,
-  Graphics,
   Btn,
   Colors,
   rgb,
@@ -13,6 +12,8 @@ import {
   SCREEN_H,
   SPRITES,
 } from '../src/index';
+
+/** @import { UpdateContext, Graphics } from '../src/index' */
 
 // --- Tunables -------------------------------------------------------------
 const GROUND_H = 28; // height of the ground strip at the bottom
@@ -27,27 +28,25 @@ const PIPE_SPEED = 2.2; // world scroll speed (pixels/frame)
 const PIPE_SPACING = 150; // horizontal distance between pipe pairs
 const PIPE_COUNT = 4; // number of recycled pipe pairs
 
-interface Pipe {
-  x: number; // left edge
-  gapY: number; // top of the gap
-  scored: boolean; // already counted for score?
-}
+/** @typedef {{x:number, gapY:number, scored:boolean}} Pipe */
 
 class GameScene extends Scene {
-  private birdY = 0;
-  private vel = 0;
-  private pipes: Pipe[] = [];
-  private score = 0;
-  private best = 0;
-  private over = false;
-  private flapAnim = 0; // frames remaining of "wing up" pose
+  birdY = 0;
+  vel = 0;
+  /** @type {Pipe[]} */
+  pipes = [];
+  score = 0;
+  best = 0;
+  over = false;
+  flapAnim = 0; // frames remaining of "wing up" pose
 
-  override onEnter(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  onEnter(ctx) {
     this.lastRng = ctx.rng; // stash before reset(), which calls randGapY()
     this.reset();
   }
 
-  private reset(): void {
+  reset() {
     this.birdY = SCREEN_H / 2 - BIRD_SIZE / 2;
     this.vel = 0;
     this.score = 0;
@@ -65,16 +64,18 @@ class GameScene extends Scene {
   }
 
   // Random vertical position for the top of the gap, kept fully on-screen.
-  private randGapY(): number {
+  randGapY() {
     const minY = 30;
     const maxY = SCREEN_H - GROUND_H - PIPE_GAP - 30;
     return Math.floor(this.lastRng.range(minY, maxY));
   }
 
   // Stash the rng so randGapY (called outside update) stays deterministic.
-  private lastRng!: UpdateContext['rng'];
+  /** @type {UpdateContext['rng']} */
+  lastRng = /** @type {any} */ (null);
 
-  override update(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  update(ctx) {
     this.lastRng = ctx.rng;
 
     if (this.over) {
@@ -135,7 +136,8 @@ class GameScene extends Scene {
   }
 
   // Axis-aligned overlap of the bird box with the pipe's two rects.
-  private collides(p: Pipe): boolean {
+  /** @param {Pipe} p */
+  collides(p) {
     const bl = BIRD_X;
     const br = BIRD_X + BIRD_SIZE;
     const bt = this.birdY;
@@ -147,11 +149,12 @@ class GameScene extends Scene {
     return hitTop || hitBottom;
   }
 
-  private die(): void {
+  die() {
     this.over = true;
   }
 
-  override draw(g: Graphics): void {
+  /** @param {Graphics} g */
+  draw(g) {
     // Sky background.
     g.clear(Colors.sky);
 
@@ -209,7 +212,7 @@ class GameScene extends Scene {
     }
   }
 
-  private blinkT = 0;
+  blinkT = 0;
 }
 
 // Root scene is the game itself; restart is handled in-scene.

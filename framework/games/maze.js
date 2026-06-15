@@ -1,10 +1,13 @@
-// fw-maze.ts — a grid maze pellet-muncher.
+// @ts-check
+// maze.js — a grid maze pellet-muncher.
 // Move the hero with the d-pad through a maze, eat every pellet to win.
 // One slow slime wanders and resets the hero to start on touch.
 import {
-  start, Scene, UpdateContext, Graphics, Btn, Colors, rgb, mix,
+  start, Scene, Btn, Colors, rgb, mix,
   SCREEN_W, SCREEN_H, SPRITES, TileMap,
 } from '../src/index';
+
+/** @import { UpdateContext, Graphics } from '../src/index' */
 
 // Maze grid: tile=16 -> 30 cols x 17 rows fills 480x272.
 const TILE = 16;
@@ -25,39 +28,53 @@ const DIRS = [
 ];
 
 // A grid actor that steps one tile at a time, animating between tiles.
-interface Actor {
-  cx: number; cy: number;     // grid cell
-  px: number; py: number;     // pixel pos (top-left of tile)
-  dx: number; dy: number;     // current step direction (cells)
-  moving: boolean;
-}
+/**
+ * @typedef {{
+ *   cx: number, cy: number,
+ *   px: number, py: number,
+ *   dx: number, dy: number,
+ *   moving: boolean
+ * }} Actor
+ */
 
-function makeActor(cx: number, cy: number): Actor {
+/**
+ * @param {number} cx
+ * @param {number} cy
+ * @returns {Actor}
+ */
+function makeActor(cx, cy) {
   return { cx, cy, px: cx * TILE, py: cy * TILE, dx: 0, dy: 0, moving: false };
 }
 
 class RootScene extends Scene {
-  map!: TileMap;
-  pellets!: Uint8Array;     // 1 = pellet present at cell
+  /** @type {TileMap} */ map = /** @type {any} */ (null);
+  /** @type {Uint8Array} */ pellets = /** @type {any} */ (null);     // 1 = pellet present at cell
   pelletsLeft = 0;
-  hero!: Actor;
-  slime!: Actor;
+  /** @type {Actor} */ hero = /** @type {any} */ (null);
+  /** @type {Actor} */ slime = /** @type {any} */ (null);
   slimeTick = 0;
   score = 0;
-  state: 'play' | 'win' = 'play';
-  rng!: { int(n: number): number; pick<T>(a: readonly T[]): T; chance(p: number): boolean };
+  /** @type {'play' | 'win'} */ state = 'play';
+  /** @type {{ int(n: number): number; pick<T>(a: readonly T[]): T; chance(p: number): boolean }} */
+  rng = /** @type {any} */ (null);
 
-  override onEnter(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  onEnter(ctx) {
     this.reset(ctx);
   }
 
   // Generate a fresh maze + pellets and place actors.
-  reset(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  reset(ctx) {
     this.rng = ctx.rng;
     this.map = new TileMap(COLS, ROWS, TILE);
     // Fill everything solid, then carve passages on odd cells (recursive backtracker).
     this.map.data.fill(WALL);
-    const carve = (cx: number, cy: number) => {
+    /**
+     * @param {number} cx
+     * @param {number} cy
+     */
+    const carve = (cx, cy) => {
       this.map.set(cx, cy, 0);
       // Shuffle directions deterministically.
       const order = [0, 1, 2, 3];
@@ -101,7 +118,11 @@ class RootScene extends Scene {
     this.state = 'play';
   }
 
-  eatAt(cx: number, cy: number): void {
+  /**
+   * @param {number} cx
+   * @param {number} cy
+   */
+  eatAt(cx, cy) {
     const i = cy * COLS + cx;
     if (i >= 0 && i < this.pellets.length && this.pellets[i]) {
       this.pellets[i] = 0;
@@ -111,12 +132,22 @@ class RootScene extends Scene {
     }
   }
 
-  open(cx: number, cy: number): boolean {
+  /**
+   * @param {number} cx
+   * @param {number} cy
+   * @returns {boolean}
+   */
+  open(cx, cy) {
     return this.map.get(cx, cy) !== WALL;
   }
 
   // Smoothly advance an actor toward its target cell; returns true when arrived.
-  stepActor(a: Actor, speed: number): boolean {
+  /**
+   * @param {Actor} a
+   * @param {number} speed
+   * @returns {boolean}
+   */
+  stepActor(a, speed) {
     const tx = a.cx * TILE;
     const ty = a.cy * TILE;
     if (a.px < tx) a.px = Math.min(tx, a.px + speed);
@@ -126,7 +157,8 @@ class RootScene extends Scene {
     return a.px === tx && a.py === ty;
   }
 
-  override update(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  update(ctx) {
     if (this.state === 'win') {
       if (ctx.input.pressed(Btn.Start)) this.reset(ctx);
       return;
@@ -156,7 +188,8 @@ class RootScene extends Scene {
     // Slime: pick a new direction at intersections, move slowly.
     this.slimeTick++;
     if (!this.slime.moving) {
-      const choices: { x: number; y: number }[] = [];
+      /** @type {{ x: number; y: number }[]} */
+      const choices = [];
       for (const dd of DIRS) {
         if (this.open(this.slime.cx + dd.x, this.slime.cy + dd.y)) choices.push(dd);
       }
@@ -186,7 +219,8 @@ class RootScene extends Scene {
     }
   }
 
-  override draw(g: Graphics): void {
+  /** @param {Graphics} g */
+  draw(g) {
     g.clear(rgb(8, 8, 24));
     const cam = { x: 0, y: 0 };
     // Walls.

@@ -1,28 +1,31 @@
-// fw-shooter.ts — a vertical space shooter.
+// @ts-check
+// shooter.js — a vertical space shooter.
 // Move with LEFT/RIGHT (and UP/DOWN within a band near the bottom), CROSS fires.
 // Shoot descending slimes for score; an enemy reaching the bottom (or hitting
 // you) costs a life. 3 lives, then game over -> press START to restart.
 // Deterministic: all randomness via ctx.rng, all timing via counters.
 import {
-  start, Scene, UpdateContext, Graphics, Btn, Colors, rgb,
+  start, Scene, Btn, Colors, rgb,
   SCREEN_W, SCREEN_H, SPRITES,
 } from '../src/index';
+
+/** @import { UpdateContext, Graphics } from '../src/index' */
 
 // Sprites are 16x16 art drawn at scale 3 => 48px on screen.
 const SHIP = 48;
 const ENEMY = 48;
 const PLAY_TOP = SCREEN_H - 90; // top of the band the ship may move within
 
-interface Bullet { x: number; y: number; }
-interface Enemy { x: number; y: number; vx: number; }
-interface Star { x: number; y: number; speed: number; size: number; }
+/** @typedef {{x:number, y:number}} Bullet */
+/** @typedef {{x:number, y:number, vx:number}} Enemy */
+/** @typedef {{x:number, y:number, speed:number, size:number}} Star */
 
 class ShooterScene extends Scene {
   shipX = 0;
   shipY = 0;
-  bullets: Bullet[] = [];
-  enemies: Enemy[] = [];
-  stars: Star[] = [];
+  /** @type {Bullet[]} */ bullets = [];
+  /** @type {Enemy[]} */ enemies = [];
+  /** @type {Star[]} */ stars = [];
   cooldown = 0;     // frames until next shot allowed
   spawnTimer = 0;   // frames until next enemy spawn
   spawnEvery = 60;  // current spawn interval (speeds up with score)
@@ -31,7 +34,8 @@ class ShooterScene extends Scene {
   over = false;
   frames = 0; // local frame counter, drives the blinking prompt
 
-  override onEnter(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  onEnter(ctx) {
     this.shipX = (SCREEN_W - SHIP) / 2;
     this.shipY = SCREEN_H - SHIP - 8;
     this.bullets = [];
@@ -55,7 +59,8 @@ class ShooterScene extends Scene {
     }
   }
 
-  override update(ctx: UpdateContext): void {
+  /** @param {UpdateContext} ctx */
+  update(ctx) {
     const i = ctx.input;
     this.frames++;
 
@@ -143,7 +148,8 @@ class ShooterScene extends Scene {
     }
   }
 
-  override draw(g: Graphics): void {
+  /** @param {Graphics} g */
+  draw(g) {
     g.clear(rgb(6, 8, 20)); // deep space
 
     // Starfield (brighter for nearer/larger stars).
@@ -179,15 +185,29 @@ class ShooterScene extends Scene {
   }
 }
 
-function clamp(v: number, lo: number, hi: number): number {
+/**
+ * @param {number} v
+ * @param {number} lo
+ * @param {number} hi
+ * @returns {number}
+ */
+function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
 // Axis-aligned bounding-box overlap test.
-function aabb(
-  ax: number, ay: number, aw: number, ah: number,
-  bx: number, by: number, bw: number, bh: number,
-): boolean {
+/**
+ * @param {number} ax
+ * @param {number} ay
+ * @param {number} aw
+ * @param {number} ah
+ * @param {number} bx
+ * @param {number} by
+ * @param {number} bw
+ * @param {number} bh
+ * @returns {boolean}
+ */
+function aabb(ax, ay, aw, ah, bx, by, bw, bh) {
   return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 

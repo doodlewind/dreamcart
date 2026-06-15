@@ -124,7 +124,7 @@ const fails = results.filter((r) => r.status === "fail");
 const warns = results.filter((r) => r.status === "warn");
 for (const w of warns) console.log("  ! " + w.name + (w.note ? ": " + w.note : ""));
 for (const f of fails) console.log("  ✗ " + f.name + (f.note ? ": " + f.note : ""));
-if (!fails.length && !warns.length) console.log("  all set! try:  bun run play web   /   bun run play psp tetris   /   bun run play 3ds fw-rpg");
+if (!fails.length && !warns.length) console.log("  all set! try:  bun run play web   /   bun run play psp raw-tetris   /   bun run play 3ds rpg");
 else console.log("\n  resolve the items above, then re-run `bun run bootstrap` (it's idempotent).");
 process.exit(fails.length ? 1 : 0);
 

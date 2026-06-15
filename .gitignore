@@ -12,5 +12,8 @@ runtime-3ds/*.3dsx
 runtime-3ds/*.elf
 runtime-3ds/*.map
 framework/node_modules
-runtime/src/game/fw-*.js
+# Framework game bundles are generated into runtime/src/game/ (unprefixed names);
+# only the tracked raw low-level demos (raw-*.js) are kept under version control.
+runtime/src/game/*.js
+!runtime/src/game/raw-*.js
 node_modules

@@ -1,0 +1,13 @@
+{
+  // Type-checks the JavaScript games against the TypeScript framework SDK.
+  // Games are authored in plain JS (the project's hard boundary: game business
+  // logic is JavaScript) but get full editor/CI checking via // @ts-check + JSDoc
+  // types imported from ../src. Run: bunx tsc -p framework/games/tsconfig.json --noEmit
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true
+  },
+  "include": ["*.js"]
+}

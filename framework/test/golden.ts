@@ -4,7 +4,7 @@
 // PSP/Web/3DS, so this validates the shared cross-platform code.
 //   bun framework/test/golden.ts           # compare
 //   UPDATE=1 bun framework/test/golden.ts  # (re)write goldens
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 
 const here = new URL(".", import.meta.url).pathname;
 const gameDir = here + "../../runtime/src/game/";
@@ -57,26 +57,50 @@ function encodePNG(rgba: Uint8Array): Buffer {
   return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", Buffer.from(Bun.deflateSync(raw))), chunk("IEND", Buffer.alloc(0))]);
 }
 
-async function runGame(file: string, frames: number, inputAt?: (f: number) => number): Promise<Uint8Array> {
+// mulberry32 — used to make raw games (which call Math.random directly)
+// deterministic during the smoke pass.
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+async function runGame(
+  file: string,
+  frames: number,
+  inputAt?: (f: number) => number,
+  seedRandom?: number,
+): Promise<Uint8Array> {
   const buf = new Uint8Array(W * H * 4);
   (globalThis as any).gfx = makeGfx(buf);
   (globalThis as any).log = () => {};
   (globalThis as any).frame = undefined;
-  const src = await Bun.file(file).text();
-  (0, eval)(src); // run the IIFE; it sets globalThis.frame
-  const fr = (globalThis as any).frame;
-  if (typeof fr !== "function") throw new Error("no globalThis.frame after load");
-  for (let f = 0; f < frames; f++) fr(inputAt ? inputAt(f) : 0);
+  const realRandom = Math.random;
+  if (seedRandom !== undefined) Math.random = mulberry32(seedRandom);
+  try {
+    const src = await Bun.file(file).text();
+    (0, eval)(src); // run the IIFE; it sets globalThis.frame
+    const fr = (globalThis as any).frame;
+    if (typeof fr !== "function") throw new Error("no globalThis.frame after load");
+    for (let f = 0; f < frames; f++) fr(inputAt ? inputAt(f) : 0);
+  } finally {
+    Math.random = realRandom;
+  }
   return buf;
 }
 
 const SPECS: { name: string; frames: number; input?: (f: number) => number }[] = [
-  { name: "fw-snake", frames: 200 },
-  { name: "fw-shooter", frames: 200, input: (f) => (f % 40 < 20 ? 0x20 : 0x80) | (f % 7 === 0 ? 0x4000 : 0) },
-  { name: "fw-flappy", frames: 160, input: (f) => (f % 18 === 0 ? 0x4000 : 0) },
-  { name: "fw-maze", frames: 200, input: (f) => [0x20, 0x40, 0x80, 0x10][(f >> 4) & 3] },
-  { name: "fw-dodge", frames: 200, input: (f) => (f % 50 < 25 ? 0x20 : 0x80) },
-  { name: "fw-rpg", frames: 260, input: (f) => (f < 45 ? 0x80 : f < 170 ? 0x40 : 0x20 | (f % 40 === 0 ? 0x4000 : 0)) },
+  { name: "snake", frames: 200 },
+  { name: "shooter", frames: 200, input: (f) => (f % 40 < 20 ? 0x20 : 0x80) | (f % 7 === 0 ? 0x4000 : 0) },
+  { name: "flappy", frames: 160, input: (f) => (f % 18 === 0 ? 0x4000 : 0) },
+  { name: "maze", frames: 200, input: (f) => [0x20, 0x40, 0x80, 0x10][(f >> 4) & 3] },
+  { name: "dodge", frames: 200, input: (f) => (f % 50 < 25 ? 0x20 : 0x80) },
+  { name: "rpg", frames: 260, input: (f) => (f < 45 ? 0x80 : f < 170 ? 0x40 : 0x20 | (f % 40 === 0 ? 0x4000 : 0)) },
 ];
 
 let pass = 0, fail = 0, skipped = 0;
@@ -100,6 +124,25 @@ for (const spec of SPECS) {
   for (let i = 0; i < buf.length; i++) if (buf[i] !== golden[i]) diff++;
   if (diff === 0) { console.log("PASS ", spec.name); pass++; }
   else { await Bun.write(goldenDir + spec.name + ".actual.png", encodePNG(buf)); console.log("FAIL ", spec.name, "- " + diff + " byte diffs"); fail++; }
+}
+
+// --- Raw low-level demos (runtime/src/game/raw-*.js) ---
+// These call Math.random directly, so pixel goldens aren't reproducible; instead
+// run a deterministic (seeded Math.random) scripted sequence and assert frame()
+// never throws — a no-crash smoke test of the bare gfx/frame contract.
+const RAW_INPUT = (f: number) =>
+  [0x20, 0x40, 0x80, 0x10][(f >> 4) & 3] | (f % 30 === 0 ? 0x4000 : 0) | (f % 90 === 0 ? 0x08 : 0);
+const rawFiles = readdirSync(gameDir)
+  .filter((f) => f.startsWith("raw-") && f.endsWith(".js"))
+  .sort();
+for (const f of rawFiles) {
+  const name = f.slice(0, -3);
+  try {
+    await runGame(gameDir + f, 200, RAW_INPUT, 0x1234);
+    console.log("SMOKE", name, "- ok"); pass++;
+  } catch (e: any) {
+    console.log("FAIL ", name, "- threw:", e?.message ?? e); fail++;
+  }
 }
 
 console.log("\n" + pass + " passed, " + fail + " failed, " + skipped + " skipped");

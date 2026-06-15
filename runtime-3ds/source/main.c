@@ -107,6 +107,8 @@ int main(int argc, char **argv) {
         u32 k = hidKeysHeld();
         if ((k & KEY_START) && (k & KEY_SELECT)) break;
 
+        // Map 3DS keys to the canonical button bitmask (framework/src/input.ts Btn;
+        // the // NAME tags are checked against it by framework/test/contract.ts).
         int mask = 0;
         if (k & KEY_UP)     mask |= 0x10;    // UP
         if (k & KEY_RIGHT)  mask |= 0x20;    // RIGHT

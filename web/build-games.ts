@@ -1,27 +1,30 @@
 // Builds web/games.generated.js — the manifest the Playground loads.
-//  - raw JS games (runtime/src/game/<name>.js): editable + run.
-//  - framework games (framework/games/<name>.ts, bundled by `bun framework/build.ts`):
-//    the playground shows the TS source and runs the prebuilt bundle.
-// Run: bun web/build-games.ts   (run the framework build first for fw games)
+//  - raw low-level demos (runtime/src/game/raw-<name>.js): editable + run.
+//  - framework games (framework/games/<name>.js, bundled by `bun framework/build.ts`):
+//    the playground shows the authored JS source and runs the prebuilt bundle.
+// Run: bun web/build-games.ts   (run the framework build first for framework games)
 import { readdirSync, existsSync } from "node:fs";
 
 const here = new URL(".", import.meta.url).pathname;
 const runDir = here + "../runtime/src/game/";
 const fwDir = here + "../framework/games/";
 
+// Framework games (built bundle name == authored source name, no prefix) come
+// first; the raw- prefixed low-level demos follow. Anything without an entry
+// falls back to its file name and order 99.
 const META: Record<string, { title: string; order: number }> = {
-  "snake.js": { title: "Snake", order: 0 },
-  "pong.js": { title: "Pong", order: 1 },
-  "g2048.js": { title: "2048", order: 2 },
-  "breakout.js": { title: "Breakout", order: 3 },
-  "tetris.js": { title: "Tetris", order: 4 },
-  "platformer.js": { title: "Platformer", order: 5 },
-  "fw-rpg.js": { title: "Wuxia Village (framework)", order: 10 },
-  "fw-maze.js": { title: "Maze (framework)", order: 11 },
-  "fw-shooter.js": { title: "Shooter (framework)", order: 12 },
-  "fw-flappy.js": { title: "Flappy (framework)", order: 13 },
-  "fw-dodge.js": { title: "Dodge (framework)", order: 14 },
-  "fw-snake.js": { title: "Snake (framework)", order: 15 },
+  "rpg.js": { title: "Wuxia Village", order: 0 },
+  "maze.js": { title: "Maze", order: 1 },
+  "shooter.js": { title: "Shooter", order: 2 },
+  "flappy.js": { title: "Flappy", order: 3 },
+  "dodge.js": { title: "Dodge", order: 4 },
+  "snake.js": { title: "Snake", order: 5 },
+  "raw-snake.js": { title: "Snake (raw API)", order: 10 },
+  "raw-pong.js": { title: "Pong (raw API)", order: 11 },
+  "raw-g2048.js": { title: "2048 (raw API)", order: 12 },
+  "raw-breakout.js": { title: "Breakout (raw API)", order: 13 },
+  "raw-tetris.js": { title: "Tetris (raw API)", order: 14 },
+  "raw-platformer.js": { title: "Platformer (raw API)", order: 15 },
 };
 
 export async function buildGames(): Promise<number> {
@@ -29,15 +32,17 @@ export async function buildGames(): Promise<number> {
   const games: Record<string, unknown> = {};
   for (const f of files) {
     const name = f.replace(/\.js$/, "");
-    const tsPath = fwDir + name + ".ts";
-    const isFw = existsSync(tsPath);
+    const srcPath = fwDir + name + ".js"; // authored framework source (JS)
+    const isFw = existsSync(srcPath);
     games[f] = {
       title: META[f]?.title ?? name,
       order: META[f]?.order ?? 99,
       kind: isFw ? "fw" : "raw",
+      // framework games run the prebuilt bundle but display the authored source;
+      // raw games are self-contained, so source == what runs.
       run: await Bun.file(runDir + f).text(),
-      src: isFw ? await Bun.file(tsPath).text() : await Bun.file(runDir + f).text(),
-      lang: isFw ? "ts" : "js",
+      src: isFw ? await Bun.file(srcPath).text() : await Bun.file(runDir + f).text(),
+      lang: "js", // everything authored in JS now
     };
   }
   await Bun.write(

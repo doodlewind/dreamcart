@@ -2,8 +2,9 @@
 #![no_main]
 
 //! psp-js runtime: boots QuickJS, exposes a tiny native 2D graphics + input API
-//! to JavaScript, evaluates `game/snake.js`, then drives its `frame(buttons)`
-//! function once per vblank while presenting frames via sceGu.
+//! to JavaScript, evaluates the PSPJS_GAME-selected file (see build.rs), then
+//! drives its `frame(buttons)` function once per vblank while presenting frames
+//! via sceGu.
 
 extern crate alloc;
 
@@ -21,7 +22,7 @@ mod bridge;
 mod gfx;
 mod qjs_alloc;
 
-psp::module!("psp_js_snake", 1, 1);
+psp::module!("psp_js", 1, 1);
 
 // GE display list buffer (256 KB), 16-byte aligned.
 static mut LIST: Align16<[u32; 0x40000]> = Align16([0; 0x40000]);
