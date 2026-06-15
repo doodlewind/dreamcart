@@ -1,0 +1,56 @@
+name: CI + Deploy Playground
+
+# `check` runs typecheck + tests on every push and PR (the quality gate).
+# `deploy` builds the playground with Bun and publishes web/ to the gh-pages
+# branch — only on main, and only after `check` passes. No PSP/3DS toolchain or
+# submodules are needed for either job (the framework is pure TS/JS).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run build   # bake -> typecheck -> bundle games -> web manifest
+      - run: bun run test    # button contract + golden render + raw smoke
+
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run bake
+      - run: bun run bundle
+      - run: bun web/build-games.ts
+      - name: Publish web/ to gh-pages
+        run: |
+          cd web
+          touch .nojekyll
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "deploy ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:gh-pages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

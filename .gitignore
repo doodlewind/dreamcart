@@ -2,3 +2,18 @@
 target
 mipsel-sony-psp
 *.zip
+dist
+.pspjs-*.workflow.js
+dist-3ds
+web/games.generated.js
+runtime-3ds/build
+runtime-3ds/source/game_js.h
+runtime-3ds/*.3dsx
+runtime-3ds/*.elf
+runtime-3ds/*.map
+framework/node_modules
+# Framework game bundles are generated into runtime/src/game/ (unprefixed names);
+# only the tracked raw low-level demos (raw-*.js) are kept under version control.
+runtime/src/game/*.js
+!runtime/src/game/raw-*.js
+node_modules

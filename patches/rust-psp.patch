@@ -1,0 +1,31 @@
+diff --git a/psp/src/lib.rs b/psp/src/lib.rs
+index 0d9fd40..b36bb12 100644
+--- a/psp/src/lib.rs
++++ b/psp/src/lib.rs
+@@ -7,13 +7,12 @@
+     core_intrinsics,
+     const_loop,
+     const_if_match,
+-    const_generics,
+     c_variadic,
+     lang_items,
+ )]
+ 
+ // For unwinding support
+-#![feature(std_internals, panic_info_message, panic_internals, unwind_attributes)]
++#![feature(std_internals, panic_info_message, panic_internals)]
+ #![cfg_attr(not(feature = "stub-only"), feature(panic_unwind))]
+ 
+ // For the `const_generics` feature.
+diff --git a/psp/src/panic.rs b/psp/src/panic.rs
+index 711763b..66349f5 100644
+--- a/psp/src/panic.rs
++++ b/psp/src/panic.rs
+@@ -124,7 +124,6 @@ fn update_panic_count(amt: isize) -> usize {
+ #[allow(improper_ctypes)]
+ extern "C" {
+     fn __rust_panic_cleanup(payload: *mut u8) -> *mut (dyn Any + Send + 'static);
+-    #[unwind(allowed)]
+     fn __rust_start_panic(payload: usize) -> u32;
+ }
+ 

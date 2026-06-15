@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>psp-js Playground</title>
+<style>
+  :root { --bg:#0f1117; --panel:#171a23; --line:#262b38; --fg:#e6e8ee; --muted:#8b93a7; --accent:#5ee08a; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  header { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  header h1 b { color:var(--accent); }
+  header .sub { color:var(--muted); font-size:12px; }
+  .wrap { display:grid; grid-template-columns: 520px 1fr; gap:16px; padding:16px; align-items:start; }
+  @media (max-width: 980px){ .wrap { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  select, button { font:inherit; color:var(--fg); background:#222736; border:1px solid var(--line);
+    border-radius:7px; padding:6px 11px; cursor:pointer; }
+  button:hover, select:hover { border-color:#3a4255; }
+  button.primary { background:var(--accent); color:#06210f; border-color:var(--accent); font-weight:700; }
+  button:active { transform: translateY(1px); }
+  canvas { width:480px; height:272px; image-rendering: pixelated; background:#000;
+    border:1px solid var(--line); border-radius:8px; display:block; }
+  @media (min-width: 1280px){ canvas { width:720px; height:408px; } }
+  .stage { display:flex; flex-direction:column; gap:10px; align-items:center; }
+  .meta { color:var(--muted); width:100%; display:flex; justify-content:space-between; }
+  textarea { width:100%; height:340px; resize:vertical; background:#0c0e14; color:#cfe3d6;
+    border:1px solid var(--line); border-radius:8px; padding:10px; font:12px/1.45 ui-monospace,monospace; tab-size:2; }
+  pre.console { height:120px; overflow:auto; margin:0; background:#0c0e14; border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; color:#9fb3c8; white-space:pre-wrap; }
+  .legend { color:var(--muted); font-size:12px; line-height:1.7; }
+  kbd { background:#222736; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px;
+    padding:0 6px; color:var(--fg); }
+  .pad { display:grid; grid-template-columns:repeat(3,40px); grid-auto-rows:40px; gap:5px; }
+  .pad button { padding:0; }
+  .face { display:flex; gap:6px; flex-wrap:wrap; }
+  h3 { margin:0 0 8px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+</style>
+</head>
+<body>
+<header>
+  <h1><b>psp-js</b> Playground</h1>
+  <span class="sub">the same JS games that run on PSP &amp; 3DS, in your browser</span>
+</header>
+
+<div class="wrap">
+  <!-- LEFT: controls + editor -->
+  <div class="panel">
+    <div class="row" style="margin-bottom:10px">
+      <select id="game" title="pick a game"></select>
+      <button class="primary" id="run" title="Run the code in the editor (Ctrl/Cmd+Enter)">▶ Run</button>
+      <button id="pause">⏸ Pause</button>
+      <button id="stepBtn">⏭ Step</button>
+      <button id="reload" title="Reload original source">↺ Reset</button>
+    </div>
+    <textarea id="code" spellcheck="false"></textarea>
+    <div class="legend" id="note" style="margin-top:6px"></div>
+    <h3 style="margin-top:12px">Console (log)</h3>
+    <pre class="console" id="console"></pre>
+  </div>
+
+  <!-- RIGHT: canvas + input -->
+  <div class="panel stage">
+    <div class="meta"><span id="title">—</span><span>FPS: <b id="fps">0</b></span></div>
+    <canvas id="screen"></canvas>
+    <div class="row" style="width:100%; justify-content:space-between; align-items:flex-start">
+      <div>
+        <h3>D-pad</h3>
+        <div class="pad">
+          <span></span><button data-btn="UP">▲</button><span></span>
+          <button data-btn="LEFT">◀</button><span></span><button data-btn="RIGHT">▶</button>
+          <span></span><button data-btn="DOWN">▼</button><span></span>
+        </div>
+      </div>
+      <div>
+        <h3>Buttons</h3>
+        <div class="face">
+          <button data-btn="CROSS">✕ (Z)</button>
+          <button data-btn="CIRCLE">○ (X)</button>
+          <button data-btn="START">START ⏎</button>
+        </div>
+        <div class="legend" style="margin-top:10px">
+          Move: <kbd>↑↓←→</kbd> / <kbd>WASD</kbd><br>
+          ✕ <kbd>Z</kbd> &nbsp; ○ <kbd>X</kbd> &nbsp; □ <kbd>C</kbd> &nbsp; △ <kbd>V</kbd><br>
+          START <kbd>Enter</kbd> &nbsp; SELECT <kbd>R-Shift</kbd>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script src="games.generated.js"></script>
+<script>
+(function () {
+  var sel = document.getElementById('game');
+  var code = document.getElementById('code');
+  var consoleEl = document.getElementById('console');
+  var titleEl = document.getElementById('title');
+  var fpsEl = document.getElementById('fps');
+
+  PSPJS.mount(document.getElementById('screen'));
+  PSPJS.onFps(function (f) { fpsEl.textContent = f; });
+  PSPJS.onLog(function (m) {
+    consoleEl.textContent += m + '\n';
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+    if (consoleEl.textContent.length > 8000) consoleEl.textContent = consoleEl.textContent.slice(-6000);
+  });
+
+  // populate game dropdown (sorted by order)
+  var games = window.GAMES || {};
+  var keys = Object.keys(games).sort(function (a, b) { return games[a].order - games[b].order; });
+  keys.forEach(function (k) {
+    var o = document.createElement('option');
+    o.value = k; o.textContent = games[k].title + '  (' + k + ')';
+    sel.appendChild(o);
+  });
+
+  var noteEl = document.getElementById('note');
+  var currentKey = null;
+
+  function runCurrent() {
+    consoleEl.textContent = '';
+    var g = games[currentKey];
+    if (!g) return;
+    // raw JS games run the (editable) editor text; framework games run the
+    // prebuilt bundle while the editor shows their authored JS source.
+    var js = g.kind === 'fw' ? g.run : code.value;
+    var err = PSPJS.load(js);
+    if (!err) PSPJS.start();
+  }
+  function loadGame(k) {
+    currentKey = k;
+    var g = games[k];
+    titleEl.textContent = g ? g.title : k;
+    code.value = g ? g.src : '';
+    code.readOnly = !!(g && g.kind === 'fw');
+    if (noteEl) {
+      var hint = g && g.kind === 'fw'
+        ? 'Framework game source (JavaScript, read-only) — runs the bundled build'
+        : 'JavaScript — edit then Run (Ctrl/Cmd+Enter)';
+      var controls = g && g.controls ? 'Controls: ' + g.controls + '  ·  ' : '';
+      noteEl.textContent = controls + hint;
+    }
+    runCurrent();
+  }
+
+  sel.addEventListener('change', function () { loadGame(sel.value); });
+  document.getElementById('run').addEventListener('click', runCurrent);
+  document.getElementById('reload').addEventListener('click', function () { loadGame(currentKey); });
+  document.getElementById('pause').addEventListener('click', function () {
+    var p = !PSPJS.isPaused(); PSPJS.setPaused(p);
+    this.textContent = p ? '▶ Resume' : '⏸ Pause';
+  });
+  document.getElementById('stepBtn').addEventListener('click', function () {
+    PSPJS.step(); document.getElementById('pause').textContent = '▶ Resume';
+  });
+  code.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); runCurrent(); }
+  });
+
+  // virtual buttons -> engine
+  Array.prototype.forEach.call(document.querySelectorAll('[data-btn]'), function (b) {
+    var bit = PSPJS.BTN[b.getAttribute('data-btn')];
+    var down = function (e) { e.preventDefault(); PSPJS.pressVirtual(bit, true); };
+    var up = function (e) { e.preventDefault(); PSPJS.pressVirtual(bit, false); };
+    b.addEventListener('mousedown', down); b.addEventListener('mouseup', up);
+    b.addEventListener('mouseleave', up);
+    b.addEventListener('touchstart', down, { passive: false });
+    b.addEventListener('touchend', up);
+  });
+
+  // boot with ?game=<file> if present, else the first game
+  if (keys.length) {
+    var want = new URLSearchParams(location.search).get('game');
+    var startKey = want && games[want] ? want : keys[0];
+    sel.value = startKey;
+    loadGame(startKey);
+  }
+})();
+</script>
+</body>
+</html>
