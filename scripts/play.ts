@@ -74,13 +74,18 @@ if (platform === "web") {
   console.log("building 3DS .3dsx for " + game + " ...");
   await $`bun ${root}runtime-3ds/build.ts`.env({ ...process.env, PSPJS_GAME: game + ".js" });
   const dsx = root + "runtime-3ds/psp-js-3ds.3dsx";
-  const emu = ["Azahar", "Lime3DS", "Citra", "Panda3DS"].find((e) => existsSync(`/Applications/${e}.app`));
-  if (emu) {
-    console.log("launching " + emu + ": " + game);
-    await $`open -a ${emu} ${dsx}`.nothrow();
+  const dirs = ["/Applications", `${process.env.HOME}/Applications`];
+  let emuApp = "";
+  for (const e of ["Azahar", "Lime3DS", "Citra", "Panda3DS"]) {
+    for (const d of dirs) if (existsSync(`${d}/${e}.app`)) { emuApp = `${d}/${e}.app`; break; }
+    if (emuApp) break;
+  }
+  if (emuApp) {
+    console.log("launching " + emuApp.split("/").pop() + ": " + game);
+    await $`open -a ${emuApp} ${dsx}`.nothrow();
   } else {
     console.log("\nBuilt: " + dsx);
-    console.log("No 3DS emulator found in /Applications. Install Azahar (https://azahar-emu.org),");
-    console.log("then: open -a Azahar " + dsx);
+    console.log("No 3DS emulator found. Run `bun run bootstrap` to install Azahar, or grab it");
+    console.log("from https://azahar-emu.org, then: open -a Azahar " + dsx);
   }
 }

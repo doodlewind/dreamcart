@@ -109,54 +109,38 @@ this catches crashes and visual regressions in the shared code. Run with
   startup sets up no C heap, so newlib `malloc` is unusable).
 - **FFI bindings**: extended in `quickjs-rs/libquickjs-sys/src/lib.rs`.
 
-## Build
-Clone, then init submodules and apply their small local patches:
+## Setup (from a fresh clone, macOS)
+Install [Bun](https://bun.sh) and [Homebrew](https://brew.sh) (and Docker, e.g.
+[OrbStack](https://orbstack.dev), for the 3DS build), then one command sets up
+**everything**:
 
 ``` sh
 git clone https://github.com/doodlewind/psp-js.git
 cd psp-js
 bun install
-bun run setup        # git submodule update --init + apply patches/*.patch
+bun run bootstrap
 ```
 
-The Web playground needs nothing more (`bun run serve`). For **PSP**, download and
-unzip the [prebuilt PSPSDK](https://github.com/doodlewind/psp-test-app/releases/download/sdk/mipsel-sony-psp.zip)
-(newlib, built from [clang-psp](https://github.com/pspdev/clang-psp)) into the
-project root as `mipsel-sony-psp/`, then build:
+`bun run bootstrap` ([scripts/bootstrap.ts](scripts/bootstrap.ts)) is idempotent
+and installs/configures:
+- submodules + their patches (`bun run setup`)
+- **LLVM** (`brew install llvm` — Apple clang can't target MIPS)
+- **PPSSPP** (`brew install --cask ppsspp`) — PSP emulator
+- **Azahar** (downloaded from GitHub releases) — 3DS emulator
+- **Rust** `nightly-2021-11-01-x86_64-apple-darwin` + `rust-src` (Rosetta on Apple
+  Silicon — host arch is irrelevant to the MIPS output), and pins the repo override
+- **cargo-psp / prxgen / pack-pbp / mksfo** (built from the `rust-psp` submodule)
+- the **PSPSDK** (prebuilt newlib) into `mipsel-sony-psp/`
+- the **`devkitpro/devkitarm`** Docker image (3DS toolchain)
 
-``` sh
-bun install          # once
-bun run psp          # -> runtime/target/mipsel-sony-psp/debug/EBOOT.PBP
-```
+It reports anything it can't auto-install (Homebrew/Docker not present, Docker
+daemon stopped); fix those and re-run. Then everything runs on Bun — there's no
+Python/Make glue.
 
-All scripts run on [Bun](https://bun.sh) (`bun run psp` / `3ds` / `serve` /
-`build` / `test`); there is no Python/Make glue.
-
-### Toolchain requirements
-`bun run psp` wires these up; install them first:
-
-- **Rust nightly** in the `2021-05`..`2021-11` range with the `rust-src`
-  component (this rust-psp pins 2020-era feature gates). On Apple Silicon, install
-  the **x86_64** toolchain (runs under Rosetta — host arch is irrelevant to the
-  MIPS output):
-  ``` sh
-  rustup toolchain install nightly-2021-11-01-x86_64-apple-darwin \
-    --component rust-src --force-non-host
-  rustup override set nightly-2021-11-01-x86_64-apple-darwin   # in repo root
-  ```
-- **LLVM** (Apple clang cannot target MIPS): `brew install llvm`. QuickJS's C is
-  compiled with it; `build.sh` also forces `llvm-ar`/`llvm-ranlib` for the static
-  archive (Apple `ar` silently drops MIPS objects, causing `undefined symbol:
-  JS_*` at link time).
-- **cargo-psp + prxgen/pack-pbp/mksfo** on `PATH`:
-  ``` sh
-  (cd rust-psp/cargo-psp && cargo +stable build --release --bins)
-  cp rust-psp/target/release/{cargo-psp,prxgen,pack-pbp,mksfo} ~/.cargo/bin/
-  ```
-
-This repo applies a tiny local patch to the `rust-psp` submodule so it compiles on
-a 1.58-era nightly (drops the removed `const_generics` / `unwind_attributes`
-feature gates and the `#[unwind(allowed)]` attribute).
+> The `rust-psp` / `quickjs-rs` submodule patches ([patches/](patches)) let them
+> compile on a 1.58-era nightly and fix the 32-bit `size_t` ABI for QuickJS; LLVM
+> `llvm-ar` is used for the static archive (Apple `ar` silently drops MIPS objects
+> → `undefined symbol: JS_*`).
 
 ## Run on PSP
 Open the EBOOT in [PPSSPP](https://www.ppsspp.org/):
