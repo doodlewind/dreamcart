@@ -1,4 +1,7 @@
 // @ts-check
+// @title Wuxia Village
+// @order 0
+// @controls D-pad to move, CROSS to interact
 // A small Jin-Yong-flavoured wuxia story game: you wake in your room, walk out
 // the door into the village, and roam — talking to villagers and the elder,
 // opening a chest. Shows scene transitions, a scrolling tilemap + camera, AABB

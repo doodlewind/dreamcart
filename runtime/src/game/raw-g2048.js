@@ -1,3 +1,6 @@
+// @title 2048 (raw API)
+// @order 12
+// @controls D-pad slide; START restart
 // 2048 for PSP (QuickJS runtime)
 // Controls: D-Pad = slide tiles (UP/DOWN/LEFT/RIGHT). START = restart after game over.
 // Merge equal adjacent tiles once per move; reach 2048 to win (continue allowed).
@@ -20,7 +23,7 @@ function drawText(str, x, y, s, r, g, b){
 }
 
 // ---- Input masks ----
-var UP=0x10, RIGHT=0x20, DOWN=0x40, LEFT=0x80, START=0x08;
+var BTN_UP=0x10, BTN_RIGHT=0x20, BTN_DOWN=0x40, BTN_LEFT=0x80, BTN_START=0x08;
 
 // ---- Board geometry ----
 var SIZE = 4;
@@ -165,13 +168,13 @@ function frame(buttons){
   // ---- Update ----
   if(!gameOver){
     var did=false;
-    if((buttons&LEFT)  && !(prevButtons&LEFT))  did = move("L") || did;
-    if((buttons&RIGHT) && !(prevButtons&RIGHT)) did = move("R") || did;
-    if((buttons&UP)    && !(prevButtons&UP))    did = move("U") || did;
-    if((buttons&DOWN)  && !(prevButtons&DOWN))  did = move("D") || did;
+    if((buttons&BTN_LEFT)  && !(prevButtons&BTN_LEFT))  did = move("L") || did;
+    if((buttons&BTN_RIGHT) && !(prevButtons&BTN_RIGHT)) did = move("R") || did;
+    if((buttons&BTN_UP)    && !(prevButtons&BTN_UP))    did = move("U") || did;
+    if((buttons&BTN_DOWN)  && !(prevButtons&BTN_DOWN))  did = move("D") || did;
     if(did && checkGameOver()) gameOver = true;
   } else {
-    if((buttons&START) && !(prevButtons&START)) reset();
+    if((buttons&BTN_START) && !(prevButtons&BTN_START)) reset();
   }
   blinkCounter++;
   prevButtons = buttons;

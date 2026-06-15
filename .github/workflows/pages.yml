@@ -1,21 +1,37 @@
-name: Deploy Playground to GitHub Pages
+name: CI + Deploy Playground
 
-# Builds the playground with Bun and publishes web/ to the gh-pages branch
-# (Pages source = gh-pages /). No PSP/3DS toolchain or submodules needed.
+# `check` runs typecheck + tests on every push and PR (the quality gate).
+# `deploy` builds the playground with Bun and publishes web/ to the gh-pages
+# branch — only on main, and only after `check` passes. No PSP/3DS toolchain or
+# submodules are needed for either job (the framework is pure TS/JS).
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run build   # bake -> typecheck -> bundle games -> web manifest
+      - run: bun run test    # button contract + golden render + raw smoke
+
   deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

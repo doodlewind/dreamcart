@@ -1,4 +1,7 @@
 // @ts-check
+// @title Maze
+// @order 1
+// @controls D-pad to move; START restart
 // maze.js — a grid maze pellet-muncher.
 // Move the hero with the d-pad through a maze, eat every pellet to win.
 // One slow slime wanders and resets the hero to start on touch.

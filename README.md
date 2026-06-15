@@ -105,7 +105,9 @@ scripted input, and byte-compares the framebuffer to a committed golden
 (`framework/test/goldens/*.png`); it also runs a no-crash **smoke pass** over the
 `raw-*` demos (seeded `Math.random`). A sibling
 [`framework/test/contract.ts`](framework/test/contract.ts) asserts the controller
-button bitmask is identical across the Web and 3DS hosts and the framework SDK.
+button bitmask is identical across the Web and 3DS hosts, the framework SDK, and
+every raw demo's `BTN_*` constants (the raw games are eval'd as a string and so
+can't `import` the canonical `Btn`, so the test enforces they never drift).
 Because the same bundle runs on every platform, this catches crashes and visual
 regressions in the shared code. Run with
 `bun run test`; regenerate goldens with `UPDATE=1 bun framework/test/golden.ts`.
@@ -176,8 +178,11 @@ bun run serve        # -> http://localhost:8123  (PORT=3000 to change)
 ```
 
 Open <http://localhost:8123/> (or `?game=rpg.js` to pick one). The server
-([`web/serve.ts`](web/serve.ts)) regenerates the game manifest on startup. The
-Playground implements the identical `gfx`/`input`/`frame` contract on Canvas
+([`web/serve.ts`](web/serve.ts)) regenerates the game manifest on startup. Each
+game's menu title, order and on-screen controls come from a header comment in
+its own source (`// @title` / `// @order` / `// @controls`) — the single source
+of truth, so adding a game needs no edit to the build script. The Playground
+implements the identical `gfx`/`input`/`frame` contract on Canvas
 ([`web/engine.js`](web/engine.js)), so the same game files run in the browser.
 
 ## 3DS

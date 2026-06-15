@@ -9,23 +9,18 @@ const here = new URL(".", import.meta.url).pathname;
 const runDir = here + "../runtime/src/game/";
 const fwDir = here + "../framework/games/";
 
-// Framework games (built bundle name == authored source name, no prefix) come
-// first; the raw- prefixed low-level demos follow. Anything without an entry
-// falls back to its file name and order 99.
-const META: Record<string, { title: string; order: number }> = {
-  "rpg.js": { title: "Wuxia Village", order: 0 },
-  "maze.js": { title: "Maze", order: 1 },
-  "shooter.js": { title: "Shooter", order: 2 },
-  "flappy.js": { title: "Flappy", order: 3 },
-  "dodge.js": { title: "Dodge", order: 4 },
-  "snake.js": { title: "Snake", order: 5 },
-  "raw-snake.js": { title: "Snake (raw API)", order: 10 },
-  "raw-pong.js": { title: "Pong (raw API)", order: 11 },
-  "raw-g2048.js": { title: "2048 (raw API)", order: 12 },
-  "raw-breakout.js": { title: "Breakout (raw API)", order: 13 },
-  "raw-tetris.js": { title: "Tetris (raw API)", order: 14 },
-  "raw-platformer.js": { title: "Platformer (raw API)", order: 15 },
-};
+// Each game's metadata (title / menu order / controls) is declared in the game's
+// own source as a header comment — the single source of truth — so adding a game
+// needs no edit here:
+//   // @title Snake
+//   // @order 5
+//   // @controls D-pad to steer
+// Anything missing falls back to the file name / order 99 / no controls.
+function parseMeta(src: string): { title?: string; order?: number; controls?: string } {
+  const tag = (name: string) => src.match(new RegExp(`^//\\s*@${name}\\s+(.+)$`, "m"))?.[1].trim();
+  const order = tag("order");
+  return { title: tag("title"), order: order === undefined ? undefined : parseInt(order, 10), controls: tag("controls") };
+}
 
 export async function buildGames(): Promise<number> {
   const files = readdirSync(runDir).filter((f) => f.endsWith(".js")).sort();
@@ -34,14 +29,17 @@ export async function buildGames(): Promise<number> {
     const name = f.replace(/\.js$/, "");
     const srcPath = fwDir + name + ".js"; // authored framework source (JS)
     const isFw = existsSync(srcPath);
+    // framework games run the prebuilt bundle but display the authored source;
+    // raw games are self-contained, so source == what runs.
+    const src = isFw ? await Bun.file(srcPath).text() : await Bun.file(runDir + f).text();
+    const meta = parseMeta(src);
     games[f] = {
-      title: META[f]?.title ?? name,
-      order: META[f]?.order ?? 99,
+      title: meta.title ?? name,
+      order: meta.order ?? 99,
+      controls: meta.controls ?? "",
       kind: isFw ? "fw" : "raw",
-      // framework games run the prebuilt bundle but display the authored source;
-      // raw games are self-contained, so source == what runs.
       run: await Bun.file(runDir + f).text(),
-      src: isFw ? await Bun.file(srcPath).text() : await Bun.file(runDir + f).text(),
+      src,
       lang: "js", // everything authored in JS now
     };
   }

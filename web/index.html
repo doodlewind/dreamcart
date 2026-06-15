@@ -138,9 +138,13 @@
     titleEl.textContent = g ? g.title : k;
     code.value = g ? g.src : '';
     code.readOnly = !!(g && g.kind === 'fw');
-    if (noteEl) noteEl.textContent = g && g.kind === 'fw'
-      ? 'Framework game source (JavaScript, read-only) — runs the bundled build'
-      : 'JavaScript — edit then Run (Ctrl/Cmd+Enter)';
+    if (noteEl) {
+      var hint = g && g.kind === 'fw'
+        ? 'Framework game source (JavaScript, read-only) — runs the bundled build'
+        : 'JavaScript — edit then Run (Ctrl/Cmd+Enter)';
+      var controls = g && g.controls ? 'Controls: ' + g.controls + '  ·  ' : '';
+      noteEl.textContent = controls + hint;
+    }
     runCurrent();
   }
 

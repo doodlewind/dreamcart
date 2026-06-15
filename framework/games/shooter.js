@@ -1,4 +1,7 @@
 // @ts-check
+// @title Shooter
+// @order 2
+// @controls D-pad to move, CROSS to shoot; START restart
 // shooter.js — a vertical space shooter.
 // Move with LEFT/RIGHT (and UP/DOWN within a band near the bottom), CROSS fires.
 // Shoot descending slimes for score; an enemy reaching the bottom (or hitting

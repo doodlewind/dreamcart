@@ -24,7 +24,10 @@ static inline u32 col(int r, int g, int b) {
     return C2D_Color32((u8)(r & 255), (u8)(g & 255), (u8)(b & 255), 0xFF);
 }
 
-// gfx.clear(r,g,b)
+// gfx.clear(r,g,b) — fill the screen with a color (the cross-host contract:
+// clear does nothing but paint the background). Scene setup is the host loop's
+// job: C2D_SceneBegin(g_top) is called once per frame in main() before frame()
+// runs, and the render target never changes, so clear must NOT re-begin it.
 static JSValue js_gfx_clear(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     int32_t r = 0, g = 0, b = 0;
     if (argc >= 3) {
@@ -33,7 +36,6 @@ static JSValue js_gfx_clear(JSContext *ctx, JSValueConst this_val, int argc, JSV
         JS_ToInt32(ctx, &b, argv[2]);
     }
     C2D_TargetClear(g_top, col(r, g, b));
-    C2D_SceneBegin(g_top);
     return JS_UNDEFINED;
 }
 
@@ -48,8 +50,17 @@ static JSValue js_gfx_fillRect(JSContext *ctx, JSValueConst this_val, int argc, 
     JS_ToInt32(ctx, &r, argv[4]);
     JS_ToInt32(ctx, &g, argv[5]);
     JS_ToInt32(ctx, &b, argv[6]);
-    C2D_DrawRectSolid(x * g_scale, y * g_scale + g_offy, 0.0f,
-                      w * g_scale, h * g_scale, col(r, g, b));
+
+    // Clip to the logical screen before scaling, so out-of-range coords behave
+    // like the Web canvas and the golden render mock (both clamp to the screen).
+    int x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y;
+    int x1 = x + w, y1 = y + h;
+    if (x1 > (int)LOGIC_W) x1 = (int)LOGIC_W;
+    if (y1 > (int)LOGIC_H) y1 = (int)LOGIC_H;
+    if (x1 <= x0 || y1 <= y0) return JS_UNDEFINED; // fully off-screen / empty
+
+    C2D_DrawRectSolid(x0 * g_scale, y0 * g_scale + g_offy, 0.0f,
+                      (x1 - x0) * g_scale, (y1 - y0) * g_scale, col(r, g, b));
     return JS_UNDEFINED;
 }
 

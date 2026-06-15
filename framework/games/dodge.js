@@ -1,4 +1,7 @@
 // @ts-check
+// @title Dodge
+// @order 4
+// @controls D-pad to dodge; START restart
 // dodge.js — arena survival / dodge game.
 // Move the hero with the d-pad. Dodge red hazards (slimes) flying across the
 // arena; survive as long as you can. Grab yellow coins for bonus score.

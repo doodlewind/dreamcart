@@ -9,6 +9,7 @@ use core::ptr::null;
 
 use libquickjs_sys::*;
 use psp::sys::{self, ClearBuffer, GuPrimitive, VertexType};
+use psp::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 /// A 2D sprite vertex. The PSP GU expects components in a fixed order
 /// (color before position) for `COLOR_8888 | VERTEX_16BIT | TRANSFORM_2D`:
@@ -44,6 +45,12 @@ unsafe fn arg_i32(ctx: *mut JSContext, argc: i32, argv: *mut JSValue, i: isize) 
 }
 
 /// `gfx.clear(r, g, b)` — clear the framebuffer to a solid color.
+///
+/// The cross-host contract (see the Web/3DS hosts) defines `clear` as "fill the
+/// screen with this color" — nothing more. Depth is intentionally NOT cleared:
+/// the GU never enables `DepthTest` (see `init_graphics` in main.rs), so the
+/// depth buffer is unused and clearing it would be both wasteful and a behavior
+/// the other platforms don't share.
 unsafe extern "C" fn js_gfx_clear(
     ctx: *mut JSContext,
     _this: JSValue,
@@ -54,8 +61,7 @@ unsafe extern "C" fn js_gfx_clear(
     let g = arg_i32(ctx, argc, argv, 1);
     let b = arg_i32(ctx, argc, argv, 2);
     sys::sceGuClearColor(pack_abgr(r, g, b));
-    sys::sceGuClearDepth(0);
-    sys::sceGuClear(ClearBuffer::COLOR_BUFFER_BIT | ClearBuffer::DEPTH_BUFFER_BIT);
+    sys::sceGuClear(ClearBuffer::COLOR_BUFFER_BIT);
     JS_UNDEFINED
 }
 
@@ -79,10 +85,22 @@ unsafe extern "C" fn js_gfx_fill_rect(
         arg_i32(ctx, argc, argv, 6),
     );
 
+    // Clip the rect to the logical screen. The GU's scissor test already discards
+    // off-screen fragments, but the 16-bit vertex components would *wrap* for
+    // coordinates outside i16 range; clamping here keeps behavior identical to
+    // the Web canvas and the golden render mock (both clamp to the screen).
+    let x0 = x.max(0).min(SCREEN_WIDTH as i32);
+    let y0 = y.max(0).min(SCREEN_HEIGHT as i32);
+    let x1 = (x + w).max(0).min(SCREEN_WIDTH as i32);
+    let y1 = (y + h).max(0).min(SCREEN_HEIGHT as i32);
+    if x1 <= x0 || y1 <= y0 {
+        return JS_UNDEFINED; // fully off-screen / empty
+    }
+
     // A PSP "sprite" is two vertices: top-left and bottom-right corners.
     let verts: psp::Align16<[Vertex2D; 2]> = psp::Align16([
-        Vertex2D { color, x: x as i16, y: y as i16, z: 0, _pad: 0 },
-        Vertex2D { color, x: (x + w) as i16, y: (y + h) as i16, z: 0, _pad: 0 },
+        Vertex2D { color, x: x0 as i16, y: y0 as i16, z: 0, _pad: 0 },
+        Vertex2D { color, x: x1 as i16, y: y1 as i16, z: 0, _pad: 0 },
     ]);
 
     // The GE reads vertices from RAM, not the CPU cache — flush this buffer.

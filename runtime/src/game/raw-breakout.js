@@ -1,3 +1,6 @@
+// @title Breakout (raw API)
+// @order 13
+// @controls LEFT/RIGHT paddle, CROSS launch
 // Breakout / Arkanoid for PSP (QuickJS)
 // Controls: LEFT/RIGHT move paddle, CROSS launches ball (auto-launch after ~90 frames),
 //           START restarts after game over.
@@ -20,8 +23,8 @@ function drawText(str, x, y, s, r, g, b){
 }
 
 // ---- Button masks ----
-var UP=0x10, RIGHT=0x20, DOWN=0x40, LEFT=0x80;
-var CROSS=0x4000, CIRCLE=0x2000, TRIANGLE=0x1000, SQUARE=0x8000, START=0x08, SELECT=0x01;
+var BTN_UP=0x10, BTN_RIGHT=0x20, BTN_DOWN=0x40, BTN_LEFT=0x80;
+var BTN_CROSS=0x4000, BTN_CIRCLE=0x2000, BTN_TRIANGLE=0x1000, BTN_SQUARE=0x8000, BTN_START=0x08, BTN_SELECT=0x01;
 
 // ---- Screen / layout constants ----
 var SCRW=480, SCRH=272;
@@ -134,7 +137,7 @@ function frame(buttons){
 
   if(gameOver){
     // Wait for START to restart
-    if((buttons&START) && !(prevButtons&START)){
+    if((buttons&BTN_START) && !(prevButtons&BTN_START)){
       reset();
     }
     renderGameOver();
@@ -143,8 +146,8 @@ function frame(buttons){
   }
 
   // ---- Paddle movement ----
-  if(buttons&LEFT)  paddleX-=PADDLE_SPEED;
-  if(buttons&RIGHT) paddleX+=PADDLE_SPEED;
+  if(buttons&BTN_LEFT)  paddleX-=PADDLE_SPEED;
+  if(buttons&BTN_RIGHT) paddleX+=PADDLE_SPEED;
   if(paddleX<0) paddleX=0;
   if(paddleX>SCRW-PADDLE_W) paddleX=SCRW-PADDLE_W;
 
@@ -153,7 +156,7 @@ function frame(buttons){
     ballX=paddleX+PADDLE_W/2-BALL_SIZE/2;
     ballY=PADDLE_Y-BALL_SIZE-1;
     launchTimer++;
-    var launchPressed=(buttons&CROSS) && !(prevButtons&CROSS);
+    var launchPressed=(buttons&BTN_CROSS) && !(prevButtons&BTN_CROSS);
     if(launchPressed || launchTimer>=90){
       launchBall();
     }

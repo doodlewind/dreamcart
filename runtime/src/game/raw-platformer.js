@@ -1,3 +1,6 @@
+// @title Platformer (raw API)
+// @order 15
+// @controls LEFT/RIGHT run, CROSS jump, START restart
 // platformer.js - a simple single-screen mini-Mario platformer for PSP / QuickJS
 // Controls: LEFT/RIGHT = run, CROSS (X) = jump (only when on ground/platform),
 //           START = restart after game over.

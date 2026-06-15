@@ -1,4 +1,7 @@
 // @ts-check
+// @title Snake
+// @order 5
+// @controls D-pad to steer
 // Snake rebuilt on the framework — the reference game for golden tests
 // (deterministic: walls wrap, food via the seeded rng, no input needed).
 import { Btn, Colors, Scene, start } from '../src/index';

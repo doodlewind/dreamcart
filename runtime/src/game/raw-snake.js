@@ -1,3 +1,6 @@
+// @title Snake (raw API)
+// @order 10
+// @controls D-pad steer; walls wrap; START restart
 // Classic Snake, written in JavaScript, running on QuickJS on a Sony PSP.
 //
 // Host API provided by the Rust runtime (on globalThis):
@@ -14,11 +17,11 @@ var ROWS = 13; // 13 * 20 = 260
 var OFF_Y = 12; // leave a 12px strip at the top for the score bar
 
 // PSP controller button bits (mirror psp::sys::CtrlButtons).
-var B_UP = 0x10;
-var B_RIGHT = 0x20;
-var B_DOWN = 0x40;
-var B_LEFT = 0x80;
-var B_START = 0x08;
+var BTN_UP = 0x10;
+var BTN_RIGHT = 0x20;
+var BTN_DOWN = 0x40;
+var BTN_LEFT = 0x80;
+var BTN_START = 0x08;
 
 var MOVE_EVERY = 8; // advance the snake every 8 frames (~7.5 cells/sec)
 
@@ -58,10 +61,10 @@ function reset() {
 
 function tryTurn(buttons) {
   // Disallow 180-degree reversals.
-  if (buttons & B_UP && dir.y === 0) nextDir = { x: 0, y: -1 };
-  else if (buttons & B_DOWN && dir.y === 0) nextDir = { x: 0, y: 1 };
-  else if (buttons & B_LEFT && dir.x === 0) nextDir = { x: -1, y: 0 };
-  else if (buttons & B_RIGHT && dir.x === 0) nextDir = { x: 1, y: 0 };
+  if (buttons & BTN_UP && dir.y === 0) nextDir = { x: 0, y: -1 };
+  else if (buttons & BTN_DOWN && dir.y === 0) nextDir = { x: 0, y: 1 };
+  else if (buttons & BTN_LEFT && dir.x === 0) nextDir = { x: -1, y: 0 };
+  else if (buttons & BTN_RIGHT && dir.x === 0) nextDir = { x: 1, y: 0 };
 }
 
 function step() {
@@ -118,7 +121,7 @@ log("snake.js loaded");
 function frame(buttons) {
   if (!alive) {
     // Show a red-tinted board; press START to restart.
-    if (buttons & B_START && !(prevButtons & B_START)) {
+    if (buttons & BTN_START && !(prevButtons & BTN_START)) {
       reset();
     }
     prevButtons = buttons;

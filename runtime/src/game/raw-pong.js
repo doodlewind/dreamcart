@@ -1,3 +1,6 @@
+// @title Pong (raw API)
+// @order 11
+// @controls UP/DOWN move paddle (vs AI)
 // ============================================================================
 // PONG  (pong.js)  -- for Sony PSP via QuickJS
 // Controls: UP / DOWN = move left paddle. START = (only used implicitly; play
@@ -25,7 +28,7 @@ function drawText(str, x, y, s, r, g, b){
 }
 
 // ---- Button masks ----------------------------------------------------------
-var UP=0x10, DOWN=0x40; // only these are needed for Pong
+var BTN_UP=0x10, BTN_DOWN=0x40; // only these are needed for Pong
 
 // ---- Screen / playfield constants ------------------------------------------
 var SCREEN_W = 480, SCREEN_H = 272;
@@ -138,8 +141,8 @@ function frame(buttons){
   // ----- UPDATE -----------------------------------------------------------
 
   // Player paddle movement.
-  if(buttons & UP)   leftPaddleY -= PLAYER_SPEED;
-  if(buttons & DOWN) leftPaddleY += PLAYER_SPEED;
+  if(buttons & BTN_UP)   leftPaddleY -= PLAYER_SPEED;
+  if(buttons & BTN_DOWN) leftPaddleY += PLAYER_SPEED;
   leftPaddleY = clamp(leftPaddleY, 0, SCREEN_H - PADDLE_H);
 
   // AI paddle: track ball's vertical center with capped speed.

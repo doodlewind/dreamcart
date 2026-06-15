@@ -1,3 +1,6 @@
+// @title Tetris (raw API)
+// @order 14
+// @controls LEFT/RIGHT move, DOWN soft-drop, CROSS/UP rotate, START restart
 // ============================================================
 // TETRIS  (tetris.js)
 // Classic Tetris for PSP / QuickJS runtime.
