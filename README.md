@@ -35,6 +35,22 @@ rectangle pixel-font). Select which one to embed at build time with `PSPJS_GAME`
 PSPJS_GAME=tetris.js bun run psp     # builds EBOOT.PBP for Tetris
 ```
 
+## Play (one command)
+`bun run play <web|psp|3ds> [game]` builds the chosen game and launches the
+matching emulator:
+
+``` sh
+bun run play web              # open the playground (pick a game from the list)
+bun run play web fw-maze      # playground, jump straight to a game
+bun run play psp tetris       # build EBOOT + launch PPSSPP
+bun run play 3ds fw-rpg       # build .3dsx + launch a 3DS emulator (Azahar/Citra/…)
+```
+
+Run `bun run play` with no args to see the game list. For Web you don't need a
+game arg — the playground has a dropdown. PSP needs PPSSPP
+(`brew install --cask ppsspp`); 3DS needs a 3DS emulator in `/Applications`
+(it prints the built `.3dsx` path + install hint if none is found).
+
 ## Framework (TypeScript)
 The raw `gfx`/`frame` contract is deliberately tiny. On top of it lives a small,
 **isomorphic, TypeScript** game framework ([`framework/`](framework/)) that the

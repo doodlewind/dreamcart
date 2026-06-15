@@ -5,10 +5,6 @@
 import { buildGames } from "./build-games.ts";
 
 const ROOT = new URL(".", import.meta.url).pathname; // the web/ dir
-const PORT = Number(process.env.PORT ?? 8123);
-
-const n = await buildGames();
-console.log("manifest: " + n + " games");
 
 const TYPES: Record<string, string> = {
   html: "text/html; charset=utf-8",
@@ -18,21 +14,31 @@ const TYPES: Record<string, string> = {
   json: "application/json",
 };
 
-const server = Bun.serve({
-  port: PORT,
-  hostname: "127.0.0.1",
-  async fetch(req) {
-    let path = new URL(req.url).pathname;
-    if (path === "/") path = "/index.html";
-    // prevent path traversal, then resolve within web/
-    const safe = path.replace(/\.\.+/g, "").replace(/^\/+/, "");
-    const file = Bun.file(ROOT + safe);
-    if (!(await file.exists())) return new Response("Not found: " + path, { status: 404 });
-    const ext = safe.split(".").pop() ?? "";
-    return new Response(file, { headers: { "content-type": TYPES[ext] ?? "application/octet-stream" } });
-  },
-});
+/** Build the manifest and start the static server. Returns the Bun server. */
+export async function startServer(port = Number(process.env.PORT ?? 8123)) {
+  const n = await buildGames();
+  console.log("manifest: " + n + " games");
 
-console.log("psp-js Playground -> http://localhost:" + server.port + "/");
-console.log("  pick a game:        http://localhost:" + server.port + "/?game=fw-rpg.js");
-console.log("Press Ctrl-C to stop.");
+  const server = Bun.serve({
+    port,
+    hostname: "127.0.0.1",
+    async fetch(req) {
+      let path = new URL(req.url).pathname;
+      if (path === "/") path = "/index.html";
+      const safe = path.replace(/\.\.+/g, "").replace(/^\/+/, "");
+      const file = Bun.file(ROOT + safe);
+      if (!(await file.exists())) return new Response("Not found: " + path, { status: 404 });
+      const ext = safe.split(".").pop() ?? "";
+      return new Response(file, { headers: { "content-type": TYPES[ext] ?? "application/octet-stream" } });
+    },
+  });
+
+  console.log("psp-js Playground -> http://localhost:" + server.port + "/");
+  console.log("  pick a game:        http://localhost:" + server.port + "/?game=fw-rpg.js");
+  return server;
+}
+
+if (import.meta.main) {
+  await startServer();
+  console.log("Press Ctrl-C to stop.");
+}

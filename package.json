@@ -5,6 +5,7 @@
   "description": "Isomorphic JS game runtime + framework for PSP, Web and 3DS. All scripts run on Bun.",
   "scripts": {
     "setup": "bun scripts/setup.ts",
+    "play": "bun scripts/play.ts",
     "serve": "bun web/serve.ts",
     "web": "bun web/build-games.ts",
     "bake": "bun framework/bake/bake-font.ts && bun framework/bake/bake-sprites.ts",
