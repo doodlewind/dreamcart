@@ -1,4 +1,4 @@
-# PSP.js
+# DreamCart
 An **isomorphic** JavaScript game runtime — the *same* game `.js` runs unchanged on
 Sony **PSP**, the **Web**, and Nintendo **3DS**, powered by [QuickJS](https://bellard.org/quickjs/)
 (plus [rust-psp](https://github.com/overdrivenpotato/rust-psp) on PSP and
@@ -135,8 +135,8 @@ Install [Bun](https://bun.sh) and [Homebrew](https://brew.sh) (and Docker, e.g.
 **everything**:
 
 ``` sh
-git clone https://github.com/doodlewind/psp-js.git
-cd psp-js
+git clone https://github.com/doodlewind/dreamcart.git
+cd dreamcart
 bun install
 bun run bootstrap
 ```
@@ -190,7 +190,7 @@ Builds a `.3dsx` homebrew app using the `devkitpro/devkitarm` Docker image — n
 host toolchain install or sudo needed (just Docker, e.g. OrbStack/Docker Desktop):
 
 ``` sh
-PSPJS_GAME=raw-tetris.js bun run 3ds   # -> runtime-3ds/psp-js-3ds.3dsx
+PSPJS_GAME=raw-tetris.js bun run 3ds   # -> runtime-3ds/dreamcart-3ds.3dsx
 ```
 
 Run the `.3dsx` in [Azahar](https://azahar-emu.org/) (the maintained Citra fork)

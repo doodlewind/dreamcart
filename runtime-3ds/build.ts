@@ -10,5 +10,5 @@ const IMG = "devkitpro/devkitarm:latest";
 console.log("3DS build: " + game);
 await $`bun ${here}gen-game.ts ${game}`;
 await $`docker run --rm -v ${root.replace(/\/$/, "")}:/work -w /work/runtime-3ds ${IMG} bash -lc ${"make -j8"}`;
-console.log("output: runtime-3ds/psp-js-3ds.3dsx");
-await $`file ${here}psp-js-3ds.3dsx`;
+console.log("output: runtime-3ds/dreamcart-3ds.3dsx");
+await $`file ${here}dreamcart-3ds.3dsx`;

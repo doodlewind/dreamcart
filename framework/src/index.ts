@@ -1,4 +1,4 @@
-// Public API of the psp-js game framework. Games import from here and are
+// Public API of the DreamCart game framework. Games import from here and are
 // bundled (with the framework inlined) per platform by framework/build.ts (Bun.build).
 import './assets-font'; // registers the default font (side effect: setFont)
 

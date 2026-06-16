@@ -1,5 +1,5 @@
 {
-  "name": "psp-js",
+  "name": "dreamcart",
   "private": true,
   "type": "module",
   "description": "Isomorphic JS game runtime + framework for PSP, Web and 3DS. All scripts run on Bun.",
@@ -9,6 +9,8 @@
     "play": "bun scripts/play.ts",
     "serve": "bun web/serve.ts",
     "web": "bun web/build-games.ts",
+    "site": "bun web/deploy-build.ts",
+    "deploy": "bun web/deploy-build.ts && bunx wrangler pages deploy web/site --project-name dreamcart",
     "bake": "bun framework/bake/bake-font.ts && bun framework/bake/bake-sprites.ts",
     "typecheck": "bunx tsc -p framework/tsconfig.json --noEmit && bunx tsc -p framework/games/tsconfig.json --noEmit",
     "bundle": "bun framework/build.ts",

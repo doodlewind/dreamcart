@@ -31,7 +31,7 @@ async function run(p: ReturnType<typeof $>): Promise<boolean> {
   return r.exitCode === 0;
 }
 
-console.log("psp-js environment setup (" + arch + ")\n");
+console.log("DreamCart environment setup (" + arch + ")\n");
 
 // 1) Bun deps
 console.log("deps:");

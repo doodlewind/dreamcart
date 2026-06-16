@@ -1,4 +1,4 @@
-// Bun.serve static server for the psp-js Playground.
+// Bun.serve static server for the DreamCart Playground.
 //   bun web/serve.ts            -> http://localhost:8123
 //   PORT=3000 bun web/serve.ts
 // Regenerates web/games.generated.js on startup so the manifest is always fresh.
@@ -33,7 +33,7 @@ export async function startServer(port = Number(process.env.PORT ?? 8123)) {
     },
   });
 
-  console.log("psp-js Playground -> http://localhost:" + server.port + "/");
+  console.log("DreamCart Playground -> http://localhost:" + server.port + "/");
   console.log("  pick a game:        http://localhost:" + server.port + "/?game=rpg.js");
   return server;
 }

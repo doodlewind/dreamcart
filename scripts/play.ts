@@ -74,7 +74,7 @@ if (platform === "web") {
   if (isFw(game)) await ensureBundles();
   console.log("building 3DS .3dsx for " + game + " ...");
   await $`bun ${root}runtime-3ds/build.ts`.env({ ...process.env, PSPJS_GAME: game + ".js" });
-  const dsx = root + "runtime-3ds/psp-js-3ds.3dsx";
+  const dsx = root + "runtime-3ds/dreamcart-3ds.3dsx";
   const dirs = ["/Applications", `${process.env.HOME}/Applications`];
   let emuApp = "";
   for (const e of ["Azahar", "Lime3DS", "Citra", "Panda3DS"]) {

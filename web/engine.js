@@ -1,4 +1,4 @@
-// psp-js Web engine — an isomorphic Canvas implementation of the same tiny
+// DreamCart Web engine — an isomorphic Canvas implementation of the same tiny
 // runtime the PSP and 3DS builds provide. A game is a .js file that uses only:
 //   gfx.clear(r,g,b), gfx.fillRect(x,y,w,h,r,g,b), log(msg)
 //   globalThis.frame = function(buttons){ ... }   // called ~60x/second

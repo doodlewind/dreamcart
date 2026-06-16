@@ -1,0 +1,7 @@
+{
+  // Cloudflare Pages config for the dreamcart.games site.
+  // Deploy with: bun run deploy   (assembles web/site, then `wrangler pages deploy`)
+  "name": "dreamcart",
+  "compatibility_date": "2025-06-15",
+  "pages_build_output_dir": "web/site"
+}

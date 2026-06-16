@@ -6,6 +6,7 @@ dist
 .pspjs-*.workflow.js
 dist-3ds
 web/games.generated.js
+web/site
 runtime-3ds/build
 runtime-3ds/source/game_js.h
 runtime-3ds/*.3dsx
