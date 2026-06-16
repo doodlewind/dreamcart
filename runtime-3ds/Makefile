@@ -60,6 +60,7 @@ export DEPSDIR	:=	$(CURDIR)/$(BUILD)
 CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+PICAFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.v.pica)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
 
 #---------------------------------------------------------------------------------
@@ -71,9 +72,11 @@ endif
 #---------------------------------------------------------------------------------
 
 export OFILES_SOURCES 	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
-export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES))
+export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES)) \
+				$(PICAFILES:.v.pica=.shbin.o)
 export OFILES := $(OFILES_BIN) $(OFILES_SOURCES)
-export HFILES	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
+export HFILES	:=	$(addsuffix .h,$(subst .,_,$(BINFILES))) \
+				$(PICAFILES:.v.pica=_shbin.h)
 
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
@@ -116,6 +119,15 @@ $(OUTPUT).elf	:	$(OFILES)
 %.bin.o	%_bin.h :	%.bin
 	@echo $(notdir $<)
 	@$(bin2o)
+
+#---------------------------------------------------------------------------------
+# PICA200 vertex shader rule: %.v.pica -> %.shbin (picasso) -> %.shbin.o + %_shbin.h
+# (this devkitARM image's 3ds_rules ships bin2o but not the shader recipe).
+#---------------------------------------------------------------------------------
+%.shbin.o %_shbin.h : %.v.pica
+	@echo $(notdir $<)
+	@picasso -o $*.shbin $<
+	@bin2s -a 4 -H `echo $* | tr . _`_shbin.h $*.shbin | $(AS) -o $*.shbin.o
 
 -include $(DEPSDIR)/*.d
 

@@ -8,13 +8,17 @@ Each platform implements the same tiny native contract — `gfx.clear(r,g,b)`,
 `gfx.fillRect(x,y,w,h,r,g,b)`, `log(msg)`, and a `frame(buttons)` function called
 once per frame with a fixed controller bitmask — so games in
 [`runtime/src/game/`](runtime/src/game/) are written once and run everywhere.
+An **optional** `g3d` contract adds 3D the same way: meshes uploaded once + one
+batched draw-list per frame, with all scene/physics/math logic in shared JS and a
+native engine per platform (see [`docs/3d-design.md`](docs/3d-design.md) and the
+`cube3d`/`racing3d`/`fps3d` games).
 
-| Platform | Host | Graphics | Status |
-|----------|------|----------|--------|
-| PSP | Rust (rust-psp) + QuickJS | sceGu | ✅ runs (PPSSPP) |
-| Web | Canvas + RAF | Canvas2D | ✅ runs ([Playground](web/index.html)) |
-| 3DS | C (libctru) + QuickJS | citro2d | ✅ builds `.3dsx` (Azahar/hardware) |
-| Android (dual-screen) | Kotlin + WebView (web engine) | Canvas2D | ✅ runs (3DS-style handheld; top=game, bottom=native UI) — see [`android/`](android/) |
+| Platform | Host | Graphics (2D / 3D) | Status |
+|----------|------|--------------------|--------|
+| PSP | Rust (rust-psp) + QuickJS | sceGu / sceGu+sceGum | ✅ runs (PPSSPP) |
+| Web | Canvas + RAF | Canvas2D / WebGL2 | ✅ runs ([Playground](web/index.html)) |
+| 3DS | C (libctru) + QuickJS | citro2d / citro3d | ✅ runs (Azahar/hardware) |
+| Android (dual-screen) | Kotlin + WebView (web engine) | Canvas2D / WebGL2 | ✅ runs (3DS-style handheld; top=game, bottom=native UI) — see [`android/`](android/) |
 
 ![Snake running on PPSSPP](docs/snake.png)
 

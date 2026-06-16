@@ -1,0 +1,47 @@
+; DreamCart 3DS vertex shader — minimal MVP transform.
+;
+; The host premultiplies mvp = viewProj * model on the ARM CPU (per DRAW) and
+; uploads it as one mat4 uniform, so the shader is a single matrix-times-vector.
+; This matches the wire format: only ONE column-major matrix ever crosses the
+; boundary per draw, and the CPU does the proj*view*model compose with C3D_Mtx.
+;
+; Inputs (see AttrInfo in main.c sceneInit):
+;   v0 = position (3 x f32)        -> attr 0
+;   v1 = color    (4 x u8 -> vec4) -> attr 1   (raw 0..255 bytes; we normalize)
+; Outputs:
+;   position  (clip space)
+;   color0    (vertex color / 255; TexEnv = PRIMARY_COLOR/REPLACE)
+
+; The 4x4 MVP uniform. mvp[0..3] are the four ROWS the GPU dot-products with the
+; position vector, so the host uploads the matrix row-major into the C3D_Mtx
+; (the column-major wire matrix is transposed on the CPU — see wireToMtx()).
+.fvec mvp[4]
+
+.constf myconst(0.0, 1.0, 0.0, 0.0)
+.alias  ones myconst.yyyy ; vec4(1.0)
+; The PICA loads GPU_UNSIGNED_BYTE attributes as raw 0..255 floats (NOT
+; normalized like GL/PSP), so colors would clamp to white. Scale by 1/255.
+.constf inv255(0.003921568, 0.003921568, 0.003921568, 0.003921568)
+
+.alias inpos v0
+.alias inclr v1
+
+.out outpos position
+.out outclr color
+
+.proc main
+	; r0 = vec4(inpos.xyz, 1.0)
+	mov r0.xyz, inpos
+	mov r0.w,   ones
+
+	; outpos = mvp * r0  (each row dotted with the position)
+	dp4 outpos.x, mvp[0], r0
+	dp4 outpos.y, mvp[1], r0
+	dp4 outpos.z, mvp[2], r0
+	dp4 outpos.w, mvp[3], r0
+
+	; normalize the 0..255 byte color to 0..1 (constant must be src1 on the PICA)
+	mul outclr, inv255, inclr
+
+	end
+.end

@@ -5,6 +5,7 @@
 //   bun framework/test/golden.ts           # compare
 //   UPDATE=1 bun framework/test/golden.ts  # (re)write goldens
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { Raster3D } from "./raster3d";
 
 const here = new URL(".", import.meta.url).pathname;
 const gameDir = here + "../../runtime/src/game/";
@@ -75,9 +76,14 @@ async function runGame(
   frames: number,
   inputAt?: (f: number) => number,
   seedRandom?: number,
-): Promise<Uint8Array> {
+): Promise<{ buf: Uint8Array; raster: Raster3D }> {
   const buf = new Uint8Array(W * H * 4);
+  // The 3D host is the software reference rasterizer: it renders the same submit
+  // buffer the native hosts get, into the same RGBA buffer (3D first), and the
+  // 2D gfx HUD draws on top. 2D-only games never touch it (no scene3d -> no submit).
+  const raster = new Raster3D(buf, W, H);
   (globalThis as any).gfx = makeGfx(buf);
+  (globalThis as any).g3d = raster;
   (globalThis as any).log = () => {};
   (globalThis as any).frame = undefined;
   const realRandom = Math.random;
@@ -90,8 +96,9 @@ async function runGame(
     for (let f = 0; f < frames; f++) fr(inputAt ? inputAt(f) : 0);
   } finally {
     Math.random = realRandom;
+    delete (globalThis as any).g3d;
   }
-  return buf;
+  return { buf, raster };
 }
 
 const SPECS: { name: string; frames: number; input?: (f: number) => number }[] = [
@@ -101,6 +108,11 @@ const SPECS: { name: string; frames: number; input?: (f: number) => number }[] =
   { name: "maze", frames: 200, input: (f) => [0x20, 0x40, 0x80, 0x10][(f >> 4) & 3] },
   { name: "dodge", frames: 200, input: (f) => (f % 50 < 25 ? 0x20 : 0x80) },
   { name: "rpg", frames: 260, input: (f) => (f < 45 ? 0x80 : f < 170 ? 0x40 : 0x20 | (f % 40 === 0 ? 0x4000 : 0)) },
+  { name: "cube3d", frames: 120, input: (f) => (f < 30 ? 0x20 : f < 60 ? 0x10 : f < 90 ? 0x80 : 0x40) },
+  // racing: hold accelerate (CROSS) the whole time, steer right then left.
+  { name: "racing3d", frames: 180, input: (f) => 0x4000 | (f > 60 && f < 110 ? 0x20 : f >= 110 ? 0x80 : 0) },
+  // fps: turn right, walk forward, shoot a few times.
+  { name: "fps3d", frames: 180, input: (f) => (f < 40 ? 0x20 : f < 110 ? 0x10 : 0x80) | (f % 24 === 0 ? 0x4000 : 0) },
 ];
 
 let pass = 0, fail = 0, skipped = 0;
@@ -108,8 +120,9 @@ for (const spec of SPECS) {
   const file = gameDir + spec.name + ".js";
   if (!existsSync(file)) { console.log("SKIP", spec.name, "(no bundle)"); skipped++; continue; }
   let buf: Uint8Array;
+  let raster: Raster3D;
   try {
-    buf = await runGame(file, spec.frames, spec.input);
+    ({ buf, raster } = await runGame(file, spec.frames, spec.input));
   } catch (e: any) {
     console.log("FAIL", spec.name, "- threw:", e?.message ?? e); fail++; continue;
   }
@@ -117,13 +130,31 @@ for (const spec of SPECS) {
   if (UPDATE || !existsSync(goldRaw)) {
     await Bun.write(goldRaw, Bun.gzipSync(buf));
     await Bun.write(goldenDir + spec.name + ".png", encodePNG(buf));
-    console.log(UPDATE ? "WROTE" : "NEW  ", spec.name); pass++; continue;
+    console.log(UPDATE ? "WROTE" : "NEW  ", spec.name); pass++;
+  } else {
+    const golden = Bun.gunzipSync(new Uint8Array(await Bun.file(goldRaw).arrayBuffer()));
+    let diff = 0;
+    for (let i = 0; i < buf.length; i++) if (buf[i] !== golden[i]) diff++;
+    if (diff === 0) { console.log("PASS ", spec.name); pass++; }
+    else { await Bun.write(goldenDir + spec.name + ".actual.png", encodePNG(buf)); console.log("FAIL ", spec.name, "- " + diff + " byte diffs"); fail++; }
   }
-  const golden = Bun.gunzipSync(new Uint8Array(await Bun.file(goldRaw).arrayBuffer()));
-  let diff = 0;
-  for (let i = 0; i < buf.length; i++) if (buf[i] !== golden[i]) diff++;
-  if (diff === 0) { console.log("PASS ", spec.name); pass++; }
-  else { await Bun.write(goldenDir + spec.name + ".actual.png", encodePNG(buf)); console.log("FAIL ", spec.name, "- " + diff + " byte diffs"); fail++; }
+
+  // 3D games also get a byte-exact draw-list (.dc3d) golden: the uploadMesh +
+  // submit wire bytes, which are deterministic across hosts (shared math).
+  if (raster.used) {
+    const dc3d = goldenDir + spec.name + ".dc3d";
+    const rec = raster.recorded();
+    if (UPDATE || !existsSync(dc3d)) {
+      await Bun.write(dc3d, Bun.gzipSync(rec));
+      console.log(UPDATE ? "WROTE" : "NEW  ", spec.name + ".dc3d");
+    } else {
+      const gold = Bun.gunzipSync(new Uint8Array(await Bun.file(dc3d).arrayBuffer()));
+      let d = rec.length !== gold.length ? 1 : 0;
+      for (let i = 0; i < rec.length && d === 0; i++) if (rec[i] !== gold[i]) d++;
+      if (d === 0) console.log("PASS ", spec.name + ".dc3d");
+      else { console.log("FAIL ", spec.name + ".dc3d - draw-list mismatch"); fail++; }
+    }
+  }
 }
 
 // --- Raw low-level demos (runtime/src/game/raw-*.js) ---

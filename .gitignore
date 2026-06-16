@@ -18,3 +18,5 @@ framework/node_modules
 runtime/src/game/*.js
 !runtime/src/game/raw-*.js
 node_modules
+
+.DS_Store
