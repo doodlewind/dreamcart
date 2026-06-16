@@ -144,11 +144,15 @@
     uModel = gl.getUniformLocation(p, 'u_model');
     uTint = gl.getUniformLocation(p, 'u_tint');
 
-    // Reversed-Z: the shared projection defaults to a [0,1] near->1/far->0 clip
-    // range. Plain WebGL2 only clips z to [-1,1], so prefer EXT_clip_control to
-    // get a true [0,1] range matching PSP/3DS; clear depth to 0 + GREATER test.
-    // Without the extension, fall back to standard-Z (clear 1, LESS) — Web depth
-    // is then threshold-compared, not byte-matched (docs §10.1 C1).
+    // Reversed-Z (the shared projection emits NDC z near->1, far->0 ALWAYS). With
+    // EXT_clip_control we get a true [0,1] clip range (best precision, matches
+    // PSP/3DS). WITHOUT it, plain WebGL2 maps NDC z [-1,1] -> depth [0,1], so the
+    // cube's [0,1] NDC z lands in depth [0.5,1] — lower precision but, crucially,
+    // NEAR still maps to the HIGHER depth value either way. So the depth clear +
+    // func are the SAME with or without the extension: clear to 0 (far), keep the
+    // GREATER (nearer) fragment. (Earlier this fell back to clear-1/LESS, which
+    // assumed a standard-Z projection and rendered the cube inside-out on WebViews
+    // that lack EXT_clip_control — e.g. the Android WebView.)
     var ext = gl.getExtension('EXT_clip_control');
     if (ext) {
       ext.clipControlEXT(ext.LOWER_LEFT_EXT, ext.ZERO_TO_ONE_EXT);
@@ -231,11 +235,12 @@
       gl.viewport(0, 0, W, H);
       gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
-      // Reversed-Z [0,1]: clear depth to 0, keep nearer (GREATER). Standard-Z
-      // fallback: clear to 1, keep nearer (LESS). Background matches raster3d.ts.
+      // Reversed-Z: clear depth to 0 (far), keep the GREATER (nearer) fragment.
+      // Unconditional — near maps to the higher depth value with OR without
+      // EXT_clip_control (see initGL). Background matches raster3d.ts.
       gl.clearColor(0x10 / 255, 0x14 / 255, 0x1e / 255, 1.0);
-      gl.clearDepth(reversedZ ? 0.0 : 1.0);
-      gl.depthFunc(reversedZ ? gl.GREATER : gl.LESS);
+      gl.clearDepth(0.0);
+      gl.depthFunc(gl.GREATER);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
       // SET_CAMERA defaults to identity until the first one is seen this frame.
