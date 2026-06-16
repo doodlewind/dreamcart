@@ -53,6 +53,11 @@
       try { AndroidBridge.current(file); } catch (e) {}
     },
     press: function (bit, down) { PSPJS.pressVirtual(bit, !!down); },
+    // Release every button — called when the top screen loses focus so a held
+    // button can't get stuck down in the game.
+    releaseAll: function () {
+      for (var k in PSPJS.BTN) PSPJS.pressVirtual(PSPJS.BTN[k], false);
+    },
     list: function () { return keys.slice(); }
   };
 
@@ -66,9 +71,10 @@
   // Boot the first game.
   if (keys.length) DreamCart.play(keys[0]);
 
-  // Verification heartbeat (debug builds only). The device's displays are
-  // FLAG_SECURE so screenshots are blocked; instead, once a second we
-  // fingerprint the rendered canvas — count of non-black pixels + a cheap
+  // Verification heartbeat (debug builds only). Some dual-screen handhelds
+  // (e.g. the AYN Thor) report their internal panels as secure displays in
+  // hardware, so `adb screencap` returns blank frames. Instead, once a second
+  // we fingerprint the rendered canvas — count of non-black pixels + a cheap
   // checksum — and report it to native. A non-zero, changing fingerprint
   // proves the top screen is actually drawing and animating the current game.
   // Enabled by MainActivity (window.DC_DEBUG) only in debug builds.

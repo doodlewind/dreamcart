@@ -15,12 +15,16 @@ import android.view.Display
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 /**
  * Top screen (default display). Hosts a full-screen WebView running the exact
@@ -48,7 +52,6 @@ class MainActivity : Activity() {
         KeyEvent.KEYCODE_BUTTON_X to Runtime.Btn.SQUARE,
         KeyEvent.KEYCODE_BUTTON_Y to Runtime.Btn.TRIANGLE,
         KeyEvent.KEYCODE_BUTTON_START to Runtime.Btn.START,
-        KeyEvent.KEYCODE_ENTER to Runtime.Btn.START,
         KeyEvent.KEYCODE_BUTTON_SELECT to Runtime.Btn.SELECT,
     )
 
@@ -63,7 +66,8 @@ class MainActivity : Activity() {
     private var hatX = 0
     private var hatY = 0
 
-    /** Debug hook: `adb shell am broadcast -a games.dreamcart.PLAY --es game raw-pong.js` */
+    /** Debug hook (debug builds only): switch games from adb, e.g.
+     *  `adb shell am broadcast -a games.dreamcart.PLAY --es game <file>.js`. */
     private val playReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, intent: Intent) {
             val file = intent.getStringExtra("game")
@@ -79,6 +83,18 @@ class MainActivity : Activity() {
         }
     }
 
+    // Re-show / tear down the bottom screen as the second display comes and goes.
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = showBottomScreen()
+        override fun onDisplayChanged(displayId: Int) = showBottomScreen()
+        override fun onDisplayRemoved(displayId: Int) {
+            if (bottom?.display?.displayId == displayId) {
+                bottom?.dismiss()
+                bottom = null
+            }
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,6 +107,11 @@ class MainActivity : Activity() {
             settings.mediaPlaybackRequiresUserGesture = false
             settings.allowFileAccess = true
             webViewClient = object : WebViewClient() {
+                // Pin navigation to the bundled asset so the JS bridge can never
+                // be carried to off-origin/remote content.
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                    !request.url.toString().startsWith("file:///android_asset/")
+
                 override fun onPageFinished(view: WebView, url: String) {
                     if (BuildConfig.DEBUG) {
                         view.evaluateJavascript(
@@ -103,7 +124,9 @@ class MainActivity : Activity() {
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(m: ConsoleMessage): Boolean {
-                    Log.i("DreamCart", "[web] ${m.message()} (${m.sourceId()}:${m.lineNumber()})")
+                    if (BuildConfig.DEBUG) {
+                        Log.i("DreamCart", "[web] ${m.message()} (${m.sourceId()}:${m.lineNumber()})")
+                    }
                     return true
                 }
             }
@@ -113,12 +136,14 @@ class MainActivity : Activity() {
         setContentView(web)
         web.loadUrl("file:///android_asset/index.html")
 
-        registerPlayReceiver()
+        if (BuildConfig.DEBUG) registerPlayReceiver()
     }
 
     override fun onStart() {
         super.onStart()
         showBottomScreen()
+        (getSystemService(Context.DISPLAY_SERVICE) as DisplayManager)
+            .registerDisplayListener(displayListener, null)
     }
 
     override fun onResume() {
@@ -126,8 +151,21 @@ class MainActivity : Activity() {
         hideSystemBars()
     }
 
+    /** Releasing focus (background, dialog, display change) must not leave a
+     *  button stuck held in the game. */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) {
+            hatX = 0
+            hatY = 0
+            Runtime.releaseAllButtons()
+        }
+    }
+
     /** Backgrounding the top screen must also clear the bottom screen. */
     override fun onStop() {
+        (getSystemService(Context.DISPLAY_SERVICE) as DisplayManager)
+            .unregisterDisplayListener(displayListener)
         bottom?.dismiss()
         bottom = null
         super.onStop()
@@ -145,21 +183,20 @@ class MainActivity : Activity() {
         }
         Log.i("DreamCart", "bottom UI -> display ${target.displayId} (${target.name})")
         bottom = BottomPresentation(this, target).also {
-            it.setOnDismissListener { bottom = null }
+            it.setOnDismissListener {
+                bottom = null
+                Runtime.clearUiListeners()
+            }
             it.show()
         }
     }
 
     private fun hideSystemBars() {
-        @Suppress("DEPRECATION")
-        web.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                or View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-            )
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, web).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
     }
 
     private fun registerPlayReceiver() {
@@ -202,12 +239,8 @@ class MainActivity : Activity() {
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         val isJoystick = event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
         if (isJoystick && event.action == MotionEvent.ACTION_MOVE) {
-            if (BuildConfig.DEBUG) {
-                val hx = event.getAxisValue(MotionEvent.AXIS_HAT_X)
-                val hy = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
-                if (hx != 0f || hy != 0f) Log.i("DreamCart", "HAT x=$hx y=$hy")
-            }
-            // D-pad reported as a hat axis (the Odin Controller exposes both).
+            // D-pad reported as a hat axis (this device exposes the D-pad as
+            // ABS_HAT0X/Y rather than key events).
             applyAxis(event.getAxisValue(MotionEvent.AXIS_HAT_X), hatX, Runtime.Btn.LEFT, Runtime.Btn.RIGHT) { hatX = it }
             applyAxis(event.getAxisValue(MotionEvent.AXIS_HAT_Y), hatY, Runtime.Btn.UP, Runtime.Btn.DOWN) { hatY = it }
             return true
@@ -232,13 +265,16 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        try {
-            unregisterReceiver(playReceiver)
-        } catch (_: Exception) {
+        if (BuildConfig.DEBUG) {
+            try {
+                unregisterReceiver(playReceiver)
+            } catch (_: Exception) {
+            }
         }
         bottom?.dismiss()
         bottom = null
         if (Runtime.webView === web) Runtime.webView = null
+        (web.parent as? ViewGroup)?.removeView(web)
         web.destroy()
         super.onDestroy()
     }

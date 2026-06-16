@@ -49,6 +49,15 @@ object Runtime {
     var onCurrentChanged: (() -> Unit)? = null
     var onLog: ((String) -> Unit)? = null
 
+    /** Drop the bottom-screen listeners. Called when its Presentation is
+     *  dismissed (the reliable teardown signal) so the singleton never retains
+     *  a dead Presentation/Activity. */
+    fun clearUiListeners() {
+        onGamesChanged = null
+        onCurrentChanged = null
+        onLog = null
+    }
+
     private fun eval(js: String) = main.post {
         webView?.evaluateJavascript(js, null)
     }
@@ -59,10 +68,14 @@ object Runtime {
     fun press(bit: Int, down: Boolean) =
         eval("window.DreamCart && DreamCart.press($bit, $down);")
 
+    /** Release every held button — used when the top screen loses focus so a
+     *  button held at that moment can't get stuck down in the game. */
+    fun releaseAllButtons() =
+        eval("window.DreamCart && DreamCart.releaseAll();")
+
     /** Switch the running game to [file] (a key in the games manifest). */
-    fun play(file: String) {
+    fun play(file: String) =
         eval("window.DreamCart && DreamCart.play(${quote(file)});")
-    }
 
     fun playIndex(index: Int) {
         val g = games.getOrNull(index) ?: return

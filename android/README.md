@@ -68,7 +68,9 @@ The asset sync reuses whatever games are in `runtime/src/game/`. Run
 
 ## Switching games (the bottom screen)
 
-Tap a title in the bottom-screen library. Programmatically / for tests:
+Tap a title in the bottom-screen library, or press **L1/R1** on the console.
+For tests, **debug builds** also register a broadcast hook (not present in
+release):
 
 ```sh
 adb shell am broadcast -a games.dreamcart.PLAY --es game raw-tetris.js
@@ -76,15 +78,16 @@ adb shell am broadcast -a games.dreamcart.PLAY --ei index 3
 adb shell am broadcast -a games.dreamcart.PLAY --es nav next   # or prev
 ```
 
-## Testing on FLAG_SECURE displays
+## Testing on secure-display hardware
 
-Both of the Thor's internal displays are `FLAG_SECURE`, so `adb shell screencap`
-returns blank frames. Debug builds therefore expose a headless verification path:
+The Thor reports both internal panels as secure displays in hardware (not an app
+flag — the app never sets `FLAG_SECURE`), so `adb shell screencap` returns blank
+frames. Debug builds therefore expose a headless verification path:
 
 - A 1 Hz canvas **fingerprint** (`FP nz=<non-black px> sum=<checksum>`) logged
   under tag `DreamCart` — non-zero & changing proves the top screen is rendering
   and animating the current game. (Enabled only when `BuildConfig.DEBUG`.)
-- Button screen-coordinates are logged (`GAMEBTN`/`PADBTN … tap=x,y`) so e2e
+- Each game button's screen-coordinates are logged (`GAMEBTN … tap=x,y`) so e2e
   tests can drive real touches with `adb shell input -d 4 tap <x> <y>`.
 
 ```sh

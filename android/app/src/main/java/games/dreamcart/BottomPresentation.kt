@@ -2,7 +2,6 @@ package games.dreamcart
 
 import android.app.Presentation
 import android.content.Context
-import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.util.TypedValue
@@ -30,9 +29,12 @@ class BottomPresentation(outerContext: Context, display: Display) :
 
     private lateinit var gameList: LinearLayout
     private lateinit var nowPlaying: TextView
+    private lateinit var hintView: TextView
     private lateinit var logView: TextView
 
     private val rowByFile = HashMap<String, Button>()
+
+    private fun color(id: Int) = context.getColor(id)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +45,7 @@ class BottomPresentation(outerContext: Context, display: Display) :
         setContentView(R.layout.bottom_screen)
         gameList = findViewById(R.id.game_list)
         nowPlaying = findViewById(R.id.now_playing)
+        hintView = findViewById(R.id.hint)
         logView = findViewById(R.id.log)
 
         Runtime.onGamesChanged = { rebuildList() }
@@ -93,11 +96,14 @@ class BottomPresentation(outerContext: Context, display: Display) :
         val cur = Runtime.current
         for ((file, b) in rowByFile) {
             val on = file == cur
-            b.setBackgroundColor(Color.parseColor(if (on) "#5EE08A" else "#222736"))
-            b.setTextColor(Color.parseColor(if (on) "#06210F" else "#E6E8EE"))
+            b.setBackgroundColor(color(if (on) R.color.dc_accent else R.color.dc_btn))
+            b.setTextColor(color(if (on) R.color.dc_ink else R.color.dc_fg))
         }
-        val title = Runtime.games.firstOrNull { it.file == cur }?.title
-        nowPlaying.text = if (title != null) "▶ $title" else context.getString(R.string.loading)
+        val g = Runtime.games.firstOrNull { it.file == cur }
+        nowPlaying.text = if (g != null) "▶ ${g.title}" else context.getString(R.string.loading)
+        // Show the current game's own controls when it declares them, else the
+        // generic hint. (Uses GameInfo.controls, carried from the game's header.)
+        hintView.text = g?.controls?.takeIf { it.isNotBlank() } ?: context.getString(R.string.hint)
     }
 
     private fun appendLog(msg: String) {
@@ -118,12 +124,5 @@ class BottomPresentation(outerContext: Context, display: Display) :
                 Log.i("DreamCart", "GAMEBTN $file tap=${loc[0] + b.width / 2},${loc[1] + b.height / 2}")
             }
         }
-    }
-
-    override fun onStop() {
-        if (Runtime.onGamesChanged != null) Runtime.onGamesChanged = null
-        if (Runtime.onCurrentChanged != null) Runtime.onCurrentChanged = null
-        if (Runtime.onLog != null) Runtime.onLog = null
-        super.onStop()
     }
 }
