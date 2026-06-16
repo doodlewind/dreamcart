@@ -30,9 +30,15 @@ const cSrc = await Bun.file(root + "runtime-3ds/source/main.c").text();
 const cHost: Record<string, number> = {};
 for (const m of cSrc.matchAll(/mask\s*\|=\s*(0x[0-9a-fA-F]+);\s*\/\/\s*(\w+)/g)) cHost[m[2].toUpperCase()] = parseInt(m[1], 16);
 
+// android Kotlin host: `object Btn { const val SELECT = 0x01, ... }` in Runtime.kt
+const ktSrc = await Bun.file(root + "android/app/src/main/java/games/dreamcart/Runtime.kt").text();
+const ktBlock = ktSrc.slice(ktSrc.indexOf("object Btn"), ktSrc.indexOf("}", ktSrc.indexOf("object Btn")));
+const kotlin = parsePairs(ktBlock, /const val (\w+)\s*=\s*(0x[0-9a-fA-F]+)/g);
+
 const hosts: { name: string; map: Record<string, number> }[] = [
   { name: "web/engine.js", map: engine },
   { name: "runtime-3ds/source/main.c", map: cHost },
+  { name: "android/.../Runtime.kt", map: kotlin },
 ];
 
 let problems = 0;

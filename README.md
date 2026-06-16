@@ -14,6 +14,7 @@ once per frame with a fixed controller bitmask — so games in
 | PSP | Rust (rust-psp) + QuickJS | sceGu | ✅ runs (PPSSPP) |
 | Web | Canvas + RAF | Canvas2D | ✅ runs ([Playground](web/index.html)) |
 | 3DS | C (libctru) + QuickJS | citro2d | ✅ builds `.3dsx` (Azahar/hardware) |
+| Android (dual-screen) | Kotlin + WebView (web engine) | Canvas2D | ✅ runs (3DS-style handheld; top=game, bottom=native UI) — see [`android/`](android/) |
 
 ![Snake running on PPSSPP](docs/snake.png)
 
