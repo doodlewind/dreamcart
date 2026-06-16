@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>DreamCart</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; background: #000; display: block; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="screen"></canvas></div>
+
+<!-- The exact same isomorphic engine the Web build uses. -->
+<script src="engine.js"></script>
+<script src="games.generated.js"></script>
+<script>
+(function () {
+  var cv = document.getElementById('screen');
+  PSPJS.mount(cv);
+
+  // Scale the fixed 480x272 logical screen to fill the top display while
+  // preserving aspect ratio (letterbox), with crisp nearest-neighbour pixels.
+  function fit() {
+    var W = PSPJS.W, H = PSPJS.H;
+    var s = Math.min(window.innerWidth / W, window.innerHeight / H);
+    cv.style.width = Math.round(W * s) + 'px';
+    cv.style.height = Math.round(H * s) + 'px';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  // Forward engine logs to the native side (shown on the bottom screen).
+  PSPJS.onLog(function (m) {
+    try { AndroidBridge.log(String(m)); } catch (e) {}
+  });
+
+  var GAMES = window.GAMES || {};
+  var keys = Object.keys(GAMES).sort(function (a, b) {
+    return (GAMES[a].order || 99) - (GAMES[b].order || 99);
+  });
+
+  // Public API the native runtime drives via evaluateJavascript().
+  window.DreamCart = {
+    play: function (file) {
+      var g = GAMES[file];
+      if (!g) { try { AndroidBridge.log('no such game: ' + file); } catch (e) {} return; }
+      var err = PSPJS.load(g.run);
+      if (!err) PSPJS.start();
+      try { AndroidBridge.current(file); } catch (e) {}
+    },
+    press: function (bit, down) { PSPJS.pressVirtual(bit, !!down); },
+    list: function () { return keys.slice(); }
+  };
+
+  // Report the library to native so the bottom screen can build its menu.
+  var manifest = keys.map(function (k) {
+    var g = GAMES[k];
+    return { file: k, title: g.title, controls: g.controls || '', kind: g.kind || 'raw' };
+  });
+  try { AndroidBridge.games(JSON.stringify(manifest)); } catch (e) {}
+
+  // Boot the first game.
+  if (keys.length) DreamCart.play(keys[0]);
+
+  // Verification heartbeat (debug builds only). The device's displays are
+  // FLAG_SECURE so screenshots are blocked; instead, once a second we
+  // fingerprint the rendered canvas — count of non-black pixels + a cheap
+  // checksum — and report it to native. A non-zero, changing fingerprint
+  // proves the top screen is actually drawing and animating the current game.
+  // Enabled by MainActivity (window.DC_DEBUG) only in debug builds.
+  DreamCart._startDebugHeartbeat = function () {
+    if (DreamCart._hb) return;
+    var dbgCtx = cv.getContext('2d');
+    DreamCart._hb = setInterval(function () {
+      try {
+        var d = dbgCtx.getImageData(0, 0, PSPJS.W, PSPJS.H).data;
+        var nz = 0, sum = 0;
+        for (var i = 0; i < d.length; i += 4) {
+          if (d[i] || d[i + 1] || d[i + 2]) nz++;
+          sum = (sum + d[i] * 3 + d[i + 1] * 5 + d[i + 2] * 7) & 0xffffff;
+        }
+        AndroidBridge.log('FP nz=' + nz + ' sum=' + sum);
+      } catch (e) {}
+    }, 1000);
+  };
+  if (window.DC_DEBUG) DreamCart._startDebugHeartbeat();
+})();
+</script>
+</body>
+</html>

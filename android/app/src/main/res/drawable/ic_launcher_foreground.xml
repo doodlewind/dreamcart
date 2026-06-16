@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Game cartridge -->
+    <path
+        android:fillColor="#5EE08A"
+        android:pathData="M34,30 h40 a6,6 0 0 1 6,6 v36 a6,6 0 0 1 -6,6 h-40 a6,6 0 0 1 -6,-6 v-36 a6,6 0 0 1 6,-6 z" />
+    <!-- Label window -->
+    <path
+        android:fillColor="#0F1117"
+        android:pathData="M40,38 h28 v18 h-28 z" />
+    <!-- Play triangle -->
+    <path
+        android:fillColor="#0F1117"
+        android:pathData="M48,62 l14,8 l-14,8 z" />
+</vector>

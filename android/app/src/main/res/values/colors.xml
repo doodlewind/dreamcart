@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="dc_bg">#0F1117</color>
+    <color name="dc_panel">#171A23</color>
+    <color name="dc_line">#262B38</color>
+    <color name="dc_fg">#E6E8EE</color>
+    <color name="dc_muted">#8B93A7</color>
+    <color name="dc_accent">#5EE08A</color>
+    <color name="dc_btn">#222736</color>
+    <color name="ic_bg">#0F1117</color>
+</resources>
