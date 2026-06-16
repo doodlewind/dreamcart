@@ -10,7 +10,7 @@ TOPDIR ?= $(CURDIR)
 include $(DEVKITARM)/3ds_rules
 
 #---------------------------------------------------------------------------------
-TARGET		:=	psp-js-3ds
+TARGET		:=	dreamcart-3ds
 BUILD		:=	build
 SOURCES		:=	source quickjs
 DATA		:=	data

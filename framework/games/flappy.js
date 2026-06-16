@@ -2,7 +2,7 @@
 // @title Flappy
 // @order 3
 // @controls CROSS / UP to flap; START restart
-// flappy.js — a Flappy-Bird clone for the psp-js framework.
+// flappy.js — a Flappy-Bird clone for the DreamCart framework.
 // Bird stays at a fixed x with gravity; CROSS/Up flaps. Pipes scroll left;
 // passing a pipe scores. Hitting a pipe / ground / ceiling ends the game.
 import {
