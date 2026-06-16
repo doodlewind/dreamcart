@@ -154,19 +154,13 @@ unsafe fn init_graphics() {
     sys::sceGuScissor(0, 0, SCREEN_WIDTH as i32, SCREEN_HEIGHT as i32);
     sys::sceGuEnable(GuState::ScissorTest);
 
-    // ---- 3D pass state (reversed-Z) ----
-    // The depth buffer is already bound above (sceGuDepthBuffer). The g3d
-    // contract uses reversed-Z: the shared projection emits clip z near->1,
-    // far->0, the depth buffer is cleared to 0 (far), and a fragment passes when
-    // its z is GREATER-or-equal than what's stored. DepthRange(65535, 0) inverts
-    // the window-z mapping to match (same as examples/cube). CullFace is left
-    // DISABLED to match the software reference rasterizer (raster3d.ts does not
-    // cull); occlusion is resolved purely by the depth test.
-    //
+    // ---- 3D pass state ----
     // DepthTest starts DISABLED so 2D-only games (which never call g3d.submit)
-    // behave exactly as before. gfx3d::submit ENABLES it for the 3D records each
-    // frame, then DISABLES it again afterwards so the 2D HUD (gfx.fillRect, z=0,
-    // TRANSFORM_2D) draws on top unconditionally.
+    // behave exactly as before; gfx3d::submit ENABLES it for the 3D records each
+    // frame, then DISABLES it again so the 2D HUD (gfx.fillRect, z=0, TRANSFORM_2D)
+    // draws on top. CullFace stays DISABLED on all hosts (occlusion is depth-only,
+    // matching raster3d.ts). The depth buffer is already bound (sceGuDepthBuffer).
+    //
     // Reversed-Z depth. The shared projection emits NDC z near->1, far->0, so we
     // map with a STANDARD range (NDC 1 -> window 65535 = near, NDC 0 -> 0 = far),
     // clear to 0 (far) and keep the GREATER fragment — near wins. (The example

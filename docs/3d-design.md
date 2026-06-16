@@ -1,38 +1,43 @@
 # DreamCart 3D Design
 
-> ## Implementation status (M0–M5 landed)
-> - **JS layer (M0) + all three example games — built & test-verified under Bun.**
->   `framework/src/{math,host3d,g3d,mesh,scene3d}.ts`, engine integration,
->   `index.ts` exports; games `framework/games/{cube3d,racing3d,fps3d}.js`;
->   reference rasterizer `framework/test/raster3d.ts`; goldens
->   `framework/test/goldens/{cube3d,racing3d,fps3d}.{rgbz,png,dc3d}`. `bun run test`
->   = **15 passed, 0 failed**, with **zero regression** on the 6 existing 2D games.
->   The cube/racing/FPS each render as correct 3D scenes through the shared software
->   rasterizer (depth-tested, near-plane clipped).
-> - **Web host (M1)** — `web/engine.js` WebGL2 `g3d` (stacked HUD canvas). Builds
->   (`node --check` clean); browser visual pass pending.
-> - **PSP host (M2)** — `runtime/src/gfx3d.rs` + `main.rs`. **Builds AND runs on
->   PPSSPP** (verified via a memstick debug log: `uploadMesh`→`submit`→
->   `sceGumLoadMatrix`→`sceGumDrawArray` loop every frame, no abort). Bring-up
->   uncovered three pre-existing PSP gaps (all fixed, none 3D-specific):
->   (1) added the `JS_GetArrayBuffer` FFI binding (`quickjs-rs` submodule);
->   (2) **`runtime/src/c_heap.rs`** — newlib had no C heap, so QuickJS's
->   `strtod`/`__dtoa` (reached by parsing any high-precision float literal like
->   `3.141592653589793` or formatting a float) `malloc`'d into nothing and
->   `abort()`'d — this had broken *every* framework game, 2D included, not just 3D;
->   (3) `sceGumLoadMatrix` needs 16-byte-aligned matrices (`lv.q`), so the wire
->   matrix is copied into a `psp::Align16` before loading. Also runs the JS on a
->   2 MB worker thread (the `psp::module!` main thread is only 256 KB).
->   *Pending: visual confirmation of cube orientation on screen (the transpose
->   spike) — needs a human eye.*
-> - **3DS host (M3)** — `runtime-3ds/source/{vshader.v.pica,main.c}` + `Makefile`
->   picasso rule. **Builds `dreamcart-3ds.3dsx`.**
-> - **Wire-constant parity** is enforced across all three hosts by `contract.ts`.
-> - **Remaining (runtime visual spikes):** confirm the cube renders right-side-out
->   on PPSSPP / Azahar / a browser. The PSP and 3DS hosts made **opposite** matrix
->   transpose choices (PSP loads column-major directly; 3DS transposes into
->   `C3D_Mtx`) — at most one needs adjusting; flip the loser per §9.1 once seen on
->   an emulator. Also verify reversed-Z occlusion agreement per §9.2.
+> ## Implementation status — SHIPPED (as-built reality)
+> **All three platforms render the cube/racing/FPS in 3D, hardware-verified.**
+> `bun run test` = **15 passed, 0 failed**, zero regression on the 6 existing 2D
+> games. The authoritative statement of the cross-host conventions now lives in
+> code: the **`CROSS-HOST CONVENTIONS` block in `framework/src/g3d.ts`** (depth/clip,
+> Y/winding/cull, color normalization). Where the design body (§1–§10) below
+> differs from this block, **the code + this status win** — several decisions
+> changed during on-hardware bring-up:
+>
+> - **Projection is standard Y-up (no baked Y-flip).** The Y-flip to the Y-down
+>   framebuffer is each renderer's *viewport* job (`raster3d.toScreen`, host
+>   viewports). (The body's §10.1 C4 "bake the Y-flip into the matrix" was reversed.)
+> - **Reversed-Z, realized per host (one NDC contract, three native mappings):**
+>   PSP `sceGuDepthRange(0, 65535)` + GEQUAL; 3DS negates the mvp z-row into the
+>   PICA200's `[-w,0]` clip range + `C3D_DepthMap(true,-1,0)` + GEQUAL; Web
+>   `EXT_clip_control ZERO_TO_ONE` + GREATER. All clear depth to far(0), near wins.
+> - **No back-face culling on any host** (occlusion is depth-only).
+> - **Matrix transpose is settled, not a spike:** PSP loads the column-major wire
+>   matrix verbatim; 3DS transposes into its row-major `C3D_Mtx`. Opposite choices,
+>   both correct for each GPU's dot-product convention.
+> - **3DS 90° screen tilt is applied natively** (`g_tilt` left-multiply in `main.c`);
+>   the shared JS and the `.dc3d` goldens are tilt-free. Accepted per-host divergence
+>   — do NOT move the tilt back into JS (it would break the goldens).
+> - **3DS color is normalized in the PICA vertex shader (`/255`)** — the PICA does
+>   not auto-normalize unsigned-byte attributes (this caused a white-clamp bug).
+> - **PSP-only mesh handling:** indices are expanded to a 16-byte-aligned,
+>   non-indexed `Vertex16` buffer (VFPU/GE alignment); Web/3DS draw indexed. Same
+>   image either way.
+> - **Three pre-existing PSP gaps fixed during bring-up (none 3D-specific):**
+>   (1) added the `JS_GetArrayBuffer` FFI binding (`patches/quickjs-rs.patch`);
+>   (2) `runtime/src/c_heap.rs` gives newlib a C heap (its `strtod`/`__dtoa`, reached
+>   by parsing/formatting *any* non-trivial float, `malloc`'d into nothing and
+>   aborted — had silently broken every framework game, 2D included);
+>   (3) `sceGumLoadMatrix` needs 16-byte-aligned matrices (`psp::Align16`). The JS
+>   also runs on a 2 MB worker thread (the `psp::module!` main thread is 256 KB).
+> - **Wire-constant parity + a no-`Math`-trig determinism guard** are enforced by
+>   `framework/test/contract.ts` across `g3d.ts` / `web/engine.js` /
+>   `runtime-3ds/source/main.c` / `runtime/src/gfx3d.rs`.
 >
 > Scope: extend DreamCart's isomorphic 2D contract to 3D
 > (rotating cube, racing game, single-room FPS) on **PSP / Web / 3DS**, without

@@ -101,10 +101,22 @@ if (trigProblems === 0) console.log(`PASS  3D SDK uses only deterministic math (
 // framework/src/g3d.ts and must be byte-identical in every host that implements
 // `g3d`. Hosts are parsed only once they've been wired (contain DC3D_MAGIC).
 const NAMES = ["DC3D_MAGIC", "DC3D_VERSION", "OP_SET_CAMERA", "OP_DRAW", "OP_IMM_TRIS", "FMT_POS", "FMT_COLOR", "FMT_NORMAL", "FMT_UV"];
-const constRe = new RegExp(`\\b(${NAMES.join("|")})\\b[^0-9xX\\n]*?(0x[0-9a-fA-F]+)`, "g");
+// Match NAME then the next 0x-literal on the SAME line, across all three host
+// syntaxes: JS `var NAME = 0x..`, C `#define NAME 0x..`, Rust `const NAME: u32 =
+// 0x4443_3344;`. `[^\n]*?` (not `[^0-9xX]`) is needed so the digits in Rust's
+// `: u32 =` don't block the match — otherwise the regex falls back to the prose
+// comment and validates a comment against itself instead of the real const.
+// Underscores in the literal (Rust digit separators) are stripped before parse.
+const constRe = new RegExp(`\\b(${NAMES.join("|")})\\b[^\\n]*?(0x[0-9a-fA-F_]+)`, "g");
+const parse3d = (text: string): Record<string, number> => {
+  const out: Record<string, number> = {};
+  // last occurrence wins, so the real Rust `const` (which follows its doc comment)
+  // is what gets validated, not the comment.
+  for (const m of text.matchAll(new RegExp(constRe.source, "g"))) out[m[1]] = parseInt(m[2].replace(/_/g, ""), 16);
+  return out;
+};
 const g3dSrc = await Bun.file(root + "framework/src/g3d.ts").text();
-const canonical3d = parsePairs(g3dSrc, constRe);
-// normalize keys back to exact names (parsePairs uppercases — they already are)
+const canonical3d = parse3d(g3dSrc);
 const host3dFiles = ["web/engine.js", "runtime-3ds/source/main.c", "runtime/src/gfx3d.rs"];
 let wired = 0;
 for (const rel of host3dFiles) {
@@ -113,7 +125,7 @@ for (const rel of host3dFiles) {
   const src = await file.text();
   if (!src.includes("DC3D_MAGIC")) { console.log(`NOTE  ${rel}: 3D wire constants not yet wired (skipped)`); continue; }
   wired++;
-  const map = parsePairs(src, new RegExp(constRe.source, "g"));
+  const map = parse3d(src);
   for (const n of NAMES) {
     if (canonical3d[n] === undefined) continue;
     if (map[n] === undefined) { console.log(`FAIL  ${rel}: missing 3D const ${n}`); problems++; }

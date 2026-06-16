@@ -15,6 +15,33 @@
 //
 // Every record is a whole number of u32 words, so the header (8B) + record
 // headers (4B) keep all f32/matrix payloads 4-byte aligned for typed-array views.
+//
+// ── CROSS-HOST CONVENTIONS (the single source of truth; a new host must honor
+//    all three exactly, and the software reference rasterizer framework/test/
+//    raster3d.ts is the oracle that pins them) ────────────────────────────────
+//
+// 1. DEPTH / CLIP. Matrices are column-major (m[col*4+row]); the camera matrix is
+//    proj*view (see scene3d.ts). The projection is REVERSED-Z: NDC z near->1,
+//    far->0 (clip z in [0,w] when zeroToOne, else [-1,1] reversed). Every host
+//    clears depth to the FAR value and keeps the GREATER (nearer) fragment.
+//    Per-host realizations of that one convention (do NOT unify — each is a
+//    correct native mapping):
+//      Web  — EXT_clip_control ZERO_TO_ONE; clearDepth 0; depthFunc GREATER.
+//      PSP  — sceGuDepthRange(0, 65535); clearDepth 0; DepthFunc GreaterOrEqual.
+//      3DS  — negate the mvp z-row into the PICA200's [-w,0] clip range +
+//             C3D_DepthMap(true,-1,0); clear depth 0; GPU_GEQUAL.
+//
+// 2. Y / WINDING / CULL. NDC is Y-up; the flip to the Y-down framebuffer is each
+//    renderer's VIEWPORT job (raster3d.toScreen and the host viewports) — it is
+//    NOT baked into the shared projection. Back-face culling is DISABLED on every
+//    host (occlusion is depth-only); meshes are wound CCW-outward but that is not
+//    load-bearing while culling is off.
+//
+// 3. COLOR. FMT_COLOR is u32 ABGR with 0..255 channels. Each host normalizes to
+//    [0,1] itself: Web via the vertexAttribPointer normalize flag, PSP via the
+//    GE's COLOR_8888, 3DS by dividing by 255 in the PICA vertex shader (the PICA
+//    does NOT auto-normalize unsigned-byte attributes — this bit once as a
+//    white-clamp bug).
 import { hasG3d } from './host3d';
 import type { Color } from './color';
 
@@ -89,7 +116,7 @@ export class CommandEncoder {
     }
   }
 
-  /** Emit SET_CAMERA with a column-major view*proj (16 numbers). */
+  /** Emit SET_CAMERA with a column-major proj*view matrix (16 numbers). */
   setCamera(viewProj: ArrayLike<number>): void {
     this.ensure(4 + 64);
     this.view.setUint16(this.pos, OP_SET_CAMERA, true);
@@ -115,6 +142,11 @@ export class CommandEncoder {
   /**
    * Emit inline dynamic geometry (particles/tracers). `vertices` is interleaved
    * per `format`; `byteLength` bytes are copied into the buffer.
+   *
+   * RESERVED / unexercised in v1: no shipped game calls this yet, and the
+   * software reference rasterizer (raster3d.ts) does NOT render OP_IMM_TRIS — so
+   * a game that starts emitting it would produce an unvalidated golden until
+   * raster3d gains an immTris path. Wire both together when first used.
    */
   immTris(vertices: ArrayBuffer, vertexCount: number, format: number, byteLength: number): void {
     const words = 2 + Math.ceil(byteLength / 4);

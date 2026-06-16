@@ -8,8 +8,9 @@
 //
 // Conventions (must match framework/src/math.ts + the hosts):
 //   column-major matrices · reversed-Z (clear depth 0, keep fragment if z >= zbuf)
-//   projection bakes the Y-flip, so the viewport maps NDC straight to a Y-down
-//   screen. No back-face culling (the cube is convex; depth resolves occlusion).
+//   NDC is Y-up (the shared projection is NOT pre-flipped); this rasterizer applies
+//   the Y-flip in its viewport (toScreen), exactly as each native host's viewport
+//   does. No back-face culling (depth resolves occlusion), matching all hosts.
 import {
   DC3D_MAGIC, OP_SET_CAMERA, OP_DRAW, OP_IMM_TRIS,
   FMT_COLOR, FMT_POS, vertexStride,
@@ -179,7 +180,11 @@ export class Raster3D {
         for (let i = 0; i < 16; i++) model[i] = dv.getFloat32(base + 8 + i * 4, true);
         this.drawMesh(this.meshes[handle], Mat4.multiply(this.viewProj, model));
       } else if (op === OP_IMM_TRIS) {
-        // Not exercised by the cube; supported later for particles/tracers.
+        // The native hosts DO render OP_IMM_TRIS, but this reference rasterizer
+        // doesn't yet — so rather than silently produce a golden that omits the
+        // dynamic geometry (validating the wrong image), fail loudly. Wire an
+        // immTris path here when the first game starts emitting it.
+        throw new Error('raster3d: OP_IMM_TRIS not implemented — golden would be wrong');
       }
     }
   }

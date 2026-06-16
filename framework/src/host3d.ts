@@ -7,16 +7,18 @@ export interface RawG3d {
   /**
    * Upload a mesh ONCE. The host COPIES the bytes (never retains the QuickJS
    * pointer) and returns a small int handle. `vertices` is interleaved per
-   * `format`; `indices` is a Uint16Array buffer or null for non-indexed.
+   * `format`; `indices` is a Uint16Array buffer or null for non-indexed. A host
+   * MAY draw indexed or expand to a flat non-indexed buffer (the PSP does the
+   * latter for VFPU 16-byte alignment) — the resulting image must be identical.
    */
   uploadMesh(vertices: ArrayBuffer, indices: ArrayBuffer | null, format: number): number;
   /** Release native storage (optional; many games never call it). */
   freeMesh(handle: number): void;
   /**
    * THE per-frame call. One little-endian command/draw-list buffer. The host
-   * clears depth, runs the 3D pass (depth ON, reversed-Z, optional cull), then
-   * leaves depth OFF so the subsequent gfx.fillRect HUD draws on top. Called
-   * once per frame, BEFORE any gfx.fillRect this frame.
+   * clears depth, runs the 3D pass (depth ON, reversed-Z, NO cull on any host —
+   * occlusion is depth-only), then leaves depth OFF so the subsequent
+   * gfx.fillRect HUD draws on top. Called once per frame, BEFORE any fillRect.
    */
   submit(buffer: ArrayBuffer, byteLength: number): void;
 }

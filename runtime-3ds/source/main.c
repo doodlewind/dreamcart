@@ -62,7 +62,11 @@ static DVLB_s        *g_vshader_dvlb;
 static shaderProgram_s g_program;
 static int            g_uLoc_mvp;   // "mvp" uniform location
 static C3D_AttrInfo   g_attr;       // attr0 = pos f32x3, attr1 = color u8x4
-static C3D_Mtx        g_viewProj;   // latest SET_CAMERA (column-major wire -> row C3D_Mtx)
+static C3D_Mtx        g_viewProj;   // tilt * (latest SET_CAMERA), ready for mvp
+// The 3DS top screen is scanned rotated 90°. citro3d's Mtx_PerspTilt bakes that
+// into the projection, but our projection comes from shared JS without it, so we
+// left-multiply every camera matrix by this constant 90° screen-space rotation.
+static C3D_Mtx        g_tilt;
 
 // Scratch VBO for OP_IMM_TRIS — double-buffered linearAlloc to avoid GPU/CPU
 // races under C3D_FRAME_SYNCDRAW.
@@ -149,14 +153,16 @@ static void sceneInit(void) {
     g_immVbo[1] = linearAlloc(IMM_VBO_BYTES);
 
     Mtx_Identity(&g_viewProj);
+    // 90° screen-space rotation for the rotated top screen (see g_tilt decl).
+    Mtx_Identity(&g_tilt);
+    Mtx_RotateZ(&g_tilt, 1.57079632679f, true); // +90 degrees
 }
 
 // Load a column-major wire matrix (m[col*4+row], 16 f32) into a C3D_Mtx.
 // citro3d's vertex shader dot-products mtx.r[i] (a ROW) with the position, so a
 // C3D_Mtx holds the matrix row-major: r[row] = (m row). We therefore TRANSPOSE
-// the column-major wire bytes here. (.r[i].x/.y/.z/.w avoids citro3d's reversed
-// C3D_FVec component packing.) Spike: verify on citra/hardware that this matches
-// the reference image; if the cube renders transposed, drop the transpose.
+// the column-major wire bytes here (verified on hardware). Using .r[i].x/.y/.z/.w
+// (not the .m[] union) avoids citro3d's reversed C3D_FVec component packing.
 static void wireToMtx(C3D_Mtx *out, const float *m) {
     for (int row = 0; row < 4; row++) {
         out->r[row].x = m[0 * 4 + row];
@@ -223,7 +229,10 @@ static JSValue js_g3d_freeMesh(JSContext *ctx, JSValueConst this_val, int argc, 
 static void drawMesh(Mesh3D *mesh) {
     C3D_BufInfo *bufInfo = C3D_GetBufInfo();
     BufInfo_Init(bufInfo);
-    BufInfo_Add(bufInfo, mesh->verts, V1_STRIDE, 2, 0x10); // attrs 0,1 in order
+    // Permutation 0x01: the buffer holds attr1 (color, 4B) THEN attr0 (pos, 12B),
+    // matching the wire vertex layout [u32 color @0][3 f32 pos @4]. (0x10 would
+    // read position from the color bytes -> garbage positions, nothing visible.)
+    BufInfo_Add(bufInfo, mesh->verts, V1_STRIDE, 2, 0x01);
     if (mesh->icount > 0)
         C3D_DrawElements(GPU_TRIANGLES, mesh->icount, C3D_UNSIGNED_SHORT, mesh->indices);
     else
@@ -253,7 +262,10 @@ static JSValue js_g3d_submit(JSContext *ctx, JSValueConst this_val, int argc, JS
     C3D_BindProgram(&g_program);
     C3D_SetAttrInfo(&g_attr);
     C3D_CullFace(GPU_CULL_NONE);
-    C3D_DepthTest(true, GPU_GEQUAL, GPU_WRITE_ALL); // reversed-Z: pass z >= stored
+    // Pin the depthmap so depth = -z_ndc (z_ndc in the PICA's [-1,0]); paired with
+    // the per-draw z-negate above, near -> depth 1, far -> 0.
+    C3D_DepthMap(true, -1.0f, 0.0f);
+    C3D_DepthTest(true, GPU_GEQUAL, GPU_WRITE_ALL); // keep nearer (higher depth)
 
     // TexEnv: output the interpolated vertex color directly (no texture). C2D
     // sets its own TexEnv each Prepare, so we (re)assert ours every 3D pass.
@@ -282,7 +294,11 @@ static JSValue js_g3d_submit(JSContext *ctx, JSValueConst this_val, int argc, JS
         if (op == OP_SET_CAMERA) {
             float m[16];
             memcpy(m, base + payload, 64);
-            wireToMtx(&g_viewProj, m);
+            C3D_Mtx vp;
+            wireToMtx(&vp, m);
+            // Bake the 90° screen tilt in (left-multiply, so it rotates the final
+            // projected image): g_viewProj = tilt * (proj*view).
+            Mtx_Multiply(&g_viewProj, &g_tilt, &vp);
         } else if (op == OP_DRAW) {
             u32 handle = base[payload] | (base[payload + 1] << 8) |
                          (base[payload + 2] << 16) | (base[payload + 3] << 24);
@@ -295,6 +311,16 @@ static JSValue js_g3d_submit(JSContext *ctx, JSValueConst this_val, int argc, JS
             C3D_Mtx modelMtx, mvp;
             wireToMtx(&modelMtx, model);
             Mtx_Multiply(&mvp, &g_viewProj, &modelMtx);
+            // The PICA200 clips z to [-w, 0], but our shared reversed-Z projection
+            // emits clip.z in [0, w] (near->w, far->0). NEGATE the z row to land in
+            // the PICA range mapping near->-w (z_ndc -1), far->0 (z_ndc 0). With the
+            // depthmap pinned to depth=-z_ndc (below), near->depth 1 / far->0, so the
+            // GPU_GEQUAL + clear-0 test keeps the nearer fragment. Without this the
+            // whole scene is z-clipped (clip.z>0) and nothing renders at all.
+            mvp.r[2].x = -mvp.r[2].x;
+            mvp.r[2].y = -mvp.r[2].y;
+            mvp.r[2].z = -mvp.r[2].z;
+            mvp.r[2].w = -mvp.r[2].w;
             C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, g_uLoc_mvp, &mvp);
             drawMesh(&g_meshes[handle]);
         } else if (op == OP_IMM_TRIS) {
@@ -313,7 +339,7 @@ static JSValue js_g3d_submit(JSContext *ctx, JSValueConst this_val, int argc, JS
             C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, g_uLoc_mvp, &g_viewProj);
             C3D_BufInfo *bufInfo = C3D_GetBufInfo();
             BufInfo_Init(bufInfo);
-            BufInfo_Add(bufInfo, dst, V1_STRIDE, 2, 0x10);
+            BufInfo_Add(bufInfo, dst, V1_STRIDE, 2, 0x01); // color(4B) then pos(12B)
             C3D_DrawArrays(GPU_TRIANGLES, 0, (int)vcount);
         }
     }

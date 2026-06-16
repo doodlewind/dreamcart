@@ -227,8 +227,9 @@ unsafe extern "C" fn js_g3d_free_mesh(
 /// `sceGumLoadMatrix` loads columns C300..C330 from those four consecutive
 /// vec4s. The shared JS matrices are column-major (`m[col*4 + row]`), so the
 /// wire order `[col0 (4) | col1 (4) | col2 (4) | col3 (4)]` maps DIRECTLY onto
-/// `x/y/z/w` with no transpose. (Flagged as a hardware spike in the structured
-/// result: if PPSSPP shows the cube mirrored/transposed, transpose here.)
+/// `x/y/z/w` with NO transpose (verified on PPSSPP). (Note: the 3DS host DOES
+/// transpose into its row-major `C3D_Mtx` — opposite choice, both correct for
+/// each GPU's dot-product convention.)
 // Returns an `Align16`-wrapped matrix because `sceGumLoadMatrix` loads it with
 // VFPU `lv.q` quad-word loads, which FAULT on a non-16-byte-aligned source. The
 // wire buffer is byte-packed (unaligned), so we copy into this aligned struct.
@@ -301,9 +302,9 @@ unsafe extern "C" fn js_g3d_submit(
     let record_count = read_u16(buf, 6) as usize;
 
     // --- 3D pass setup: reversed-Z depth ON, clear color + depth. ---
-    // init_graphics() already configured DepthRange(65535,0) + DepthFunc(GEQUAL)
-    // and left DepthTest enabled for the 3D pass; re-enable defensively in case
-    // a prior frame's HUD pass disabled it.
+    // init_graphics() configured DepthRange(0,65535) + DepthFunc(GEQUAL) for the
+    // reversed-Z convention; re-enable DepthTest defensively (a prior frame's HUD
+    // pass disabled it).
     sys::sceGuEnable(sys::GuState::DepthTest);
     sys::sceGuClearColor(BG_CLEAR_ABGR);
     sys::sceGuClearDepth(0); // reversed-Z: clear depth to 0 (far)

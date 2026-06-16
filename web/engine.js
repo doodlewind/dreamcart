@@ -81,8 +81,9 @@
   // the bytes the encoder emits — [u32 ABGR @0][3 x f32 pos @4].
   var V1_STRIDE = 16;
 
-  // GLSL ES 3.00. The shared math.ts bakes proj*view (and the Y-flip) into
-  // u_viewProj, so the shader is a plain MVP. a_color is normalized ABGR bytes.
+  // GLSL ES 3.00. u_viewProj is the shared math.ts proj*view (standard Y-up NDC;
+  // NO baked Y-flip — WebGL clip space is already Y-up), so the shader is a plain
+  // MVP. a_color is ABGR bytes the GPU normalizes via the vertexAttribPointer flag.
   var VERT_SRC =
     '#version 300 es\n' +
     'layout(location=0) in vec3 a_pos;\n' +
@@ -220,6 +221,12 @@
       var recordCount = dv.getUint16(6, true);
 
       used3dThisFrame = true;
+      // Clear the Canvas2D HUD layer to TRANSPARENT so the WebGL cube underneath
+      // shows through. submit() runs before the frame's gfx HUD draws, so the HUD
+      // text lands on a fresh transparent layer. (Without this, the opaque black
+      // fill from mount()'s initial gfx.clear hides the 3D layer — 3D games like
+      // cube3d never call gfx.clear themselves.)
+      if (ctx) ctx.clearRect(0, 0, W, H);
       gl.useProgram(glProgram);
       gl.viewport(0, 0, W, H);
       gl.enable(gl.DEPTH_TEST);

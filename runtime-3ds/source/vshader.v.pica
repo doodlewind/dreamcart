@@ -7,18 +7,21 @@
 ;
 ; Inputs (see AttrInfo in main.c sceneInit):
 ;   v0 = position (3 x f32)        -> attr 0
-;   v1 = color    (4 x u8 -> vec4) -> attr 1   (ABGR bytes, normalized by the GPU)
+;   v1 = color    (4 x u8 -> vec4) -> attr 1   (raw 0..255 bytes; we normalize)
 ; Outputs:
 ;   position  (clip space)
-;   color0    (passed straight through; TexEnv = PRIMARY_COLOR/REPLACE)
+;   color0    (vertex color / 255; TexEnv = PRIMARY_COLOR/REPLACE)
 
 ; The 4x4 MVP uniform. mvp[0..3] are the four ROWS the GPU dot-products with the
 ; position vector, so the host uploads the matrix row-major into the C3D_Mtx
-; (the column-major wire matrix is transposed on the CPU — see uploadMvp()).
+; (the column-major wire matrix is transposed on the CPU — see wireToMtx()).
 .fvec mvp[4]
 
 .constf myconst(0.0, 1.0, 0.0, 0.0)
 .alias  ones myconst.yyyy ; vec4(1.0)
+; The PICA loads GPU_UNSIGNED_BYTE attributes as raw 0..255 floats (NOT
+; normalized like GL/PSP), so colors would clamp to white. Scale by 1/255.
+.constf inv255(0.003921568, 0.003921568, 0.003921568, 0.003921568)
 
 .alias inpos v0
 .alias inclr v1
@@ -37,8 +40,8 @@
 	dp4 outpos.z, mvp[2], r0
 	dp4 outpos.w, mvp[3], r0
 
-	; pass vertex color through unchanged
-	mov outclr, inclr
+	; normalize the 0..255 byte color to 0..1 (constant must be src1 on the PICA)
+	mul outclr, inv255, inclr
 
 	end
 .end
