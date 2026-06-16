@@ -18,6 +18,7 @@ native engine per platform (see [`docs/3d-design.md`](docs/3d-design.md) and the
 | PSP | Rust (rust-psp) + QuickJS | sceGu / sceGu+sceGum | ✅ runs (PPSSPP) |
 | Web | Canvas + RAF | Canvas2D / WebGL2 | ✅ runs ([Playground](web/index.html)) |
 | 3DS | C (libctru) + QuickJS | citro2d / citro3d | ✅ runs (Azahar/hardware) |
+| Android (dual-screen) | Kotlin + WebView (web engine) | Canvas2D / WebGL2 | ✅ runs (3DS-style handheld; top=game, bottom=native UI) — see [`android/`](android/) |
 
 ![Snake running on PPSSPP](docs/snake.png)
 

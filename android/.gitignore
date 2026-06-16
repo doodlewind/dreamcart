@@ -1,0 +1,8 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+.kotlin/
+app/src/main/assets/games.generated.js
+app/src/main/assets/engine.js
