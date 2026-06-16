@@ -12,14 +12,16 @@ use core::ffi::c_void;
 
 use libquickjs_sys::*;
 use psp::sys::{
-    self, CtrlMode, DisplayPixelFormat, GuContextType, GuState, GuSyncBehavior, GuSyncMode,
-    SceCtrlData, TexturePixelFormat,
+    self, CtrlMode, DepthFunc, DisplayPixelFormat, FrontFaceDirection, GuContextType, GuState,
+    GuSyncBehavior, GuSyncMode, SceCtrlData, ShadingModel, TexturePixelFormat, ThreadAttributes,
 };
 use psp::vram_alloc::get_vram_allocator;
 use psp::{Align16, BUF_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 mod bridge;
+mod c_heap;
 mod gfx;
+mod gfx3d;
 mod qjs_alloc;
 
 psp::module!("psp_js", 1, 1);
@@ -32,7 +34,33 @@ static mut LIST: Align16<[u32; 0x40000]> = Align16([0; 0x40000]);
 static GAME_JS: &str = include_str!(concat!(env!("OUT_DIR"), "/game.js"));
 
 fn psp_main() {
-    unsafe { run() }
+    unsafe { boot() }
+}
+
+/// The `psp::module!` macro starts the main thread with only a 256 KB stack.
+/// QuickJS compiling the ~35 KB framework bundles recurses deeper than that and
+/// overflows the stack (-> abort). Run all the real work on a worker thread with
+/// a large (2 MB) stack instead. Raw demos fit in 256 KB but this is harmless.
+unsafe fn boot() {
+    let id = sys::sceKernelCreateThread(
+        b"pspjs_main\0".as_ptr(),
+        worker_main,
+        32,                // priority
+        2 * 1024 * 1024,   // 2 MB stack
+        ThreadAttributes::USER,
+        core::ptr::null_mut(),
+    );
+    if id.0 >= 0 {
+        sys::sceKernelStartThread(id, 0, core::ptr::null_mut());
+        sys::sceKernelWaitThreadEnd(id, core::ptr::null_mut());
+    } else {
+        run(); // fallback: small-stack inline (raw demos still work)
+    }
+}
+
+unsafe extern "C" fn worker_main(_argc: usize, _argv: *mut c_void) -> i32 {
+    run();
+    0
 }
 
 unsafe fn run() {
@@ -52,6 +80,7 @@ unsafe fn run() {
     let global = JS_GetGlobalObject(ctx);
 
     gfx::register(ctx, global);
+    gfx3d::register(ctx, global);
     bridge::register(ctx, global);
 
     let res = JS_Eval(
@@ -105,6 +134,11 @@ unsafe fn init_graphics() {
         .alloc_texture_pixels(BUF_WIDTH, SCREEN_HEIGHT, TexturePixelFormat::Psm4444)
         .as_mut_ptr_from_zero();
 
+    // Prime the VFPU matrix context (used by sceGum*) BEFORE sceGuInit, so the
+    // 3D pass's sceGumLoadMatrix/sceGumMatrixMode calls (in gfx3d.rs) operate on
+    // an initialized stack. Harmless for 2D-only games, which never touch gum.
+    sys::sceGumLoadIdentity();
+
     sys::sceGuInit();
     sys::sceGuStart(GuContextType::Direct, &mut LIST as *mut _ as *mut c_void);
     sys::sceGuDrawBuffer(DisplayPixelFormat::Psm8888, fbp0 as _, BUF_WIDTH as i32);
@@ -119,6 +153,39 @@ unsafe fn init_graphics() {
     sys::sceGuViewport(2048, 2048, SCREEN_WIDTH as i32, SCREEN_HEIGHT as i32);
     sys::sceGuScissor(0, 0, SCREEN_WIDTH as i32, SCREEN_HEIGHT as i32);
     sys::sceGuEnable(GuState::ScissorTest);
+
+    // ---- 3D pass state (reversed-Z) ----
+    // The depth buffer is already bound above (sceGuDepthBuffer). The g3d
+    // contract uses reversed-Z: the shared projection emits clip z near->1,
+    // far->0, the depth buffer is cleared to 0 (far), and a fragment passes when
+    // its z is GREATER-or-equal than what's stored. DepthRange(65535, 0) inverts
+    // the window-z mapping to match (same as examples/cube). CullFace is left
+    // DISABLED to match the software reference rasterizer (raster3d.ts does not
+    // cull); occlusion is resolved purely by the depth test.
+    //
+    // DepthTest starts DISABLED so 2D-only games (which never call g3d.submit)
+    // behave exactly as before. gfx3d::submit ENABLES it for the 3D records each
+    // frame, then DISABLES it again afterwards so the 2D HUD (gfx.fillRect, z=0,
+    // TRANSFORM_2D) draws on top unconditionally.
+    // Reversed-Z depth. The shared projection emits NDC z near->1, far->0, so we
+    // map with a STANDARD range (NDC 1 -> window 65535 = near, NDC 0 -> 0 = far),
+    // clear to 0 (far) and keep the GREATER fragment — near wins. (The example
+    // uses DepthRange(65535,0) because it uses a *standard* projection; pairing
+    // that with reversed-Z double-inverts and renders the cube inside-out.)
+    sys::sceGuDepthRange(0, 65535);
+    sys::sceGuDepthFunc(DepthFunc::GreaterOrEqual);
+    sys::sceGuDisable(GuState::DepthTest);
+
+    // 3D render state required for TRANSFORM_3D geometry to rasterize (mirrors
+    // rust-psp/examples/cube). CLIP_PLANES is the load-bearing one — without it
+    // the GE rejects transformed triangles and nothing draws. Smooth shading lets
+    // per-vertex COLOR_8888 gouraud-interpolate; texture stays OFF so vertex color
+    // shows directly. CullFace is left OFF to match the software reference.
+    sys::sceGuShadeModel(ShadingModel::Smooth);
+    sys::sceGuFrontFace(FrontFaceDirection::Clockwise);
+    sys::sceGuDisable(GuState::Texture2D);
+    sys::sceGuEnable(GuState::ClipPlanes);
+
     sys::sceGuFinish();
     sys::sceGuSync(GuSyncMode::Finish, GuSyncBehavior::Wait);
     sys::sceDisplayWaitVblankStart();

@@ -1,5 +1,5 @@
 diff --git a/libquickjs-sys/src/lib.rs b/libquickjs-sys/src/lib.rs
-index 99451c6..db434ce 100644
+index 99451c6..95e7444 100644
 --- a/libquickjs-sys/src/lib.rs
 +++ b/libquickjs-sys/src/lib.rs
 @@ -7,7 +7,11 @@
@@ -15,7 +15,7 @@ index 99451c6..db434ce 100644
  
  pub type JSValue = u64;
  
-@@ -267,3 +271,100 @@ extern "C" {
+@@ -267,3 +271,106 @@ extern "C" {
          eval_flags: libc::c_int,
      ) -> JSValue;
  }
@@ -71,6 +71,12 @@ index 99451c6..db434ce 100644
 +        cesu8: libc::c_int,
 +    ) -> *const libc::c_char;
 +    pub fn JS_FreeCString(ctx: *mut JSContext, ptr: *const libc::c_char);
++
++    /// Borrow the backing bytes of an ArrayBuffer. `psize` receives the byte
++    /// length; the returned pointer is owned by QuickJS (GC-movable) — copy out
++    /// immediately, never retain it. Used by the 3D host (gfx3d.rs) to read mesh
++    /// + command buffers handed down from JS.
++    pub fn JS_GetArrayBuffer(ctx: *mut JSContext, psize: *mut size_t, obj: JSValue) -> *mut u8;
 +}
 +
 +/// Custom allocator hooks so QuickJS can use the host (Rust/PSP) allocator

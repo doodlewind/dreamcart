@@ -80,4 +80,46 @@ for (const f of rawFiles) {
 }
 if (problems === 0) console.log(`PASS  ${rawConstants} raw-game button constant(s) across ${rawFiles.length} demo(s) match canonical`);
 
+// --- 3D layer: determinism + wire-format parity ---
+// (1) The shared 3D math/SDK must use NO non-deterministic transcendentals: those
+// differ in the last ULP between QuickJS (PSP/3DS) and the browser engine, which
+// would break the byte-exact draw-list goldens. math.ts ships its own dsin/dcos.
+const TRIG = /\bMath\.(sin|cos|tan|asin|acos|atan|atan2|hypot)\b/;
+const detFiles = ["math", "g3d", "scene3d", "mesh"];
+let trigProblems = 0;
+for (const f of detFiles) {
+  const p = root + `framework/src/${f}.ts`;
+  const file = Bun.file(p);
+  if (!(await file.exists())) continue;
+  const src = await file.text();
+  const m = src.match(TRIG);
+  if (m) { console.log(`FAIL  framework/src/${f}.ts uses non-deterministic ${m[0]} (use math.ts dsin/dcos)`); trigProblems++; problems++; }
+}
+if (trigProblems === 0) console.log(`PASS  3D SDK uses only deterministic math (no Math.sin/cos/tan/atan across ${detFiles.length} files)`);
+
+// (2) The 3D wire constants (opcodes / format bits / magic) are defined in
+// framework/src/g3d.ts and must be byte-identical in every host that implements
+// `g3d`. Hosts are parsed only once they've been wired (contain DC3D_MAGIC).
+const NAMES = ["DC3D_MAGIC", "DC3D_VERSION", "OP_SET_CAMERA", "OP_DRAW", "OP_IMM_TRIS", "FMT_POS", "FMT_COLOR", "FMT_NORMAL", "FMT_UV"];
+const constRe = new RegExp(`\\b(${NAMES.join("|")})\\b[^0-9xX\\n]*?(0x[0-9a-fA-F]+)`, "g");
+const g3dSrc = await Bun.file(root + "framework/src/g3d.ts").text();
+const canonical3d = parsePairs(g3dSrc, constRe);
+// normalize keys back to exact names (parsePairs uppercases — they already are)
+const host3dFiles = ["web/engine.js", "runtime-3ds/source/main.c", "runtime/src/gfx3d.rs"];
+let wired = 0;
+for (const rel of host3dFiles) {
+  const file = Bun.file(root + rel);
+  if (!(await file.exists())) continue;
+  const src = await file.text();
+  if (!src.includes("DC3D_MAGIC")) { console.log(`NOTE  ${rel}: 3D wire constants not yet wired (skipped)`); continue; }
+  wired++;
+  const map = parsePairs(src, new RegExp(constRe.source, "g"));
+  for (const n of NAMES) {
+    if (canonical3d[n] === undefined) continue;
+    if (map[n] === undefined) { console.log(`FAIL  ${rel}: missing 3D const ${n}`); problems++; }
+    else if (map[n] !== canonical3d[n]) { console.log(`FAIL  ${rel}: ${n} = 0x${map[n].toString(16)} != g3d.ts 0x${canonical3d[n].toString(16)}`); problems++; }
+  }
+}
+console.log(`PASS  3D wire constants defined in g3d.ts (${Object.keys(canonical3d).length}) — ${wired} host(s) wired so far`);
+
 process.exit(problems ? 1 : 0);

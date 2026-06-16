@@ -1,7 +1,10 @@
 import { Graphics } from './graphics';
+import { CommandEncoder } from './g3d';
+import { hasG3d } from './host3d';
 import { Input } from './input';
 import { Rng } from './rng';
 import { Scene } from './scene';
+import type { Scene3D } from './scene3d';
 
 export interface UpdateContext {
   input: Input;
@@ -23,6 +26,10 @@ export class Engine {
   rng: Rng;
   g = new Graphics();
   frameCount = 0;
+  /** Optional 3D scene; when set (and the host provides g3d) it is rendered
+   * each frame BEFORE the 2D tree, so 2D draws form a HUD over the 3D pass. */
+  scene3d?: Scene3D;
+  private enc?: CommandEncoder;
   private stack: Scene[] = [];
 
   constructor(opts: EngineOpts = {}) {
@@ -71,6 +78,13 @@ export class Engine {
     const sc = this.scene;
     if (sc) {
       sc.updateTree(ctx);
+      // 3D pass first (one batched g3d.submit), then the 2D HUD on top.
+      if (this.scene3d && hasG3d()) {
+        if (!this.enc) this.enc = new CommandEncoder();
+        this.enc.reset();
+        this.scene3d.render(this.enc);
+        this.enc.finish();
+      }
       sc.drawTree(this.g);
     }
   }
