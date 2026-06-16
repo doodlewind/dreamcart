@@ -46,25 +46,39 @@ import { hasG3d } from './host3d';
 import type { Color } from './color';
 
 export const DC3D_MAGIC = 0x44433344; // 'DC3D' little-endian
-export const DC3D_VERSION = 0x0001;
+export const DC3D_VERSION = 0x0002;
 
 export const OP_SET_CAMERA = 0x0001;
 export const OP_DRAW = 0x0002;
 export const OP_IMM_TRIS = 0x0003;
+// v2 (advanced 3D): texture/light state + skinned draw. All additive + length-
+// prefixed, so v1-only hosts skip them. See docs/psp-advanced-3d.md.
+export const OP_BIND_TEXTURE = 0x0004; // payload: u32 texHandle (0xffffffff = unbind)
+export const OP_SET_LIGHTS = 0x0005; // payload: u32 count, u32 ambientABGR, count×{u32 colorABGR, 3 f32 dir}
+export const OP_DRAW_SKINNED = 0x0006; // OP_DRAW + u32 boneCount, then boneCount×12 f32 (3×4 bone matrices)
 
-// Vertex-format bitfield. v1 ships POS|COLOR; NORMAL/UV reserved for later.
+// Vertex-format bitfield. v1 ships POS|COLOR; v2 adds NORMAL/UV/WEIGHTS.
+// IMPORTANT: bytes are ALWAYS interleaved in the PSP GE's mandated component
+// order [weights][uv][color][normal][position] (each 4-byte aligned), regardless
+// of bit value — the bake + encoder + host all agree on GE order. (v1's
+// [color][pos] is a legal subset.)
 export const FMT_POS = 0x0001; // 3 x f32
 export const FMT_COLOR = 0x0002; // u32 ABGR
 export const FMT_NORMAL = 0x0004; // 3 x f32
-export const FMT_UV = 0x0008; // 2 x f32
+export const FMT_UV = 0x0008; // 2 x f32 (texcoord)
+export const FMT_WEIGHTS = 0x0010; // bone weights; count carried per-mesh (weightCount), not in the bit
 
-/** Bytes per vertex for a format (v1 layout: [color u32][pos 3 f32] = 16). */
-export function vertexStride(format: number): number {
+/**
+ * Bytes per vertex for a format. `weightCount` is the number of f32 bone weights
+ * when FMT_WEIGHTS is set (0 otherwise). Order-independent (sums present fields).
+ */
+export function vertexStride(format: number, weightCount = 0): number {
   let s = 0;
-  if (format & FMT_COLOR) s += 4;
-  if (format & FMT_POS) s += 12;
-  if (format & FMT_NORMAL) s += 12;
+  if (format & FMT_WEIGHTS) s += weightCount * 4;
   if (format & FMT_UV) s += 8;
+  if (format & FMT_COLOR) s += 4;
+  if (format & FMT_NORMAL) s += 12;
+  if (format & FMT_POS) s += 12;
   return s;
 }
 

@@ -35,28 +35,37 @@ use psp::Align16;
 // each constant; the typed `const` items underneath are what the code uses.
 //
 //   DC3D_MAGIC = 0x44433344
-//   DC3D_VERSION = 0x0001
+//   DC3D_VERSION = 0x0002
 //   OP_SET_CAMERA = 0x0001
 //   OP_DRAW = 0x0002
 //   OP_IMM_TRIS = 0x0003
+//   OP_BIND_TEXTURE = 0x0004
+//   OP_SET_LIGHTS = 0x0005
+//   OP_DRAW_SKINNED = 0x0006
 //   FMT_POS = 0x0001
 //   FMT_COLOR = 0x0002
 //   FMT_NORMAL = 0x0004
 //   FMT_UV = 0x0008
+//   FMT_WEIGHTS = 0x0010
 // ---------------------------------------------------------------------------
 
 const DC3D_MAGIC: u32 = 0x4443_3344; // 'DC3D' little-endian
-const DC3D_VERSION: u32 = 0x0001;
+const DC3D_VERSION: u32 = 0x0002;
 
 const OP_SET_CAMERA: u32 = 0x0001;
 const OP_DRAW: u32 = 0x0002;
 const OP_IMM_TRIS: u32 = 0x0003;
+const OP_BIND_TEXTURE: u32 = 0x0004;
+const OP_SET_LIGHTS: u32 = 0x0005;
+const OP_DRAW_SKINNED: u32 = 0x0006;
 
-// Vertex-format bitfield (v1 ships POS|COLOR; NORMAL/UV reserved for later).
+// Vertex-format bitfield. The GE interleaves components in a FIXED order
+// [weights][uv][color][normal][position] regardless of bit value.
 const FMT_POS: u32 = 0x0001;
 const FMT_COLOR: u32 = 0x0002;
 const FMT_NORMAL: u32 = 0x0004;
 const FMT_UV: u32 = 0x0008;
+const FMT_WEIGHTS: u32 = 0x0010;
 
 /// No-tint sentinel: full white, fully opaque ABGR.
 const NO_TINT: u32 = 0xffff_ffff;
@@ -156,7 +165,8 @@ unsafe extern "C" fn js_g3d_upload_mesh(
     }
     // Silence "unused" on the reserved bits while keeping them defined for the
     // contract parity check.
-    let _ = (FMT_NORMAL, FMT_UV, DC3D_VERSION, OP_IMM_TRIS);
+    let _ = (FMT_NORMAL, FMT_UV, FMT_WEIGHTS, DC3D_VERSION, OP_IMM_TRIS);
+    let _ = (OP_BIND_TEXTURE, OP_SET_LIGHTS, OP_DRAW_SKINNED); // v2: wired in M1+
 
     // Build a 16-byte-aligned, NON-indexed vertex list (expand indices if present),
     // matching the proven cube-example draw path.

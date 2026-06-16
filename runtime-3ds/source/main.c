@@ -20,16 +20,20 @@
 // These MUST match the JS/Rust copies byte-for-byte; framework/test/contract.ts
 // greps these exact names+values and asserts parity. Keep `#define NAME 0x...`.
 #define DC3D_MAGIC     0x44433344   // 'DC3D' little-endian
-#define DC3D_VERSION   0x0001
+#define DC3D_VERSION   0x0002
 
 #define OP_SET_CAMERA  0x0001
 #define OP_DRAW        0x0002
 #define OP_IMM_TRIS    0x0003
+#define OP_BIND_TEXTURE 0x0004      // v2: declared for wire-parity; citro3d impl additive (TODO)
+#define OP_SET_LIGHTS  0x0005
+#define OP_DRAW_SKINNED 0x0006
 
 #define FMT_POS        0x0001       // 3 x f32
 #define FMT_COLOR      0x0002       // u32 ABGR
 #define FMT_NORMAL     0x0004       // 3 x f32
 #define FMT_UV         0x0008       // 2 x f32
+#define FMT_WEIGHTS    0x0010       // bone weights (count per-mesh)
 
 // v1 vertex = u32 ABGR color + 3 f32 position, interleaved, 16-byte stride.
 #define V1_STRIDE      16
