@@ -403,13 +403,10 @@
   function mountGLLayer(hud) {
     var c = document.createElement('canvas');
     c.width = W; c.height = H;
-    // Both layers are plain <canvas> elements, so the page stylesheet's `canvas`
-    // rule (480x272 box, #000 background, pixelated, border, radius, and the wide
-    // media query) sizes them IDENTICALLY — no per-host CSS copying needed, and
-    // the two layers register pixel-for-pixel at every breakpoint.
-    // Stack: GL underneath, HUD on top, both occupying the same spot. We make the
-    // HUD's parent the positioning context and absolutely overlay the HUD on the
-    // GL canvas; the GL canvas keeps normal flow so layout/size is preserved.
+    // Stack: GL canvas underneath (kept in normal flow), the HUD canvas absolutely
+    // overlaid on top. The two are kept the same size+position by syncStack()
+    // below — robust to however the host page sizes the HUD (a CSS rule on the web
+    // playground, an inline letterbox style in the Android WebView).
     var parent = hud.parentNode;
     if (!parent) return; // detached HUD canvas — can't stack a sibling
     // Try to acquire WebGL2 BEFORE touching the DOM layout, so a missing context
@@ -423,13 +420,30 @@
     if (pcs.position === 'static') parent.style.position = 'relative';
     parent.insertBefore(c, hud); // GL canvas takes the HUD's place in flow
     hud.style.position = 'absolute';
-    hud.style.left = c.offsetLeft + 'px';
-    hud.style.top = c.offsetTop + 'px';
     // The HUD must be transparent so the GL layer shows through in 3D frames; the
     // GL layer owns the (cleared) background. The GL canvas inherits the existing
     // stylesheet's #000 background, so 2D-only frames look identical to today.
     hud.style.background = 'transparent';
     glCanvas = c;
+
+    // Keep the two layers registered. The web playground sizes the canvas via a
+    // CSS rule (no inline style) — both canvases inherit it, so we leave the GL
+    // canvas alone. The Android WebView (and any host) instead sizes the HUD with
+    // an inline style.width/height (its fit() letterboxes the fixed 480x272 to the
+    // physical display); we MIRROR that inline size onto the GL canvas, then pin
+    // the HUD over it. A ResizeObserver re-runs this whenever the HUD box changes.
+    function syncStack() {
+      if (hud.style.width) c.style.width = hud.style.width;
+      if (hud.style.height) c.style.height = hud.style.height;
+      hud.style.left = c.offsetLeft + 'px';
+      hud.style.top = c.offsetTop + 'px';
+    }
+    syncStack();
+    if (window.ResizeObserver) {
+      try { new ResizeObserver(syncStack).observe(hud); } catch (e) {}
+    }
+    window.addEventListener('resize', syncStack);
+
     initGL();
     if (!gl && glCanvas) { // initGL failed (shader/link) — tear the layer back down
       parent.removeChild(c);

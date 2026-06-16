@@ -6,7 +6,11 @@ two physical internal displays, *not* a folding phone) into a DreamCart console:
 - **Top screen** (default display) runs the JS games, unchanged, via the *exact*
   isomorphic engine the Web build uses ([`web/engine.js`](../web/engine.js)) inside
   a full-screen `WebView`. Same tiny native contract (`gfx.clear`, `gfx.fillRect`,
-  `log`, `frame(buttons)`) as PSP / Web / 3DS.
+  `log`, `frame(buttons)`) as PSP / Web / 3DS — **including the optional `g3d` 3D
+  contract**: the WebView is hardware-accelerated, so the engine's WebGL2 layer
+  renders the `cube3d` / `racing3d` / `fps3d` games (a 3D canvas stacked under the
+  Canvas2D HUD; `engine.js` mirrors the top screen's letterbox size onto it). No
+  Android-side code is needed — the same `web/engine.js` does 3D here too.
 - **Bottom screen** (the device's second internal display) is a native Android
   `Presentation` — the game **library** (tap a title to switch). No WebView, no
   virtual gamepad: the console's **physical** D-pad / ABXY buttons play the game
