@@ -44,8 +44,19 @@ sleep 2
 screencapture -x -o /tmp/shot.png         # whole screen; the PPSSPP window is in it
 ```
 
-Then Read /tmp/shot.png. If you only need a number/text on screen and the window is
-occluded, that's fine — read what's visible; re-focus and retry if needed.
+Then Read /tmp/shot.png. **Other apps constantly steal focus** and occlude PPSSPP. The
+reliable fix is to HIDE every other app right before capturing (PPSSPP becomes the only
+visible window):
+
+```bash
+osascript -e 'tell application "System Events" to set visible of (every process whose \
+  background only is false and name is not "PPSSPPSDL") to false' 2>/dev/null
+sleep 0.5; screencapture -x -o /tmp/shot.png
+```
+
+Caveat: that can also hide/close PPSSPP itself on some setups — if the shot is the bare
+desktop, `open -a PPSSPPSDL` to bring it back. Do hide+capture in ONE command so nothing
+reactivates in between.
 
 ## Boot timing (do not mistake "slow" for "hung")
 
@@ -88,8 +99,11 @@ grep -iE "too many|Unable to alloc|partition|invalid|jump to|0=sceKernel" /tmp/p
 NOT to PPSSPP stdout — so you can't grep it; you must screenshot the screen, and it
 floods. Prefer on-screen HUD you control:
 - `now()` (bridge.rs, µs from `sceKernelGetSystemTimeWide`) lets a game compute real
-  frame time / FPS (the engine `dt` is a FIXED timestep, not wall-clock). Render it
-  with `g.text` so you can read it in a screenshot. (See outdoor3d's `measureFps`.)
+  frame time / FPS (the engine `dt` is a FIXED timestep, not wall-clock). Use the
+  reusable `Fps` helper (`framework/src/fps.ts`: `fps.sample()` per frame, draw
+  `fps.value`). NOTE: PPSSPP's emulation speed depends on the host Mac's spare CPU, so
+  absolute FPS readings are NOISY (can vary ~2× between captures) — trust the relative
+  before/after and the on-device draw-count, not a single number.
 - To isolate a cost, patch the **gitignored** bundle in `runtime/src/game/<game>.js`
   directly (sed/python), rebuild, measure; `bun run bundle` restores it from source.
   Toggle one thing at a time (node count, lighting, fog, HUD text) and read the FPS.
