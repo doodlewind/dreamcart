@@ -942,6 +942,51 @@ unsafe extern "C" fn js_g3d_scene_render(
         drawn += 1;
     }
 
+    // Per-frame RIGID DYNAMIC instances (e.g. a car body + spun/steered wheels):
+    // (argv[1] buffer, argv[2] count), each 76 bytes = i32 handle, i32 tex, u32
+    // tint, 16 f32 model. Drawn without culling (few + always near the camera), so
+    // JS only walks the small dynamic subtree each frame, not the static scenery.
+    if argc >= 3 {
+        let mut dlen: size_t = 0;
+        let dp = JS_GetArrayBuffer(ctx, &mut dlen, *argv.offset(1));
+        if !dp.is_null() {
+            let dcount = (arg_i32(ctx, argc, argv, 2).max(0) as usize).min((dlen as usize) / 76);
+            for di in 0..dcount {
+                let o = di * 76;
+                let handle = read_u32(dp, o) as i32;
+                let tex = read_u32(dp, o + 4) as i32;
+                let tint = read_u32(dp, o + 8);
+                if handle < 0 || (handle as usize) >= table.len() {
+                    continue;
+                }
+                let mesh = &table[handle as usize];
+                if mesh.count == 0 {
+                    continue;
+                }
+                if tex != bound_tex {
+                    apply_texture(tex_table, if tex < 0 { 0xffff_ffff } else { tex as u32 });
+                    bound_tex = tex;
+                }
+                let mut model = [0f32; 16];
+                for k in 0..16 {
+                    model[k] = read_f32(dp, o + 12 + k * 4);
+                }
+                let mm = align_mat(&model);
+                sys::sceGumMatrixMode(MatrixMode::Model);
+                sys::sceGumLoadMatrix(&mm.0);
+                sys::sceGuColor(if tint == NO_TINT { 0xffff_ffff } else { tint });
+                sys::sceGumDrawArray(
+                    GuPrimitive::Triangles,
+                    mesh.vtype,
+                    mesh.count,
+                    null(),
+                    mesh.bytes.as_ptr() as *const c_void,
+                );
+                drawn += 1;
+            }
+        }
+    }
+
     // HUD handoff (same as submit).
     sys::sceGuDisable(GuState::DepthTest);
     sys::sceGuDisable(GuState::Texture2D);

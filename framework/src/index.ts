@@ -13,6 +13,7 @@ export * from './light';
 export * from './anim';
 export * from './skin';
 export * from './scene3d';
+export * from './fps';
 export * from './color';
 export * from './input';
 export * from './rng';

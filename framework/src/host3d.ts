@@ -59,10 +59,12 @@ export interface RawG3d {
   sceneSetEnv?(env: ArrayBuffer | null): void;
   /**
    * THE per-frame retained-scene call. `camera` is 20 f32: 16 viewProj
-   * (column-major) + 3 eye + 1 cull-far. Clears, culls + draws every instance.
-   * Returns the number of instances actually drawn (visible after culling).
+   * (column-major) + 3 eye + 1 cull-far. Clears, culls + draws every static
+   * instance, then draws the optional per-frame RIGID DYNAMIC instances in `dyn`
+   * (`dynCount` of them, each 76 bytes: i32 handle, i32 tex, u32 tint, 16 f32
+   * model) without culling. Returns the number of instances drawn.
    */
-  sceneRender?(camera: ArrayBuffer): number;
+  sceneRender?(camera: ArrayBuffer, dyn?: ArrayBuffer | null, dynCount?: number): number;
 }
 
 declare global {

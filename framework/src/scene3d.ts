@@ -169,6 +169,16 @@ export class Scene3D {
   // spends ~1ms/node walking the object tree, which dominates a large scene.
   private flatBuilt = false;
   private allStatic = false;
+  // True when the scene has NO skinned nodes — then the native retained scene can
+  // draw it (static instances + per-frame rigid dynamic instances like a car).
+  private nativeEligible = false;
+  // Top-of-subtree dynamic nodes (e.g. a moving car); their subtrees are walked
+  // each frame for the native scene's dynamic-instance pass. parentWorld is the
+  // (constant) world matrix of their static parent.
+  private dynamicRoots: { node: Node3D; parentWorld: number[] }[] = [];
+  private dynBytes = new ArrayBuffer(256 * 76); // ≤256 dynamic instances × 76 B
+  private dynView = new DataView(this.dynBytes);
+  private dynCount = 0;
   private sCount = 0;
   // f64 so culling matches the object-walk (f64) bit-for-bit -> identical .dc3d.
   private sAabb = new Float64Array(0); // 6 per node: min xyz, max xyz
@@ -211,8 +221,10 @@ export class Scene3D {
   render(enc: CommandEncoder): void {
     if (!this.flatBuilt) this.buildFlat();
 
-    // Native retained-scene fast path (PSP): upload once, then just send camera.
-    if (this.allStatic && hasNativeScene()) {
+    // Native retained-scene fast path (PSP): static instances uploaded once; only
+    // the small dynamic subtree (e.g. a car) is walked in JS each frame. Used for
+    // any non-skinned scene on a host with the API.
+    if (this.nativeEligible && hasNativeScene()) {
       this.renderNative();
       return;
     }
@@ -271,8 +283,35 @@ export class Scene3D {
     c[17] = this.camera.eye.y;
     c[18] = this.camera.eye.z;
     c[19] = this.fog ? this.fog.far : 1e6;
-    const drawn = g.sceneRender!(this.camBuf.buffer);
-    this.culledCount = this.sCount - (drawn | 0); // for the HUD/profiling readout
+    // Walk the (small) dynamic subtrees each frame, packing their world matrices.
+    this.dynCount = 0;
+    for (let i = 0; i < this.dynamicRoots.length; i++) {
+      const dr = this.dynamicRoots[i];
+      this.walkDynamic(dr.node, dr.parentWorld);
+    }
+    const drawn = g.sceneRender!(this.camBuf.buffer, this.dynBytes, this.dynCount);
+    this.culledCount = this.sCount + this.dynCount - (drawn | 0); // HUD/profiling
+  }
+
+  // Pack one dynamic subtree into dynBytes (handle, tex, tint, 16 f32 model per
+  // drawable node). Few nodes (a car + wheels), so per-node JS cost is fine here.
+  private walkDynamic(node: Node3D, parent: number[]): void {
+    if (!node.visible) return;
+    const world = Mat4.multiply(parent, node.localMatrix());
+    if (node.mesh) {
+      const h = node.mesh.handle();
+      if (h >= 0 && this.dynCount < 256) {
+        const o = this.dynCount * 76;
+        const dv = this.dynView;
+        dv.setInt32(o, h, true);
+        const tex = node.material?.texture;
+        dv.setInt32(o + 4, tex ? tex.handle() : -1, true);
+        dv.setUint32(o + 8, node.tint >>> 0, true);
+        for (let k = 0; k < 16; k++) dv.setFloat32(o + 12 + k * 4, world[k], true);
+        this.dynCount++;
+      }
+    }
+    for (let i = 0; i < node.children.length; i++) this.walkDynamic(node.children[i], world);
   }
 
   // Pack lights + fog into the sceneSetEnv buffer (see host3d.ts for the layout).
@@ -302,31 +341,58 @@ export class Scene3D {
     return buf;
   }
 
-  // Build the flat static draw list by walking the tree in DFS (emit) order. If
-  // EVERY drawable node is static (no dynamic mesh, no skinned), the scene is
-  // flattened; otherwise allStatic stays false and render() uses the object walk.
+  // Walk the tree once (DFS / emit order) and classify drawable nodes: static mesh
+  // nodes go to the flat arrays (uploaded once / drawn by emitFlat); the topmost
+  // node of each dynamic subtree becomes a dynamicRoot (walked per frame). A
+  // skinned node anywhere makes the scene NOT native-eligible (skinning keeps the
+  // OP_DRAW_SKINNED submit path). `allStatic` (no dynamic mesh) still gates the
+  // non-native emitFlat fast path.
   private buildFlat(): void {
     this.flatBuilt = true;
-    const nodes: Node3D[] = [];
+    this.dynamicRoots = [];
+    const nodes: Node3D[] = []; // static mesh nodes
     const worlds: number[][] = [];
     let allStatic = true;
-    const walk = (node: Node3D, parent: number[]): void => {
+    let hasSkinned = false;
+    const walk = (node: Node3D, parent: number[], parentStatic: boolean): void => {
       if (!node.visible) return;
-      const world =
-        node.isStatic && node.cw ? node.cw : Mat4.multiply(parent, node.localMatrix());
-      if (node.isStatic) node.cw = world;
       if (node.skinned) {
+        hasSkinned = true;
         allStatic = false;
-      } else if (node.mesh) {
-        if (!node.isStatic) allStatic = false;
-        nodes.push(node);
-        worlds.push(world);
+        const w = Mat4.multiply(parent, node.localMatrix());
+        for (const c of node.children) walk(c, w, false);
+        return;
       }
-      for (const c of node.children) walk(c, world);
+      if (node.isStatic) {
+        const world = node.cw ? node.cw : Mat4.multiply(parent, node.localMatrix());
+        node.cw = world;
+        if (node.mesh) {
+          nodes.push(node);
+          worlds.push(world);
+        }
+        for (const c of node.children) walk(c, world, true);
+      } else {
+        // Dynamic node: the topmost one (static parent) is a dynamic root; its
+        // subtree is walked each frame, not collected here.
+        allStatic = false;
+        if (parentStatic && (node.mesh || node.children.length > 0)) {
+          this.dynamicRoots.push({ node, parentWorld: parent });
+        }
+        const world = Mat4.multiply(parent, node.localMatrix());
+        for (const c of node.children) walk(c, world, false);
+      }
     };
-    walk(this.root, Mat4.identity());
+    // The root is a pure container (identity, never moves) — treat as static origin.
+    for (const c of this.root.children) walk(c, Mat4.identity(), true);
     this.allStatic = allStatic && nodes.length > 0;
-    if (!this.allStatic) return;
+    this.nativeEligible = !hasSkinned && nodes.length + this.dynamicRoots.length > 0;
+
+    // Only flatten (and eagerly upload static meshes) when a path actually uses
+    // the flat arrays: the native scene, or the non-native emitFlat fast path.
+    // A mixed scene on a non-native host uses the object walk (lazy upload), so
+    // leaving the arrays empty keeps its .dc3d golden's upload order unchanged.
+    const useFlat = this.allStatic || (this.nativeEligible && hasNativeScene());
+    if (!useFlat) return;
 
     const n = nodes.length;
     this.sCount = n;

@@ -8,7 +8,7 @@
 // the body + 4 wheels, which are child Node3Ds spun (roll) and steered (front only)
 // by per-frame matrices. Vehicle physics + chase-cam are deterministic JS.
 import {
-  start, Scene, Scene3D, Node3D, Mesh, Material, Texture, meshFromBaked,
+  start, Scene, Scene3D, Node3D, Mesh, Material, Texture, meshFromBaked, Fps,
   Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
 } from '../src/index';
 import { KENNEY_CAR } from '../src/assets-kenney-car';
@@ -34,26 +34,43 @@ class CarScene extends Scene {
   speed = 0;
   roll = 0;
   steer = 0;
+  fps = new Fps();
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
     this.world = new Scene3D();
     this.world.camera.setPerspective(62, 480 / 272, 0.1, 300);
 
-    // Ground + a darker road strip just above it (avoids z-fighting).
-    this.world.add({ mesh: Mesh.plane(600, 600, rgb(60, 92, 58)) });
+    // Distance fog: fades the road into the horizon AND is the cull-far plane, so
+    // the native scene skips props beyond it (the per-draw GE cost dominates, so
+    // fewer draws = more FPS). The road is lined with props for ~520 units; this
+    // keeps only the nearby ~handful drawn.
+    this.world.fog = { color: rgb(0x9a, 0xb0, 0xc4), near: 45, far: 95 };
+
+    // Ground + a darker road strip just above it (avoids z-fighting). Static:
+    // only the car moves, so the scenery is uploaded to the native scene once and
+    // never re-walked in JS (see docs/psp-native-scene.md).
+    this.world.add({ mesh: Mesh.plane(150, 620, rgb(60, 92, 58)), isStatic: true });
     this.world.add({
       mesh: Mesh.box(9, 0.05, 600, solid(rgb(60, 60, 66))),
       position: new Vec3(0, 0.02, -260),
+      isStatic: true,
     });
 
-    // Instanced Kenney nature props (one upload each, many draws) lining the road.
+    // Instanced Kenney nature props (one upload each) lining the road. Each gets
+    // its local AABB so the native scene frustum-culls the ones behind / far from
+    // the car — keeping the GE draw count (the per-draw cost dominates) low.
     const tree = meshFromBaked(NATURE_PROPS.tree);
     const rock = meshFromBaked(NATURE_PROPS.rock);
+    const treeAabb = NATURE_PROPS.tree.aabb;
+    const rockAabb = NATURE_PROPS.rock.aabb;
     for (let i = 0; i < 16; i++) {
       const z = -i * 34 - 12;
-      this.world.add({ mesh: tree, position: new Vec3(-8.5, 0, z), scale: new Vec3(2, 2, 2) });
-      this.world.add({ mesh: i % 2 ? tree : rock, position: new Vec3(8.5, 0, z), scale: new Vec3(2, 2, 2) });
+      const l = this.world.add({ mesh: tree, position: new Vec3(-8.5, 0, z), scale: new Vec3(2, 2, 2), isStatic: true });
+      l.bounds = treeAabb;
+      const useTree = i % 2 === 1;
+      const r = this.world.add({ mesh: useTree ? tree : rock, position: new Vec3(8.5, 0, z), scale: new Vec3(2, 2, 2), isStatic: true });
+      r.bounds = useTree ? treeAabb : rockAabb;
     }
 
     // The baked car: body + 4 wheels share ONE palette texture.
@@ -86,6 +103,7 @@ class CarScene extends Scene {
 
   /** @param {UpdateContext} ctx */
   update(ctx) {
+    this.fps.sample();
     const inp = ctx.input;
     if (inp.pressed(Btn.Start)) this.reset();
 
@@ -125,6 +143,7 @@ class CarScene extends Scene {
   draw(g) {
     const kmh = Math.round(this.speed * 7.2);
     g.text('CAR 3D', 8, 8, Colors.white, 2);
+    if (this.fps.value > 0) g.text(this.fps.value + ' FPS', 410, 8, Colors.yellow, 1);
     g.text(kmh + ' KM/H', 8, 246, Colors.yellow, 2);
     g.rect(8, 234, 160, 6, rgb(40, 40, 40));
     g.rect(8, 234, Math.round((this.speed / 26) * 160), 6, Colors.green);
