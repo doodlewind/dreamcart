@@ -8,8 +8,8 @@
 // the body + 4 wheels, which are child Node3Ds spun (roll) and steered (front only)
 // by per-frame matrices. Vehicle physics + chase-cam are deterministic JS.
 import {
-  start, Scene, Scene3D, Node3D, Mesh, Material, Texture, meshFromBaked, Fps,
-  Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
+  start, Scene, Scene3D, Node3D, Mesh, Material, Texture, meshFromBaked, mergeMeshes, Fps,
+  Mat4, Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
 } from '../src/index';
 import { KENNEY_CAR } from '../src/assets-kenney-car';
 import { NATURE_PROPS } from '../src/assets-kenney-nature';
@@ -47,31 +47,25 @@ class CarScene extends Scene {
     // keeps only the nearby ~handful drawn.
     this.world.fog = { color: rgb(0x9a, 0xb0, 0xc4), near: 45, far: 95 };
 
-    // Ground + a darker road strip just above it (avoids z-fighting). Static:
-    // only the car moves, so the scenery is uploaded to the native scene once and
-    // never re-walked in JS (see docs/psp-native-scene.md).
-    this.world.add({ mesh: Mesh.plane(150, 620, rgb(60, 92, 58)), isStatic: true });
-    this.world.add({
-      mesh: Mesh.box(9, 0.05, 600, solid(rgb(60, 60, 66))),
-      position: new Vec3(0, 0.02, -260),
-      isStatic: true,
-    });
-
-    // Instanced Kenney nature props (one upload each) lining the road. Each gets
-    // its local AABB so the native scene frustum-culls the ones behind / far from
-    // the car — keeping the GE draw count (the per-draw cost dominates) low.
+    // The ENTIRE static scene — ground, road strip, and all ~32 roadside Kenney
+    // props — is baked into ONE mesh and drawn as a single GE call. The per-draw
+    // GE cost dominates large scenes, so collapsing the scenery to one draw is the
+    // big win (real PSP T&L eats the merged vertex count for free); only the car
+    // (body + 4 wheels) stays dynamic. Built once here in JS.
+    const id = Quat.identity();
+    const s = new Vec3(2, 2, 2);
     const tree = meshFromBaked(NATURE_PROPS.tree);
     const rock = meshFromBaked(NATURE_PROPS.rock);
-    const treeAabb = NATURE_PROPS.tree.aabb;
-    const rockAabb = NATURE_PROPS.rock.aabb;
+    const parts = [
+      { mesh: Mesh.plane(150, 620, rgb(60, 92, 58)), model: Mat4.identity() },
+      { mesh: Mesh.box(9, 0.05, 600, solid(rgb(60, 60, 66))), model: Mat4.compose(new Vec3(0, 0.02, -260), id, new Vec3(1, 1, 1)) },
+    ];
     for (let i = 0; i < 16; i++) {
       const z = -i * 34 - 12;
-      const l = this.world.add({ mesh: tree, position: new Vec3(-8.5, 0, z), scale: new Vec3(2, 2, 2), isStatic: true });
-      l.bounds = treeAabb;
-      const useTree = i % 2 === 1;
-      const r = this.world.add({ mesh: useTree ? tree : rock, position: new Vec3(8.5, 0, z), scale: new Vec3(2, 2, 2), isStatic: true });
-      r.bounds = useTree ? treeAabb : rockAabb;
+      parts.push({ mesh: tree, model: Mat4.compose(new Vec3(-8.5, 0, z), id, s) });
+      parts.push({ mesh: i % 2 ? tree : rock, model: Mat4.compose(new Vec3(8.5, 0, z), id, s) });
     }
+    this.world.add({ mesh: mergeMeshes(parts), isStatic: true });
 
     // The baked car: body + 4 wheels share ONE palette texture.
     const t = KENNEY_CAR.texture;

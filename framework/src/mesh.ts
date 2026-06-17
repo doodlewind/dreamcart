@@ -4,7 +4,7 @@
 // 16) + a Uint16 index buffer, and lazily uploads itself to the host on first use,
 // caching the returned handle.
 import {
-  FMT_COLOR, FMT_NORMAL, FMT_POS, FMT_UV, colorToABGR, vertexStride,
+  FMT_COLOR, FMT_NORMAL, FMT_POS, FMT_UV, FMT_WEIGHTS, colorToABGR, vertexStride,
 } from './g3d';
 import { hasG3d } from './host3d';
 import type { Color } from './color';
@@ -162,6 +162,45 @@ export interface BakedMesh {
 /** Wrap a BakedMesh into an uploadable Mesh (no copy — reuses the decoded bytes). */
 export function meshFromBaked(b: BakedMesh): Mesh {
   return new Mesh(b.vertices.buffer as ArrayBuffer, b.indices, b.format, b.weightCount);
+}
+
+/**
+ * Bake many meshes (each at a world transform) into ONE static POS|COLOR mesh, so
+ * a clump of instanced scenery (e.g. roadside props) draws as a SINGLE GE call
+ * instead of one per instance — the per-draw GE cost dominates large scenes, and
+ * real PSP T&L eats the merged vertex count for free. UV/normal are dropped
+ * (merged geometry is for unlit, untextured scenery). Done once at scene build.
+ */
+export function mergeMeshes(parts: { mesh: Mesh; model: number[] }[]): Mesh {
+  const b = new MeshBuilder();
+  for (const { mesh, model } of parts) {
+    const fmt = mesh.format;
+    const stride = vertexStride(fmt, mesh.weightCount);
+    const wB = fmt & FMT_WEIGHTS ? mesh.weightCount * 4 : 0;
+    const uvB = fmt & FMT_UV ? 8 : 0;
+    const colOff = wB + uvB;
+    const colB = fmt & FMT_COLOR ? 4 : 0;
+    const normB = fmt & FMT_NORMAL ? 12 : 0;
+    const posOff = wB + uvB + colB + normB;
+    const dv = new DataView(mesh.vertices);
+    const n = mesh.vertices.byteLength / stride;
+    const map: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const o = i * stride;
+      const abgr = colB ? dv.getUint32(o + colOff, true) : 0xffffffff;
+      const col = ((abgr & 255) << 16) | (abgr & 0xff00) | ((abgr >> 16) & 255); // ABGR->RRGGBB
+      const lx = dv.getFloat32(o + posOff, true);
+      const ly = dv.getFloat32(o + posOff + 4, true);
+      const lz = dv.getFloat32(o + posOff + 8, true);
+      const wx = model[0] * lx + model[4] * ly + model[8] * lz + model[12];
+      const wy = model[1] * lx + model[5] * ly + model[9] * lz + model[13];
+      const wz = model[2] * lx + model[6] * ly + model[10] * lz + model[14];
+      map.push(b.vertex(wx, wy, wz, col));
+    }
+    const idx = mesh.indices;
+    for (let k = 0; k + 2 < idx.length; k += 3) b.tri(map[idx[k]], map[idx[k + 1]], map[idx[k + 2]]);
+  }
+  return b.build();
 }
 
 export class Mesh {
