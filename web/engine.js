@@ -68,14 +68,19 @@
   // one-per-line `var NAME = 0x..;` so framework/test/contract.ts can grep+assert
   // parity (its regex forbids digits/newlines between the name and the hex value).
   var DC3D_MAGIC = 0x44433344;   // 'DC3D' little-endian
-  var DC3D_VERSION = 0x0001;
+  var DC3D_VERSION = 0x0002;
   var OP_SET_CAMERA = 0x0001;
   var OP_DRAW = 0x0002;
   var OP_IMM_TRIS = 0x0003;
+  var OP_BIND_TEXTURE = 0x0004;  // v2: declared for wire-parity; WebGL impl is additive (TODO)
+  var OP_SET_LIGHTS = 0x0005;
+  var OP_DRAW_SKINNED = 0x0006;
+  var OP_SET_FOG = 0x0007;
   var FMT_POS = 0x0001;          // 3 x f32
   var FMT_COLOR = 0x0002;        // u32 ABGR
-  var FMT_NORMAL = 0x0004;       // 3 x f32 (reserved)
-  var FMT_UV = 0x0008;           // 2 x f32 (reserved)
+  var FMT_NORMAL = 0x0004;       // 3 x f32
+  var FMT_UV = 0x0008;           // 2 x f32
+  var FMT_WEIGHTS = 0x0010;      // bone weights (count per-mesh)
 
   // v1 vertex layout (FMT_POS|FMT_COLOR): 16 bytes/vertex, interleaved, matching
   // the bytes the encoder emits — [u32 ABGR @0][3 x f32 pos @4].

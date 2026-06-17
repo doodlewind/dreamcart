@@ -12,8 +12,8 @@
 //   the Y-flip in its viewport (toScreen), exactly as each native host's viewport
 //   does. No back-face culling (depth resolves occlusion), matching all hosts.
 import {
-  DC3D_MAGIC, OP_SET_CAMERA, OP_DRAW, OP_IMM_TRIS,
-  FMT_COLOR, FMT_POS, vertexStride,
+  DC3D_MAGIC, OP_SET_CAMERA, OP_DRAW, OP_IMM_TRIS, OP_DRAW_SKINNED, OP_SET_FOG,
+  FMT_COLOR, FMT_NORMAL, FMT_POS, FMT_UV, FMT_WEIGHTS, vertexStride,
 } from '../src/g3d';
 import { Mat4 } from '../src/math';
 
@@ -116,10 +116,32 @@ export class Raster3D {
     hv.setUint32(9, ibytes.length, true);
     this.chunks.push(head, vbytes, ibytes);
 
-    if (!(format & FMT_POS) || !(format & FMT_COLOR)) {
-      throw new Error('raster3d: only POS|COLOR meshes supported');
+    // POS is required; COLOR/UV/NORMAL/WEIGHTS are optional. This software oracle
+    // shades by vertex COLOR + POSITION only — it deliberately does NOT sample
+    // textures or apply hardware lighting (the .dc3d byte golden is the gate for
+    // those; see docs/psp-advanced-3d.md §7). It must still parse the wider
+    // strides so a textured/lit/skinned mesh produces a deterministic image
+    // instead of throwing. Weight-count cannot be recovered from the format bit
+    // alone, so weighted meshes (M4+) aren't pixel-rendered here yet.
+    if (!(format & FMT_POS)) {
+      throw new Error('raster3d: mesh has no POSITION');
+    }
+    if (format & FMT_WEIGHTS) {
+      // Skinned batches are validated by the .dc3d byte golden (bone matrices +
+      // draws are captured above), NOT pixel-rendered — this oracle has no HW
+      // skinning. Store an empty mesh (drawn as nothing) but keep the handle
+      // sequential so OP_DRAW_SKINNED handles match the native hosts.
+      const empty = new Float32Array(0);
+      this.meshes.push({ px: empty, py: empty, pz: empty, cr: new Uint8Array(0), cg: new Uint8Array(0), cb: new Uint8Array(0), indices: new Uint16Array(0) });
+      return this.meshes.length - 1;
     }
     const stride = vertexStride(format);
+    // GE component order is [weights][uv][color][normal][pos]; compute offsets.
+    const uvBytes = format & FMT_UV ? 8 : 0;
+    const colBytes = format & FMT_COLOR ? 4 : 0;
+    const normBytes = format & FMT_NORMAL ? 12 : 0;
+    const colOff = uvBytes; // weights are 0 here
+    const posOff = uvBytes + colBytes + normBytes;
     const n = vbytes.length / stride;
     const dv = new DataView(vertices);
     const px = new Float32Array(n);
@@ -130,17 +152,43 @@ export class Raster3D {
     const cb = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
       const o = i * stride;
-      const abgr = dv.getUint32(o, true);
-      cr[i] = abgr & 255;
-      cg[i] = (abgr >> 8) & 255;
-      cb[i] = (abgr >> 16) & 255;
-      px[i] = dv.getFloat32(o + 4, true);
-      py[i] = dv.getFloat32(o + 8, true);
-      pz[i] = dv.getFloat32(o + 12, true);
+      if (colBytes) {
+        const abgr = dv.getUint32(o + colOff, true);
+        cr[i] = abgr & 255;
+        cg[i] = (abgr >> 8) & 255;
+        cb[i] = (abgr >> 16) & 255;
+      } else {
+        cr[i] = 255; cg[i] = 255; cb[i] = 255; // untextured-oracle default: white
+      }
+      px[i] = dv.getFloat32(o + posOff, true);
+      py[i] = dv.getFloat32(o + posOff + 4, true);
+      pz[i] = dv.getFloat32(o + posOff + 8, true);
     }
     const idx = indices ? new Uint16Array(indices.slice(0)) : new Uint16Array(0);
     this.meshes.push({ px, py, pz, cr, cg, cb, indices: idx });
     return this.meshes.length - 1;
+  }
+
+  private textureCount = 0;
+
+  /**
+   * Record a texture upload and return a sequential handle. This oracle does NOT
+   * sample textures (it shades by vertex color — see uploadMesh), but it must
+   * assign the SAME sequential handles the native hosts do so the OP_BIND_TEXTURE
+   * bytes in the .dc3d golden match across hosts. The pixel bytes are folded into
+   * the recorded stream (tag 0x54 'T') so the byte golden also pins the upload.
+   */
+  uploadTexture(pixels: ArrayBuffer, w: number, h: number, psm: number): number {
+    const pbytes = new Uint8Array(pixels.slice(0));
+    const head = new Uint8Array(17);
+    const hv = new DataView(head.buffer);
+    head[0] = 0x54;
+    hv.setUint32(1, w, true);
+    hv.setUint32(5, h, true);
+    hv.setUint32(9, psm, true);
+    hv.setUint32(13, pbytes.length, true);
+    this.chunks.push(head, pbytes);
+    return this.textureCount++;
   }
 
   freeMesh(_handle: number): void {
@@ -179,6 +227,16 @@ export class Raster3D {
         const model = new Array<number>(16);
         for (let i = 0; i < 16; i++) model[i] = dv.getFloat32(base + 8 + i * 4, true);
         this.drawMesh(this.meshes[handle], Mat4.multiply(this.viewProj, model));
+      } else if (op === OP_SET_FOG) {
+        // Distance fog is a fragment-color state record; this oracle shades flat
+        // (no fog), so it's a no-op here. The record is captured in the .dc3d
+        // byte golden above. (Pixel divergence from fogged hosts is expected.)
+      } else if (op === OP_DRAW_SKINNED) {
+        // Hardware-skinned draw: the bone matrices + draw bytes are already
+        // captured in the .dc3d byte golden (the whole submit buffer was recorded
+        // above), which is the gate for skinning. This software oracle does no HW
+        // skinning, so it intentionally renders nothing here (the pixel golden
+        // covers the HUD + any non-skinned geometry). See docs §7.2.
       } else if (op === OP_IMM_TRIS) {
         // The native hosts DO render OP_IMM_TRIS, but this reference rasterizer
         // doesn't yet — so rather than silently produce a golden that omits the

@@ -30,7 +30,21 @@ unsafe extern "C" fn js_log(
     JS_UNDEFINED
 }
 
-/// Install `log` onto the JS global object.
+/// `now()` — wall-clock microseconds (PSP system time) as a double. Lets games
+/// measure real frame time / FPS (the engine's `dt` is a FIXED timestep, not the
+/// actual elapsed time). Other hosts expose the same name (Web: performance.now()
+/// in ms — games that use it for FPS divide accordingly per host if needed).
+unsafe extern "C" fn js_now(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    _argc: i32,
+    _argv: *mut JSValue,
+) -> JSValue {
+    let us = psp::sys::sceKernelGetSystemTimeWide() as f64;
+    JS_NewFloat64(ctx, us)
+}
+
+/// Install `log` + `now` onto the JS global object.
 pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
     let f_log = JS_NewCFunction2(
         ctx,
@@ -41,6 +55,16 @@ pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
         0,
     );
     JS_SetPropertyStr(ctx, global, b"log\0".as_ptr() as *const _, f_log);
+
+    let f_now = JS_NewCFunction2(
+        ctx,
+        Some(js_now),
+        b"now\0".as_ptr() as *const _,
+        0,
+        JS_CFUNC_generic,
+        0,
+    );
+    JS_SetPropertyStr(ctx, global, b"now\0".as_ptr() as *const _, f_now);
 }
 
 /// Fetch and print the pending JS exception (call after a TAG_EXCEPTION result).

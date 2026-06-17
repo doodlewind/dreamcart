@@ -3,7 +3,9 @@
 // holds interleaved vertex bytes (v1 layout: [color u32 ABGR][pos 3 f32], stride
 // 16) + a Uint16 index buffer, and lazily uploads itself to the host on first use,
 // caching the returned handle.
-import { FMT_COLOR, FMT_POS, colorToABGR, vertexStride } from './g3d';
+import {
+  FMT_COLOR, FMT_NORMAL, FMT_POS, FMT_UV, FMT_WEIGHTS, colorToABGR, vertexStride,
+} from './g3d';
 import { hasG3d } from './host3d';
 import type { Color } from './color';
 
@@ -52,20 +54,172 @@ export class MeshBuilder {
   }
 }
 
+/**
+ * Builder for textured + lit geometry: each vertex carries position, color, and
+ * optionally a UV (FMT_UV) and a normal (FMT_NORMAL). The format is inferred from
+ * which attributes the first vertex supplies; bytes are packed in the GE's FIXED
+ * component order [uv][color][normal][pos] (see g3d.ts). Procedural meshes (the
+ * M1 textured/lit cube, the M6 heightmap terrain) use this; baked glTF assets
+ * pack their own bytes in bake-gltf.ts.
+ */
+export class TexMeshBuilder {
+  private x: number[] = [];
+  private y: number[] = [];
+  private z: number[] = [];
+  private col: number[] = []; // ABGR u32
+  private u: number[] = [];
+  private v: number[] = [];
+  private nx: number[] = [];
+  private ny: number[] = [];
+  private nz: number[] = [];
+  private idx: number[] = [];
+  private withUV: boolean;
+  private withNormal: boolean;
+
+  /** `uv` and `normal` toggles fix the format for every vertex in this builder. */
+  constructor(opts: { uv?: boolean; normal?: boolean } = {}) {
+    this.withUV = opts.uv ?? true;
+    this.withNormal = opts.normal ?? true;
+  }
+
+  /**
+   * Add a vertex. `u/v` are used iff the builder has UV; `nx/ny/nz` iff it has
+   * normals. Returns the vertex index.
+   */
+  vertex(
+    x: number, y: number, z: number, color: Color,
+    u = 0, v = 0, nx = 0, ny = 0, nz = 0,
+  ): number {
+    this.x.push(x);
+    this.y.push(y);
+    this.z.push(z);
+    this.col.push(colorToABGR(color));
+    this.u.push(u);
+    this.v.push(v);
+    this.nx.push(nx);
+    this.ny.push(ny);
+    this.nz.push(nz);
+    return this.x.length - 1;
+  }
+
+  tri(a: number, b: number, c: number): void {
+    this.idx.push(a, b, c);
+  }
+
+  quad(a: number, b: number, c: number, d: number): void {
+    this.idx.push(a, b, c, a, c, d);
+  }
+
+  build(): Mesh {
+    let format = FMT_POS | FMT_COLOR;
+    if (this.withUV) format |= FMT_UV;
+    if (this.withNormal) format |= FMT_NORMAL;
+    const stride = vertexStride(format);
+    const n = this.x.length;
+    const vbuf = new ArrayBuffer(n * stride);
+    const dv = new DataView(vbuf);
+    for (let i = 0; i < n; i++) {
+      let o = i * stride;
+      // GE order: [uv][color][normal][pos].
+      if (this.withUV) {
+        dv.setFloat32(o, this.u[i], true);
+        dv.setFloat32(o + 4, this.v[i], true);
+        o += 8;
+      }
+      dv.setUint32(o, this.col[i] >>> 0, true);
+      o += 4;
+      if (this.withNormal) {
+        dv.setFloat32(o, this.nx[i], true);
+        dv.setFloat32(o + 4, this.ny[i], true);
+        dv.setFloat32(o + 8, this.nz[i], true);
+        o += 12;
+      }
+      dv.setFloat32(o, this.x[i], true);
+      dv.setFloat32(o + 4, this.y[i], true);
+      dv.setFloat32(o + 8, this.z[i], true);
+    }
+    return new Mesh(vbuf, new Uint16Array(this.idx), format);
+  }
+}
+
+/**
+ * A mesh baked offline from glTF (framework/bake/bake-gltf.ts): interleaved
+ * GE-order vertex bytes + a triangle index list, plus its format/stride/AABB.
+ * The generated assets-*.ts modules export these; `meshFromBaked` wraps one into
+ * an uploadable Mesh (call once and cache — uploads on first draw).
+ */
+export interface BakedMesh {
+  format: number;
+  stride: number;
+  vertexCount: number;
+  weightCount: number; // f32 bone weights/vertex when FMT_WEIGHTS (else 0)
+  vertices: Uint8Array; // interleaved, GE order, length = stride*vertexCount
+  indices: Uint16Array; // triangle list
+  triCount: number;
+  aabb: { min: [number, number, number]; max: [number, number, number] };
+}
+
+/** Wrap a BakedMesh into an uploadable Mesh (no copy — reuses the decoded bytes). */
+export function meshFromBaked(b: BakedMesh): Mesh {
+  return new Mesh(b.vertices.buffer as ArrayBuffer, b.indices, b.format, b.weightCount);
+}
+
+/**
+ * Bake many meshes (each at a world transform) into ONE static POS|COLOR mesh, so
+ * a clump of instanced scenery (e.g. roadside props) draws as a SINGLE GE call
+ * instead of one per instance — the per-draw GE cost dominates large scenes, and
+ * real PSP T&L eats the merged vertex count for free. UV/normal are dropped
+ * (merged geometry is for unlit, untextured scenery). Done once at scene build.
+ */
+export function mergeMeshes(parts: { mesh: Mesh; model: number[] }[]): Mesh {
+  const b = new MeshBuilder();
+  for (const { mesh, model } of parts) {
+    const fmt = mesh.format;
+    const stride = vertexStride(fmt, mesh.weightCount);
+    const wB = fmt & FMT_WEIGHTS ? mesh.weightCount * 4 : 0;
+    const uvB = fmt & FMT_UV ? 8 : 0;
+    const colOff = wB + uvB;
+    const colB = fmt & FMT_COLOR ? 4 : 0;
+    const normB = fmt & FMT_NORMAL ? 12 : 0;
+    const posOff = wB + uvB + colB + normB;
+    const dv = new DataView(mesh.vertices);
+    const n = mesh.vertices.byteLength / stride;
+    const map: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const o = i * stride;
+      const abgr = colB ? dv.getUint32(o + colOff, true) : 0xffffffff;
+      const col = ((abgr & 255) << 16) | (abgr & 0xff00) | ((abgr >> 16) & 255); // ABGR->RRGGBB
+      const lx = dv.getFloat32(o + posOff, true);
+      const ly = dv.getFloat32(o + posOff + 4, true);
+      const lz = dv.getFloat32(o + posOff + 8, true);
+      const wx = model[0] * lx + model[4] * ly + model[8] * lz + model[12];
+      const wy = model[1] * lx + model[5] * ly + model[9] * lz + model[13];
+      const wz = model[2] * lx + model[6] * ly + model[10] * lz + model[14];
+      map.push(b.vertex(wx, wy, wz, col));
+    }
+    const idx = mesh.indices;
+    for (let k = 0; k + 2 < idx.length; k += 3) b.tri(map[idx[k]], map[idx[k + 1]], map[idx[k + 2]]);
+  }
+  return b.build();
+}
+
 export class Mesh {
   vertices: ArrayBuffer;
   indices: Uint16Array;
   format: number;
+  /** f32 bone weights per vertex when FMT_WEIGHTS is set (0 otherwise). */
+  weightCount: number;
   private _handle = -1;
 
-  constructor(vertices: ArrayBuffer, indices: Uint16Array, format: number) {
+  constructor(vertices: ArrayBuffer, indices: Uint16Array, format: number, weightCount = 0) {
     this.vertices = vertices;
     this.indices = indices;
     this.format = format;
+    this.weightCount = weightCount;
   }
 
   get vertexCount(): number {
-    return this.vertices.byteLength / vertexStride(this.format);
+    return this.vertices.byteLength / vertexStride(this.format, this.weightCount);
   }
 
   /** Upload to the host on first call; returns -1 when there is no 3D host. */
@@ -75,6 +229,7 @@ export class Mesh {
         this.vertices,
         this.indices.buffer as ArrayBuffer,
         this.format,
+        this.weightCount,
       );
     }
     return this._handle;
@@ -120,6 +275,38 @@ export class Mesh {
     face(-hx, -hy, hz, hx, -hy, hz, hx, hy, hz, -hx, hy, hz, faceColors[4]);
     // -Z
     face(hx, -hy, -hz, -hx, -hy, -hz, -hx, hy, -hz, hx, hy, -hz, faceColors[5]);
+    return b.build();
+  }
+
+  /**
+   * Axis-aligned textured + lit cube centered at origin. Every face gets full
+   * 0..1 UVs (so a whole texture maps onto each face) and an outward normal, so
+   * it exercises FMT_UV + FMT_NORMAL (the M1 texture/light path). `tint` is the
+   * per-vertex base color the texture modulates (default white = texture as-is).
+   */
+  static texturedCube(size: number, tint: Color = 0xffffff): Mesh {
+    const h = size / 2;
+    const b = new TexMeshBuilder({ uv: true, normal: true });
+    const face = (
+      nx: number, ny: number, nz: number,
+      ax: number, ay: number, az: number,
+      bx: number, by: number, bz: number,
+      cx: number, cy: number, cz: number,
+      dx: number, dy: number, dz: number,
+    ) => {
+      // a=(0,0) b=(1,0) c=(1,1) d=(0,1), CCW from outside.
+      const i0 = b.vertex(ax, ay, az, tint, 0, 0, nx, ny, nz);
+      const i1 = b.vertex(bx, by, bz, tint, 1, 0, nx, ny, nz);
+      const i2 = b.vertex(cx, cy, cz, tint, 1, 1, nx, ny, nz);
+      const i3 = b.vertex(dx, dy, dz, tint, 0, 1, nx, ny, nz);
+      b.quad(i0, i1, i2, i3);
+    };
+    face(1, 0, 0, h, -h, h, h, -h, -h, h, h, -h, h, h, h); // +X
+    face(-1, 0, 0, -h, -h, -h, -h, -h, h, -h, h, h, -h, h, -h); // -X
+    face(0, 1, 0, -h, h, h, h, h, h, h, h, -h, -h, h, -h); // +Y
+    face(0, -1, 0, -h, -h, -h, h, -h, -h, h, -h, h, -h, -h, h); // -Y
+    face(0, 0, 1, -h, -h, h, h, -h, h, h, h, h, -h, h, h); // +Z
+    face(0, 0, -1, h, -h, -h, -h, -h, -h, -h, h, -h, h, h, -h); // -Z
     return b.build();
   }
 

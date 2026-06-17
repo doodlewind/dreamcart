@@ -46,30 +46,56 @@ import { hasG3d } from './host3d';
 import type { Color } from './color';
 
 export const DC3D_MAGIC = 0x44433344; // 'DC3D' little-endian
-export const DC3D_VERSION = 0x0001;
+export const DC3D_VERSION = 0x0002;
 
 export const OP_SET_CAMERA = 0x0001;
 export const OP_DRAW = 0x0002;
 export const OP_IMM_TRIS = 0x0003;
+// v2 (advanced 3D): texture/light state + skinned draw. All additive + length-
+// prefixed, so v1-only hosts skip them. See docs/psp-advanced-3d.md.
+export const OP_BIND_TEXTURE = 0x0004; // payload: u32 texHandle (0xffffffff = unbind)
+export const OP_SET_LIGHTS = 0x0005; // payload: u32 count, u32 ambientABGR, count×{u32 colorABGR, 3 f32 dir}
+export const OP_DRAW_SKINNED = 0x0006; // OP_DRAW + u32 boneCount, then boneCount×12 f32 (3×4 bone matrices)
+export const OP_SET_FOG = 0x0007; // payload: u32 colorABGR, f32 near, f32 far (0xffffffff color = disable)
 
-// Vertex-format bitfield. v1 ships POS|COLOR; NORMAL/UV reserved for later.
+// Vertex-format bitfield. v1 ships POS|COLOR; v2 adds NORMAL/UV/WEIGHTS.
+// IMPORTANT: bytes are ALWAYS interleaved in the PSP GE's mandated component
+// order [weights][uv][color][normal][position] (each 4-byte aligned), regardless
+// of bit value — the bake + encoder + host all agree on GE order. (v1's
+// [color][pos] is a legal subset.)
 export const FMT_POS = 0x0001; // 3 x f32
 export const FMT_COLOR = 0x0002; // u32 ABGR
 export const FMT_NORMAL = 0x0004; // 3 x f32
-export const FMT_UV = 0x0008; // 2 x f32
+export const FMT_UV = 0x0008; // 2 x f32 (texcoord)
+export const FMT_WEIGHTS = 0x0010; // bone weights; count carried per-mesh (weightCount), not in the bit
 
-/** Bytes per vertex for a format (v1 layout: [color u32][pos 3 f32] = 16). */
-export function vertexStride(format: number): number {
+// Texture pixel formats (subset of the PSP GE's `TexturePixelFormat`). The wire
+// passes the raw enum value; each host maps it to its native sampler format.
+// 16-bit (5650/5551/4444) halve VRAM vs 8888 — preferred on the VRAM-tight PSP.
+export const PSM_5650 = 0; // RGB 16-bit, no alpha
+export const PSM_5551 = 1; // RGBA 16-bit, 1-bit alpha
+export const PSM_4444 = 2; // RGBA 16-bit
+export const PSM_8888 = 3; // RGBA 32-bit (simplest; 256 KB @256²)
+
+/**
+ * Bytes per vertex for a format. `weightCount` is the number of f32 bone weights
+ * when FMT_WEIGHTS is set (0 otherwise). Order-independent (sums present fields).
+ */
+export function vertexStride(format: number, weightCount = 0): number {
   let s = 0;
-  if (format & FMT_COLOR) s += 4;
-  if (format & FMT_POS) s += 12;
-  if (format & FMT_NORMAL) s += 12;
+  if (format & FMT_WEIGHTS) s += weightCount * 4;
   if (format & FMT_UV) s += 8;
+  if (format & FMT_COLOR) s += 4;
+  if (format & FMT_NORMAL) s += 12;
+  if (format & FMT_POS) s += 12;
   return s;
 }
 
 /** No-tint sentinel: full white, fully opaque ABGR. */
 export const NO_TINT = 0xffffffff;
+
+/** OP_BIND_TEXTURE sentinel that disables texturing (no active texture). */
+export const UNBIND_TEXTURE = 0xffffffff;
 
 /** Pack an 0xRRGGBB color into the PSP-style ABGR u32 used in vertex/tint data. */
 export function colorToABGR(c: Color, a = 255): number {
@@ -86,12 +112,14 @@ export function colorToABGR(c: Color, a = 255): number {
 export class CommandEncoder {
   private buf: ArrayBuffer;
   private view: DataView;
+  private bytes: Uint8Array; // byte view over buf, for fast matrix memcpy
   private pos = 8; // past header
   private records = 0;
 
   constructor(capacityBytes = 256 * 1024) {
     this.buf = new ArrayBuffer(capacityBytes);
     this.view = new DataView(this.buf);
+    this.bytes = new Uint8Array(this.buf);
   }
 
   reset(): void {
@@ -107,6 +135,7 @@ export class CommandEncoder {
     new Uint8Array(next).set(new Uint8Array(this.buf, 0, this.pos));
     this.buf = next;
     this.view = new DataView(this.buf);
+    this.bytes = new Uint8Array(this.buf);
   }
 
   private writeMat(m: ArrayLike<number>): void {
@@ -136,6 +165,125 @@ export class CommandEncoder {
     this.view.setUint32(this.pos + 4, tintABGR >>> 0, true);
     this.pos += 8;
     this.writeMat(model);
+    this.records++;
+  }
+
+  /**
+   * Emit OP_BIND_TEXTURE: make `texHandle` (from g3d.uploadTexture) the active
+   * texture for subsequent draws. Pass `UNBIND_TEXTURE` (0xffffffff) to disable
+   * texturing. Texture binding is sticky GE state, not a per-draw field, so this
+   * is a state record between draws (Scene3D tracks the current bind to elide
+   * redundant ones).
+   */
+  bindTexture(texHandle: number): void {
+    this.ensure(4 + 4);
+    this.view.setUint16(this.pos, OP_BIND_TEXTURE, true);
+    this.view.setUint16(this.pos + 2, 1, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, texHandle >>> 0, true);
+    this.pos += 4;
+    this.records++;
+  }
+
+  /**
+   * Emit OP_SET_LIGHTS: global ambient + up to 4 directional lights (the GE
+   * hardware T&L limit). `ambient` and each `light.color` are ABGR u32; each
+   * `light.dir` is a 3-component direction (the GE reuses a directional light's
+   * "position" slot as its direction). Requires meshes carrying FMT_NORMAL.
+   */
+  setLights(
+    ambient: number,
+    lights: { dir: ArrayLike<number>; color: number }[],
+  ): void {
+    const count = Math.min(lights.length, 4);
+    const words = 2 + count * 4; // count, ambient, then per-light {color, 3×dir}
+    this.ensure(4 + words * 4);
+    this.view.setUint16(this.pos, OP_SET_LIGHTS, true);
+    this.view.setUint16(this.pos + 2, words, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, count >>> 0, true);
+    this.view.setUint32(this.pos + 4, ambient >>> 0, true);
+    this.pos += 8;
+    for (let i = 0; i < count; i++) {
+      const l = lights[i];
+      this.view.setUint32(this.pos, l.color >>> 0, true);
+      this.view.setFloat32(this.pos + 4, l.dir[0], true);
+      this.view.setFloat32(this.pos + 8, l.dir[1], true);
+      this.view.setFloat32(this.pos + 12, l.dir[2], true);
+      this.pos += 16;
+    }
+    this.records++;
+  }
+
+  /**
+   * Like draw(), but reads the 16-float column-major model matrix from `m` at
+   * offset `off` — no subarray/array allocation. Used by Scene3D's flat static
+   * draw fast path so a large static scene emits with zero per-node garbage.
+   */
+  drawAt(handle: number, m: Float32Array, off: number, tintABGR = NO_TINT): void {
+    this.ensure(4 + 8 + 64);
+    this.view.setUint16(this.pos, OP_DRAW, true);
+    this.view.setUint16(this.pos + 2, 18, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, handle >>> 0, true);
+    this.view.setUint32(this.pos + 4, tintABGR >>> 0, true);
+    this.pos += 8;
+    // memcpy the 16 f32 (64 bytes) straight from the source Float32Array — one
+    // typed-array copy instead of 16 setFloat32 calls. f32 little-endian bytes are
+    // identical to setFloat32(LE), so the wire/golden is unchanged.
+    this.bytes.set(new Uint8Array(m.buffer, m.byteOffset + off * 4, 64), this.pos);
+    this.pos += 64;
+    this.records++;
+  }
+
+  /**
+   * Emit OP_SET_FOG: linear distance fog fading geometry to `colorABGR` between
+   * `near` and `far` (view-space distance). Pass color 0xffffffff to disable.
+   * Used by the outdoor scene to bound draw distance + overdraw; the fog color
+   * should match the background clear so distant geometry fades into the sky.
+   */
+  setFog(colorABGR: number, near: number, far: number): void {
+    this.ensure(4 + 12);
+    this.view.setUint16(this.pos, OP_SET_FOG, true);
+    this.view.setUint16(this.pos + 2, 3, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, colorABGR >>> 0, true);
+    this.view.setFloat32(this.pos + 4, near, true);
+    this.view.setFloat32(this.pos + 8, far, true);
+    this.pos += 12;
+    this.records++;
+  }
+
+  /**
+   * Emit OP_DRAW_SKINNED: a retained skinned-mesh batch + its ≤8 bone matrices.
+   * `bones` is a flat Float32Array of `boneCount`×12 floats (3×4 affine, GE order
+   * col0.xyz,col1.xyz,col2.xyz,col3.xyz) = jointWorld·inverseBind per bone slot;
+   * the GE blends them per-vertex by the mesh's bone weights, then applies
+   * `model` (column-major, the character placement). The mesh must have been
+   * uploaded with FMT_WEIGHTS and a matching weightCount.
+   */
+  drawSkinned(
+    handle: number,
+    model: ArrayLike<number>,
+    bones: Float32Array,
+    boneCount: number,
+    tintABGR = NO_TINT,
+  ): void {
+    const n = Math.min(boneCount, 8);
+    const words = 3 + 16 + n * 12; // handle,tint,boneCount + model + bones
+    this.ensure(4 + words * 4);
+    this.view.setUint16(this.pos, OP_DRAW_SKINNED, true);
+    this.view.setUint16(this.pos + 2, words, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, handle >>> 0, true);
+    this.view.setUint32(this.pos + 4, tintABGR >>> 0, true);
+    this.view.setUint32(this.pos + 8, n >>> 0, true);
+    this.pos += 12;
+    this.writeMat(model);
+    for (let i = 0; i < n * 12; i++) {
+      this.view.setFloat32(this.pos, bones[i], true);
+      this.pos += 4;
+    }
     this.records++;
   }
 

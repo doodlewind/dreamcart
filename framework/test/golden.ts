@@ -28,6 +28,16 @@ function makeGfx(buf: Uint8Array) {
   return {
     clear: (r: number, g: number, b: number) => put(0, 0, W, H, r, g, b),
     fillRect: (x: number, y: number, w: number, h: number, r: number, g: number, b: number) => put(x, y, w, h, r, g, b),
+    // Batched path (gfx.fillRects): same pixels as N fillRect calls, so the
+    // golden image is identical whether a host batches text or not.
+    fillRects: (buffer: ArrayBuffer, count: number) => {
+      const v = new Int32Array(buffer);
+      for (let i = 0; i < count; i++) {
+        const o = i * 5;
+        const rgb = v[o + 4] >>> 0;
+        put(v[o], v[o + 1], v[o + 2], v[o + 3], (rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
+      }
+    },
   };
 }
 
@@ -109,8 +119,18 @@ const SPECS: { name: string; frames: number; input?: (f: number) => number }[] =
   { name: "dodge", frames: 200, input: (f) => (f % 50 < 25 ? 0x20 : 0x80) },
   { name: "rpg", frames: 260, input: (f) => (f < 45 ? 0x80 : f < 170 ? 0x40 : 0x20 | (f % 40 === 0 ? 0x4000 : 0)) },
   { name: "cube3d", frames: 120, input: (f) => (f < 30 ? 0x20 : f < 60 ? 0x10 : f < 90 ? 0x80 : 0x40) },
+  // lit3d (M1): textured + hardware-lit static cube; tilt it through all axes.
+  { name: "lit3d", frames: 120, input: (f) => (f < 30 ? 0x20 : f < 60 ? 0x10 : f < 90 ? 0x80 : 0x40) },
   // racing: hold accelerate (CROSS) the whole time, steer right then left.
   { name: "racing3d", frames: 180, input: (f) => 0x4000 | (f > 60 && f < 110 ? 0x20 : f >= 110 ? 0x80 : 0) },
+  // car (M3): baked glTF car; accelerate, steer right then left (wheels roll/steer).
+  { name: "car3d", frames: 180, input: (f) => 0x4000 | (f > 60 && f < 110 ? 0x20 : f >= 110 ? 0x80 : 0) },
+  // skin (M4): static-pose HW-skinned Fox, auto-orbit camera (no input).
+  { name: "skin3d", frames: 90 },
+  // walk (M5): walking Fox; turn, walk, run (clip phase tied to motion).
+  { name: "walk3d", frames: 160, input: (f) => (f < 40 ? 0x4000 : f < 70 ? 0x4000 | 0x80 : f < 120 ? 0x8000 : 0x4000) },
+  // outdoor (M6): fly-through; auto-forward, steer + boost (fog + frustum cull).
+  { name: "outdoor3d", frames: 160, input: (f) => (f < 50 ? 0x20 : f < 100 ? 0x80 : 0) | (f % 3 === 0 ? 0x4000 : 0) },
   // fps: turn right, walk forward, shoot a few times.
   { name: "fps3d", frames: 180, input: (f) => (f < 40 ? 0x20 : f < 110 ? 0x10 : 0x80) | (f % 24 === 0 ? 0x4000 : 0) },
 ];

@@ -1,18 +1,18 @@
-//! Back QuickJS's allocator with the Rust/PSP global allocator.
+//! Back QuickJS's allocator with the single-arena sub-allocator (`arena.rs`).
 //!
 //! rust-psp's startup does not set up a C heap, so newlib `malloc` (used by the
 //! bundled QuickJS) has no backing memory and hangs/corrupts during
-//! `JS_NewRuntime`. We instead create the runtime via `JS_NewRuntime2` with
-//! these hooks, which route every allocation through Rust's `alloc` (PSP
-//! `sceKernelAllocPartitionMemory`).
+//! `JS_NewRuntime`. We instead create the runtime via `JS_NewRuntime2` with these
+//! hooks. They route every allocation through `arena`, which sub-allocates from
+//! ONE big kernel block — crucial because the PSP kernel caps the number of
+//! objects and one-kernel-block-per-allocation exhausts it on large bundles.
 
-extern crate alloc;
-
-use core::alloc::Layout;
 use core::ffi::c_void;
 use core::ptr;
 
 use libquickjs_sys::*;
+
+use crate::arena;
 
 // A 16-byte header keeps user pointers 16-byte aligned and stores the request
 // size so `free`/`realloc`/`usable_size` can recover it.
@@ -23,8 +23,7 @@ unsafe fn raw_alloc(size: usize) -> *mut c_void {
     if size == 0 {
         return ptr::null_mut();
     }
-    let layout = Layout::from_size_align_unchecked(size + HEADER, 16);
-    let p = alloc::alloc::alloc(layout);
+    let p = arena::alloc(size + HEADER, 16);
     if p.is_null() {
         return ptr::null_mut();
     }
@@ -39,8 +38,7 @@ unsafe fn raw_free(ptr: *mut c_void) {
     }
     let base = (ptr as *mut u8).sub(HEADER);
     let size = *(base as *mut usize);
-    let layout = Layout::from_size_align_unchecked(size + HEADER, 16);
-    alloc::alloc::dealloc(base, layout);
+    arena::dealloc(base, size + HEADER, 16);
 }
 
 #[inline]
@@ -54,13 +52,15 @@ unsafe fn raw_realloc(p: *mut c_void, size: usize) -> *mut c_void {
     }
     let base = (p as *mut u8).sub(HEADER);
     let old = *(base as *mut usize);
-    let layout = Layout::from_size_align_unchecked(old + HEADER, 16);
-    let np = alloc::alloc::realloc(base, layout, size + HEADER);
+    // No in-place grow in the free-list heap: allocate, copy, free.
+    let np = raw_alloc(size);
     if np.is_null() {
         return ptr::null_mut();
     }
-    *(np as *mut usize) = size;
-    np.add(HEADER) as *mut c_void
+    let copy = if old < size { old } else { size };
+    ptr::copy_nonoverlapping(base.add(HEADER), np as *mut u8, copy);
+    arena::dealloc(base, old + HEADER, 16);
+    np
 }
 
 unsafe extern "C" fn qjs_malloc(_s: *mut JSMallocState, size: size_t) -> *mut c_void {

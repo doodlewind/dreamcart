@@ -1,0 +1,13 @@
+Fox — glTF Sample Asset
+Source: https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Fox
+File: Fox.glb (glTF-Binary)
+
+LICENSE (mixed; the asset as a whole requires CC-BY-4.0 attribution):
+  - Model:               (c) 2014, PixelMannen — CC0 1.0 Universal (public domain)
+  - Rigging & Animation: (c) 2014, tomkranis — CC BY 4.0 International
+  - Conversion to glTF:  (c) 2017, @AsoboStudio and @scurest — CC BY 4.0 International
+
+REQUIRED ATTRIBUTION STRING (verbatim, use this in-app/credits):
+  "Fox" model by PixelMannen (CC0), rigged & animated by tomkranis (CC BY 4.0),
+  converted to glTF by @AsoboStudio and @scurest (CC BY 4.0).
+  https://github.com/KhronosGroup/glTF-Sample-Assets
