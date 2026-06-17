@@ -10,9 +10,10 @@
 //
 // Fox: CC-BY-4.0 — model PixelMannen (CC0), rig/anim tomkranis, glTF Asobo/scurest.
 import {
-  start, Scene, Scene3D, SkinnedMesh, poseFromClip, FOX,
+  start, Scene, Scene3D, SkinnedMesh, poseFromClip,
   Vec3, Colors, dsin, dcos,
 } from '../src/index';
+import { FOX } from '../src/assets-fox';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
 

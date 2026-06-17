@@ -9,8 +9,10 @@
 // by per-frame matrices. Vehicle physics + chase-cam are deterministic JS.
 import {
   start, Scene, Scene3D, Node3D, Mesh, Material, Texture, meshFromBaked,
-  KENNEY_CAR, NATURE_PROPS, Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
+  Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
 } from '../src/index';
+import { KENNEY_CAR } from '../src/assets-kenney-car';
+import { NATURE_PROPS } from '../src/assets-kenney-nature';
 
 /** @import { UpdateContext, Graphics, Node3D as N3D } from '../src/index' */
 

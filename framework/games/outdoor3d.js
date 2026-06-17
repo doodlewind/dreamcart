@@ -10,9 +10,10 @@
 // frame so the GE stays in budget. All terrain/scatter/camera logic is JS.
 import {
   start, Scene, Scene3D, Node3D, TexMeshBuilder, Texture, Material,
-  Lighting, DirectionalLight, meshFromBaked, NATURE_PROPS,
+  Lighting, DirectionalLight, meshFromBaked,
   Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
 } from '../src/index';
+import { NATURE_PROPS } from '../src/assets-kenney-nature';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
 
