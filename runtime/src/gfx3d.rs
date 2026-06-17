@@ -261,9 +261,9 @@ unsafe extern "C" fn js_g3d_upload_mesh(
     if stride == 0 {
         return JS_NewInt32(ctx, -1);
     }
-    // Silence "unused" on constants not consumed yet while keeping them defined
-    // for the contract parity check. OP_DRAW_SKINNED is wired in M4.
-    let _ = (DC3D_VERSION, OP_DRAW_SKINNED);
+    // Silence "unused" on constants not consumed in this function while keeping
+    // them defined for the contract parity check (DC3D_VERSION is in the header).
+    let _ = DC3D_VERSION;
 
     let src_vert_count = vlen as usize / stride;
 
@@ -433,6 +433,21 @@ unsafe fn read_f32(base: *const u8, off: usize) -> f32 {
     f32::from_bits(read_u32(base, off))
 }
 
+/// Read a 12-float (3×4 affine) bone matrix from the wire into a ScePspFMatrix4.
+/// Wire order is col0.xyz, col1.xyz, col2.xyz, col3.xyz; `sceGuBoneMatrix` reads
+/// `.x/.y/.z` of each of the 4 columns (the homogeneous w-row is dropped — exact
+/// for affine joint transforms), so we place each column's xyz and zero its w.
+#[inline]
+unsafe fn read_bone_matrix(base: *const u8, off: usize) -> ScePspFMatrix4 {
+    let f = |i: usize| read_f32(base, off + i * 4);
+    ScePspFMatrix4 {
+        x: sys::ScePspFVector4 { x: f(0), y: f(1), z: f(2), w: 0.0 },
+        y: sys::ScePspFVector4 { x: f(3), y: f(4), z: f(5), w: 0.0 },
+        z: sys::ScePspFVector4 { x: f(6), y: f(7), z: f(8), w: 0.0 },
+        w: sys::ScePspFVector4 { x: f(9), y: f(10), z: f(11), w: 0.0 },
+    }
+}
+
 /// `GuState::Light0 + i` for light slot `i` (0..3).
 #[inline]
 fn light_state(i: u32) -> GuState {
@@ -596,6 +611,45 @@ unsafe extern "C" fn js_g3d_submit(
                 i += 1;
             }
             sys::sceGuEnable(GuState::Lighting);
+        } else if op == OP_DRAW_SKINNED {
+            // payload = u32 handle, u32 tintABGR, u32 boneCount, 16 f32 model,
+            // boneCount×12 f32 (3×4 affine bone matrices). The GE blends the first
+            // boneCount bone matrices per-vertex by the mesh's WEIGHTSn, then
+            // applies Model·View·Proj — so bones are character-local
+            // (jointWorld·inverseBind) and Model places the character.
+            let handle = read_u32(buf, base) as i32;
+            let tint = read_u32(buf, base + 4);
+            let bone_count = read_u32(buf, base + 8);
+            let model = read_matrix(buf, base + 12);
+
+            if handle < 0 || (handle as usize) >= table.len() {
+                continue;
+            }
+            let mesh = &table[handle as usize];
+            if mesh.count == 0 {
+                continue;
+            }
+
+            sys::sceGumMatrixMode(MatrixMode::Model);
+            sys::sceGumLoadMatrix(&model.0);
+            sys::sceGuColor(if tint == NO_TINT { 0xffff_ffff } else { tint });
+
+            // Bone matrices follow the 16-float (64-byte) model in the payload.
+            let bones_base = base + 12 + 64;
+            let mut i = 0u32;
+            while i < bone_count && i < 8 {
+                let bm = read_bone_matrix(buf, bones_base + (i as usize) * 48);
+                sys::sceGuBoneMatrix(i, &bm);
+                i += 1;
+            }
+
+            sys::sceGumDrawArray(
+                GuPrimitive::Triangles,
+                mesh.vtype, // carries WEIGHT_32BITF | WEIGHTSn
+                mesh.count,
+                null(),
+                mesh.bytes.as_ptr() as *const c_void,
+            );
         } else if op == OP_IMM_TRIS {
             // Inline dynamic geometry. The example games don't emit this yet; a
             // correct implementation would stage `vertexCount` vertices into a

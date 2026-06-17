@@ -212,6 +212,39 @@ export class CommandEncoder {
   }
 
   /**
+   * Emit OP_DRAW_SKINNED: a retained skinned-mesh batch + its ≤8 bone matrices.
+   * `bones` is a flat Float32Array of `boneCount`×12 floats (3×4 affine, GE order
+   * col0.xyz,col1.xyz,col2.xyz,col3.xyz) = jointWorld·inverseBind per bone slot;
+   * the GE blends them per-vertex by the mesh's bone weights, then applies
+   * `model` (column-major, the character placement). The mesh must have been
+   * uploaded with FMT_WEIGHTS and a matching weightCount.
+   */
+  drawSkinned(
+    handle: number,
+    model: ArrayLike<number>,
+    bones: Float32Array,
+    boneCount: number,
+    tintABGR = NO_TINT,
+  ): void {
+    const n = Math.min(boneCount, 8);
+    const words = 3 + 16 + n * 12; // handle,tint,boneCount + model + bones
+    this.ensure(4 + words * 4);
+    this.view.setUint16(this.pos, OP_DRAW_SKINNED, true);
+    this.view.setUint16(this.pos + 2, words, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, handle >>> 0, true);
+    this.view.setUint32(this.pos + 4, tintABGR >>> 0, true);
+    this.view.setUint32(this.pos + 8, n >>> 0, true);
+    this.pos += 12;
+    this.writeMat(model);
+    for (let i = 0; i < n * 12; i++) {
+      this.view.setFloat32(this.pos, bones[i], true);
+      this.pos += 4;
+    }
+    this.records++;
+  }
+
+  /**
    * Emit inline dynamic geometry (particles/tracers). `vertices` is interleaved
    * per `format`; `byteLength` bytes are copied into the buffer.
    *

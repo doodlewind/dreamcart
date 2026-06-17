@@ -152,6 +152,7 @@ export interface BakedMesh {
   format: number;
   stride: number;
   vertexCount: number;
+  weightCount: number; // f32 bone weights/vertex when FMT_WEIGHTS (else 0)
   vertices: Uint8Array; // interleaved, GE order, length = stride*vertexCount
   indices: Uint16Array; // triangle list
   triCount: number;
@@ -160,23 +161,26 @@ export interface BakedMesh {
 
 /** Wrap a BakedMesh into an uploadable Mesh (no copy — reuses the decoded bytes). */
 export function meshFromBaked(b: BakedMesh): Mesh {
-  return new Mesh(b.vertices.buffer as ArrayBuffer, b.indices, b.format);
+  return new Mesh(b.vertices.buffer as ArrayBuffer, b.indices, b.format, b.weightCount);
 }
 
 export class Mesh {
   vertices: ArrayBuffer;
   indices: Uint16Array;
   format: number;
+  /** f32 bone weights per vertex when FMT_WEIGHTS is set (0 otherwise). */
+  weightCount: number;
   private _handle = -1;
 
-  constructor(vertices: ArrayBuffer, indices: Uint16Array, format: number) {
+  constructor(vertices: ArrayBuffer, indices: Uint16Array, format: number, weightCount = 0) {
     this.vertices = vertices;
     this.indices = indices;
     this.format = format;
+    this.weightCount = weightCount;
   }
 
   get vertexCount(): number {
-    return this.vertices.byteLength / vertexStride(this.format);
+    return this.vertices.byteLength / vertexStride(this.format, this.weightCount);
   }
 
   /** Upload to the host on first call; returns -1 when there is no 3D host. */
@@ -186,6 +190,7 @@ export class Mesh {
         this.vertices,
         this.indices.buffer as ArrayBuffer,
         this.format,
+        this.weightCount,
       );
     }
     return this._handle;

@@ -12,7 +12,7 @@
 //   the Y-flip in its viewport (toScreen), exactly as each native host's viewport
 //   does. No back-face culling (depth resolves occlusion), matching all hosts.
 import {
-  DC3D_MAGIC, OP_SET_CAMERA, OP_DRAW, OP_IMM_TRIS,
+  DC3D_MAGIC, OP_SET_CAMERA, OP_DRAW, OP_IMM_TRIS, OP_DRAW_SKINNED,
   FMT_COLOR, FMT_NORMAL, FMT_POS, FMT_UV, FMT_WEIGHTS, vertexStride,
 } from '../src/g3d';
 import { Mat4 } from '../src/math';
@@ -127,7 +127,13 @@ export class Raster3D {
       throw new Error('raster3d: mesh has no POSITION');
     }
     if (format & FMT_WEIGHTS) {
-      throw new Error('raster3d: skinned meshes use the .dc3d golden, not pixels');
+      // Skinned batches are validated by the .dc3d byte golden (bone matrices +
+      // draws are captured above), NOT pixel-rendered — this oracle has no HW
+      // skinning. Store an empty mesh (drawn as nothing) but keep the handle
+      // sequential so OP_DRAW_SKINNED handles match the native hosts.
+      const empty = new Float32Array(0);
+      this.meshes.push({ px: empty, py: empty, pz: empty, cr: new Uint8Array(0), cg: new Uint8Array(0), cb: new Uint8Array(0), indices: new Uint16Array(0) });
+      return this.meshes.length - 1;
     }
     const stride = vertexStride(format);
     // GE component order is [weights][uv][color][normal][pos]; compute offsets.
@@ -221,6 +227,12 @@ export class Raster3D {
         const model = new Array<number>(16);
         for (let i = 0; i < 16; i++) model[i] = dv.getFloat32(base + 8 + i * 4, true);
         this.drawMesh(this.meshes[handle], Mat4.multiply(this.viewProj, model));
+      } else if (op === OP_DRAW_SKINNED) {
+        // Hardware-skinned draw: the bone matrices + draw bytes are already
+        // captured in the .dc3d byte golden (the whole submit buffer was recorded
+        // above), which is the gate for skinning. This software oracle does no HW
+        // skinning, so it intentionally renders nothing here (the pixel golden
+        // covers the HUD + any non-skinned geometry). See docs §7.2.
       } else if (op === OP_IMM_TRIS) {
         // The native hosts DO render OP_IMM_TRIS, but this reference rasterizer
         // doesn't yet — so rather than silently produce a golden that omits the

@@ -115,6 +115,8 @@ const SPECS: { name: string; frames: number; input?: (f: number) => number }[] =
   { name: "racing3d", frames: 180, input: (f) => 0x4000 | (f > 60 && f < 110 ? 0x20 : f >= 110 ? 0x80 : 0) },
   // car (M3): baked glTF car; accelerate, steer right then left (wheels roll/steer).
   { name: "car3d", frames: 180, input: (f) => 0x4000 | (f > 60 && f < 110 ? 0x20 : f >= 110 ? 0x80 : 0) },
+  // skin (M4): static-pose HW-skinned Fox, auto-orbit camera (no input).
+  { name: "skin3d", frames: 90 },
   // fps: turn right, walk forward, shoot a few times.
   { name: "fps3d", frames: 180, input: (f) => (f < 40 ? 0x20 : f < 110 ? 0x10 : 0x80) | (f % 24 === 0 ? 0x4000 : 0) },
 ];

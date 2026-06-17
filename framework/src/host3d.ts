@@ -10,8 +10,16 @@ export interface RawG3d {
    * `format`; `indices` is a Uint16Array buffer or null for non-indexed. A host
    * MAY draw indexed or expand to a flat non-indexed buffer (the PSP does the
    * latter for VFPU 16-byte alignment) — the resulting image must be identical.
+   * `weightCount` is the number of f32 bone weights per vertex when the format
+   * has FMT_WEIGHTS (skinned meshes); 0 otherwise. It is needed to compute the
+   * vertex stride and the GE WEIGHTSn vertex-type bits.
    */
-  uploadMesh(vertices: ArrayBuffer, indices: ArrayBuffer | null, format: number): number;
+  uploadMesh(
+    vertices: ArrayBuffer,
+    indices: ArrayBuffer | null,
+    format: number,
+    weightCount?: number,
+  ): number;
   /**
    * Upload a texture ONCE (retained, returns a small int handle), mirroring
    * uploadMesh. `pixels` is tightly-packed image data in pixel format `psm`

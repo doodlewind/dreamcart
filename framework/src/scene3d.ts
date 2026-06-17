@@ -10,6 +10,7 @@ import type { Color } from './color';
 import type { Mesh } from './mesh';
 import type { Material } from './material';
 import type { Lighting } from './light';
+import type { SkinnedMesh } from './skin';
 
 export class Camera {
   proj: number[] = Mat4.identity();
@@ -34,6 +35,7 @@ export class Camera {
 export interface Node3DOpts {
   mesh?: Mesh;
   material?: Material;
+  skinned?: SkinnedMesh;
   position?: Vec3;
   rotation?: Quat;
   scale?: Vec3;
@@ -47,6 +49,8 @@ export class Node3D {
   mesh?: Mesh;
   /** Optional textured material; Scene3D binds its texture before drawing. */
   material?: Material;
+  /** Optional hardware-skinned character; Scene3D emits its bone-batch draws. */
+  skinned?: SkinnedMesh;
   tint: number; // ABGR, NO_TINT = untinted
   visible = true;
   children: Node3D[] = [];
@@ -57,6 +61,7 @@ export class Node3D {
     this.scale = opts.scale ?? new Vec3(1, 1, 1);
     this.mesh = opts.mesh;
     this.material = opts.material;
+    this.skinned = opts.skinned;
     this.tint = opts.tint === undefined ? NO_TINT : colorToABGR(opts.tint);
   }
 
@@ -109,25 +114,33 @@ export class Scene3D {
     this.emit(this.root, Mat4.identity(), enc);
   }
 
+  // Emit the bind/unbind record for a desired texture handle (-1 = none), only
+  // when it differs from the GE's currently-bound texture (sticky host state).
+  private bindIfChanged(want: number, enc: CommandEncoder): void {
+    if (want >= 0) {
+      if (this.boundTex !== want) {
+        enc.bindTexture(want);
+        this.boundTex = want;
+      }
+    } else if (this.boundTex !== -1) {
+      enc.bindTexture(UNBIND_TEXTURE);
+      this.boundTex = -1;
+    }
+  }
+
   private emit(node: Node3D, parent: number[], enc: CommandEncoder): void {
     if (!node.visible) return;
     const world = Mat4.multiply(parent, node.localMatrix());
-    if (node.mesh) {
+    if (node.skinned) {
+      // Skinned characters carry their own texture + bone-batch draws.
+      const tex = node.skinned.texture;
+      this.bindIfChanged(tex ? tex.handle() : -1, enc);
+      node.skinned.emit(enc, world, node.tint);
+    } else if (node.mesh) {
       const h = node.mesh.handle();
       if (h >= 0) {
-        // Bind/unbind the node's texture only when it differs from the GE's
-        // current binding (state record, sticky on the host).
         const tex = node.material?.texture;
-        const want = tex ? tex.handle() : -1;
-        if (want >= 0) {
-          if (this.boundTex !== want) {
-            enc.bindTexture(want);
-            this.boundTex = want;
-          }
-        } else if (this.boundTex !== -1) {
-          enc.bindTexture(UNBIND_TEXTURE);
-          this.boundTex = -1;
-        }
+        this.bindIfChanged(tex ? tex.handle() : -1, enc);
         enc.draw(h, world, node.tint);
       }
     }

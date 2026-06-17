@@ -93,6 +93,10 @@ export class Vec3 {
     const l = this.length();
     return l > 0 ? new Vec3(this.x / l, this.y / l, this.z / l) : new Vec3(0, 0, 0);
   }
+  /** Component lerp a + (b-a)*t. */
+  static lerp(a: Vec3, b: Vec3, t: number): Vec3 {
+    return new Vec3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
+  }
 }
 
 /** A unit quaternion (f64), built with deterministic trig. */
@@ -141,6 +145,25 @@ export class Quat {
       this.w * b.z + this.x * b.y - this.y * b.x + this.z * b.w,
       this.w * b.w - this.x * b.x - this.y * b.y - this.z * b.z,
     );
+  }
+
+  /**
+   * Normalized lerp toward `b`, taking the shorter arc (dot-sign flip). Used for
+   * animation blending instead of slerp, which needs acos/sin (banned by the
+   * deterministic-math guard); nlerp is visually fine for the dense baked
+   * keyframes (≥24 fps). Returns a unit quaternion.
+   */
+  static nlerp(a: Quat, b: Quat, t: number): Quat {
+    let bx = b.x, by = b.y, bz = b.z, bw = b.w;
+    if (a.x * bx + a.y * by + a.z * bz + a.w * bw < 0) {
+      bx = -bx; by = -by; bz = -bz; bw = -bw;
+    }
+    const x = a.x + (bx - a.x) * t;
+    const y = a.y + (by - a.y) * t;
+    const z = a.z + (bz - a.z) * t;
+    const w = a.w + (bw - a.w) * t;
+    const l = dsqrt(x * x + y * y + z * z + w * w) || 1;
+    return new Quat(x / l, y / l, z / l, w / l);
   }
 }
 
@@ -246,6 +269,26 @@ export const Mat4 = {
     const out = new Float32Array(16);
     for (let i = 0; i < 16; i++) out[i] = m[i];
     return out;
+  },
+
+  /** Read a length-16 column-major matrix out of a flat array at `off`. */
+  fromArray(a: ArrayLike<number>, off = 0): number[] {
+    const m = new Array<number>(16);
+    for (let i = 0; i < 16; i++) m[i] = a[off + i];
+    return m;
+  },
+
+  /**
+   * Write the 3×4 affine slice of a column-major 4×4 into `out` at `off` (12
+   * floats: col0.xyz, col1.xyz, col2.xyz, col3.xyz). This is the GE bone-matrix
+   * layout — the homogeneous w-row (m[3],m[7],m[11],m[15]) is dropped, which is
+   * exact for affine joint transforms.
+   */
+  affine3x4Into(out: Float32Array, off: number, m: number[]): void {
+    out[off] = m[0]; out[off + 1] = m[1]; out[off + 2] = m[2];
+    out[off + 3] = m[4]; out[off + 4] = m[5]; out[off + 5] = m[6];
+    out[off + 6] = m[8]; out[off + 7] = m[9]; out[off + 8] = m[10];
+    out[off + 9] = m[12]; out[off + 10] = m[13]; out[off + 11] = m[14];
   },
 };
 
