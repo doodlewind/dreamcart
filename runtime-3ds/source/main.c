@@ -28,6 +28,7 @@
 #define OP_BIND_TEXTURE 0x0004      // v2: declared for wire-parity; citro3d impl additive (TODO)
 #define OP_SET_LIGHTS  0x0005
 #define OP_DRAW_SKINNED 0x0006
+#define OP_SET_FOG     0x0007
 
 #define FMT_POS        0x0001       // 3 x f32
 #define FMT_COLOR      0x0002       // u32 ABGR

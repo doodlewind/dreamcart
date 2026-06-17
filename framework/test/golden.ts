@@ -119,6 +119,8 @@ const SPECS: { name: string; frames: number; input?: (f: number) => number }[] =
   { name: "skin3d", frames: 90 },
   // walk (M5): walking Fox; turn, walk, run (clip phase tied to motion).
   { name: "walk3d", frames: 160, input: (f) => (f < 40 ? 0x4000 : f < 70 ? 0x4000 | 0x80 : f < 120 ? 0x8000 : 0x4000) },
+  // outdoor (M6): fly-through; auto-forward, steer + boost (fog + frustum cull).
+  { name: "outdoor3d", frames: 160, input: (f) => (f < 50 ? 0x20 : f < 100 ? 0x80 : 0) | (f % 3 === 0 ? 0x4000 : 0) },
   // fps: turn right, walk forward, shoot a few times.
   { name: "fps3d", frames: 180, input: (f) => (f < 40 ? 0x20 : f < 110 ? 0x10 : 0x80) | (f % 24 === 0 ? 0x4000 : 0) },
 ];

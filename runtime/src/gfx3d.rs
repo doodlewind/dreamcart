@@ -44,6 +44,7 @@ use psp::Align16;
 //   OP_BIND_TEXTURE = 0x0004
 //   OP_SET_LIGHTS = 0x0005
 //   OP_DRAW_SKINNED = 0x0006
+//   OP_SET_FOG = 0x0007
 //   FMT_POS = 0x0001
 //   FMT_COLOR = 0x0002
 //   FMT_NORMAL = 0x0004
@@ -60,6 +61,7 @@ const OP_IMM_TRIS: u32 = 0x0003;
 const OP_BIND_TEXTURE: u32 = 0x0004;
 const OP_SET_LIGHTS: u32 = 0x0005;
 const OP_DRAW_SKINNED: u32 = 0x0006;
+const OP_SET_FOG: u32 = 0x0007;
 
 // Vertex-format bitfield. The GE interleaves components in a FIXED order
 // [weights][uv][color][normal][position] regardless of bit value.
@@ -611,6 +613,17 @@ unsafe extern "C" fn js_g3d_submit(
                 i += 1;
             }
             sys::sceGuEnable(GuState::Lighting);
+        } else if op == OP_SET_FOG {
+            // payload = u32 colorABGR, f32 near, f32 far (0xffffffff = disable).
+            let color = read_u32(buf, base);
+            if color == 0xffff_ffff {
+                sys::sceGuDisable(GuState::Fog);
+            } else {
+                let near = read_f32(buf, base + 4);
+                let far = read_f32(buf, base + 8);
+                sys::sceGuFog(near, far, color);
+                sys::sceGuEnable(GuState::Fog);
+            }
         } else if op == OP_DRAW_SKINNED {
             // payload = u32 handle, u32 tintABGR, u32 boneCount, 16 f32 model,
             // boneCount×12 f32 (3×4 affine bone matrices). The GE blends the first
@@ -667,6 +680,7 @@ unsafe extern "C" fn js_g3d_submit(
     sys::sceGuDisable(sys::GuState::DepthTest);
     sys::sceGuDisable(GuState::Texture2D);
     sys::sceGuDisable(GuState::Lighting);
+    sys::sceGuDisable(GuState::Fog);
     JS_UNDEFINED
 }
 

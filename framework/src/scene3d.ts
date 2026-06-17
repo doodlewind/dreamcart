@@ -16,6 +16,8 @@ export class Camera {
   proj: number[] = Mat4.identity();
   view: number[] = Mat4.identity();
   viewProj: number[] = Mat4.identity();
+  /** Eye position in world space (kept for distance-based culling). */
+  eye = new Vec3(0, 0, 0);
   /** Set to false on the WebGL fallback path (clip z in [-1,1]). */
   zeroToOne = true;
 
@@ -24,12 +26,62 @@ export class Camera {
     this.recompute();
   }
   lookAt(eye: Vec3, center: Vec3, up: Vec3): void {
+    this.eye = eye;
     this.view = Mat4.lookAt(eye, center, up);
     this.recompute();
   }
   recompute(): void {
     this.viewProj = Mat4.multiply(this.proj, this.view);
   }
+}
+
+/** Local-space axis-aligned bounds, for frustum/distance culling. */
+export interface AABB {
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
+// A culling frustum: the 4 side planes (a,b,c,d with inside = a*x+b*y+c*z+d ≥ 0)
+// derived from a column-major viewProj, plus the eye + a far cutoff. We skip the
+// near/far planes (their derivation depends on the reversed-Z clip convention) and
+// bound depth with the explicit far distance instead — robust and convention-free.
+interface Frustum {
+  planes: number[][];
+  ex: number;
+  ey: number;
+  ez: number;
+  far2: number;
+}
+
+function makeFrustum(m: number[], eye: Vec3, far: number): Frustum {
+  // rows r_i = [m[i], m[4+i], m[8+i], m[12+i]]; side planes = r3 ± r0, r3 ± r1.
+  const r0 = [m[0], m[4], m[8], m[12]];
+  const r1 = [m[1], m[5], m[9], m[13]];
+  const r3 = [m[3], m[7], m[11], m[15]];
+  const planes = [
+    [r3[0] + r0[0], r3[1] + r0[1], r3[2] + r0[2], r3[3] + r0[3]], // left
+    [r3[0] - r0[0], r3[1] - r0[1], r3[2] - r0[2], r3[3] - r0[3]], // right
+    [r3[0] + r1[0], r3[1] + r1[1], r3[2] + r1[2], r3[3] + r1[3]], // bottom
+    [r3[0] - r1[0], r3[1] - r1[1], r3[2] - r1[2], r3[3] - r1[3]], // top
+  ];
+  return { planes, ex: eye.x, ey: eye.y, ez: eye.z, far2: far * far };
+}
+
+// True when the world-space AABB [wmin,wmax] is entirely outside the frustum (so
+// the node can be skipped). Uses the positive-vertex test per side plane + a
+// center-distance far cutoff.
+function aabbCulled(f: Frustum, wmin: number[], wmax: number[]): boolean {
+  for (const p of f.planes) {
+    // the corner farthest along the plane normal (most likely inside).
+    const px = p[0] >= 0 ? wmax[0] : wmin[0];
+    const py = p[1] >= 0 ? wmax[1] : wmin[1];
+    const pz = p[2] >= 0 ? wmax[2] : wmin[2];
+    if (p[0] * px + p[1] * py + p[2] * pz + p[3] < 0) return true; // fully outside
+  }
+  const cx = (wmin[0] + wmax[0]) * 0.5 - f.ex;
+  const cy = (wmin[1] + wmax[1]) * 0.5 - f.ey;
+  const cz = (wmin[2] + wmax[2]) * 0.5 - f.ez;
+  return cx * cx + cy * cy + cz * cz > f.far2;
 }
 
 export interface Node3DOpts {
@@ -51,6 +103,8 @@ export class Node3D {
   material?: Material;
   /** Optional hardware-skinned character; Scene3D emits its bone-batch draws. */
   skinned?: SkinnedMesh;
+  /** Optional LOCAL-space bounds; when set, Scene3D frustum/distance-culls it. */
+  bounds?: AABB;
   tint: number; // ABGR, NO_TINT = untinted
   visible = true;
   children: Node3D[] = [];
@@ -85,6 +139,12 @@ export class Scene3D {
   camera = new Camera();
   /** Optional hardware lighting; when set, one OP_SET_LIGHTS is emitted/frame. */
   lighting?: Lighting;
+  /** Optional distance fog: fades geometry to `color` between `near` and `far`. */
+  fog?: { color: number; near: number; far: number };
+  // Per-frame culling frustum (built in render() when any node has bounds).
+  private frustum?: Frustum;
+  /** Diagnostic: nodes culled in the last render() (for HUD/profiling). */
+  culledCount = 0;
   // Texture currently bound on the GE during a render pass; tracked so we emit
   // OP_BIND_TEXTURE only when the active texture actually changes (and once to
   // unbind when a textured draw is followed by an untextured one). Initialized to
@@ -104,14 +164,39 @@ export class Scene3D {
     return this.root.add(node);
   }
 
-  /** Emit SET_CAMERA, the lights (if any), then a DRAW per visible mesh. */
+  /** Emit SET_CAMERA, lights + fog (if any), then a DRAW per visible mesh. */
   render(enc: CommandEncoder): void {
     enc.setCamera(this.camera.viewProj);
     if (this.lighting && this.lighting.lights.length > 0) {
       enc.setLights(this.lighting.ambientABGR(), this.lighting.encoded());
     }
+    if (this.fog) {
+      enc.setFog(colorToABGR(this.fog.color), this.fog.near, this.fog.far);
+      // Cull beyond the fog far plane (geometry there is fully fogged out anyway).
+      this.frustum = makeFrustum(this.camera.viewProj, this.camera.eye, this.fog.far);
+    } else {
+      // Cull only when some node opts in (has bounds); large default far cutoff.
+      this.frustum = makeFrustum(this.camera.viewProj, this.camera.eye, 1e6);
+    }
     this.boundTex = -1;
+    this.culledCount = 0;
     this.emit(this.root, Mat4.identity(), enc);
+  }
+
+  // World-space AABB of a node's local bounds under `world` (transform 8 corners).
+  private worldAABB(b: AABB, world: number[], outMin: number[], outMax: number[]): void {
+    for (let i = 0; i < 3; i++) { outMin[i] = Infinity; outMax[i] = -Infinity; }
+    for (let c = 0; c < 8; c++) {
+      const lx = c & 1 ? b.max[0] : b.min[0];
+      const ly = c & 2 ? b.max[1] : b.min[1];
+      const lz = c & 4 ? b.max[2] : b.min[2];
+      const x = world[0] * lx + world[4] * ly + world[8] * lz + world[12];
+      const y = world[1] * lx + world[5] * ly + world[9] * lz + world[13];
+      const z = world[2] * lx + world[6] * ly + world[10] * lz + world[14];
+      if (x < outMin[0]) outMin[0] = x; if (x > outMax[0]) outMax[0] = x;
+      if (y < outMin[1]) outMin[1] = y; if (y > outMax[1]) outMax[1] = y;
+      if (z < outMin[2]) outMin[2] = z; if (z > outMax[2]) outMax[2] = z;
+    }
   }
 
   // Emit the bind/unbind record for a desired texture handle (-1 = none), only
@@ -131,6 +216,16 @@ export class Scene3D {
   private emit(node: Node3D, parent: number[], enc: CommandEncoder): void {
     if (!node.visible) return;
     const world = Mat4.multiply(parent, node.localMatrix());
+    // Frustum/distance cull (bounds encompass the node's subtree by convention).
+    if (node.bounds && this.frustum) {
+      const wmin: number[] = [0, 0, 0];
+      const wmax: number[] = [0, 0, 0];
+      this.worldAABB(node.bounds, world, wmin, wmax);
+      if (aabbCulled(this.frustum, wmin, wmax)) {
+        this.culledCount++;
+        return;
+      }
+    }
     if (node.skinned) {
       // Skinned characters carry their own texture + bone-batch draws.
       const tex = node.skinned.texture;

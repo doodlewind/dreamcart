@@ -12,7 +12,7 @@
 //   the Y-flip in its viewport (toScreen), exactly as each native host's viewport
 //   does. No back-face culling (depth resolves occlusion), matching all hosts.
 import {
-  DC3D_MAGIC, OP_SET_CAMERA, OP_DRAW, OP_IMM_TRIS, OP_DRAW_SKINNED,
+  DC3D_MAGIC, OP_SET_CAMERA, OP_DRAW, OP_IMM_TRIS, OP_DRAW_SKINNED, OP_SET_FOG,
   FMT_COLOR, FMT_NORMAL, FMT_POS, FMT_UV, FMT_WEIGHTS, vertexStride,
 } from '../src/g3d';
 import { Mat4 } from '../src/math';
@@ -227,6 +227,10 @@ export class Raster3D {
         const model = new Array<number>(16);
         for (let i = 0; i < 16; i++) model[i] = dv.getFloat32(base + 8 + i * 4, true);
         this.drawMesh(this.meshes[handle], Mat4.multiply(this.viewProj, model));
+      } else if (op === OP_SET_FOG) {
+        // Distance fog is a fragment-color state record; this oracle shades flat
+        // (no fog), so it's a no-op here. The record is captured in the .dc3d
+        // byte golden above. (Pixel divergence from fogged hosts is expected.)
       } else if (op === OP_DRAW_SKINNED) {
         // Hardware-skinned draw: the bone matrices + draw bytes are already
         // captured in the .dc3d byte golden (the whole submit buffer was recorded

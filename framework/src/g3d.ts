@@ -56,6 +56,7 @@ export const OP_IMM_TRIS = 0x0003;
 export const OP_BIND_TEXTURE = 0x0004; // payload: u32 texHandle (0xffffffff = unbind)
 export const OP_SET_LIGHTS = 0x0005; // payload: u32 count, u32 ambientABGR, count×{u32 colorABGR, 3 f32 dir}
 export const OP_DRAW_SKINNED = 0x0006; // OP_DRAW + u32 boneCount, then boneCount×12 f32 (3×4 bone matrices)
+export const OP_SET_FOG = 0x0007; // payload: u32 colorABGR, f32 near, f32 far (0xffffffff color = disable)
 
 // Vertex-format bitfield. v1 ships POS|COLOR; v2 adds NORMAL/UV/WEIGHTS.
 // IMPORTANT: bytes are ALWAYS interleaved in the PSP GE's mandated component
@@ -208,6 +209,24 @@ export class CommandEncoder {
       this.view.setFloat32(this.pos + 12, l.dir[2], true);
       this.pos += 16;
     }
+    this.records++;
+  }
+
+  /**
+   * Emit OP_SET_FOG: linear distance fog fading geometry to `colorABGR` between
+   * `near` and `far` (view-space distance). Pass color 0xffffffff to disable.
+   * Used by the outdoor scene to bound draw distance + overdraw; the fog color
+   * should match the background clear so distant geometry fades into the sky.
+   */
+  setFog(colorABGR: number, near: number, far: number): void {
+    this.ensure(4 + 12);
+    this.view.setUint16(this.pos, OP_SET_FOG, true);
+    this.view.setUint16(this.pos + 2, 3, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, colorABGR >>> 0, true);
+    this.view.setFloat32(this.pos + 4, near, true);
+    this.view.setFloat32(this.pos + 8, far, true);
+    this.pos += 12;
     this.records++;
   }
 
