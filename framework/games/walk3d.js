@@ -9,7 +9,7 @@
 //
 // Fox: CC-BY-4.0 — model PixelMannen (CC0), rig/anim tomkranis, glTF Asobo/scurest.
 import {
-  start, Scene, Scene3D, Mesh, SkinnedMesh,
+  start, Scene, Scene3D, Mesh, SkinnedMesh, Fps,
   Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
 } from '../src/index';
 import { FOX } from '../src/assets-fox';
@@ -27,6 +27,8 @@ class WalkScene extends Scene {
   z = 0;
   heading = 0;
   running = false;
+  fps = new Fps();
+  /** @type {any} */ engine = null;
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -43,6 +45,7 @@ class WalkScene extends Scene {
       scale: new Vec3(FOX.scale, FOX.scale, FOX.scale),
     });
 
+    this.engine = ctx.engine;
     this.reset();
     ctx.engine.scene3d = this.world;
   }
@@ -56,6 +59,7 @@ class WalkScene extends Scene {
 
   /** @param {UpdateContext} ctx */
   update(ctx) {
+    this.fps.sample();
     const inp = ctx.input;
     if (inp.pressed(Btn.Start)) this.reset();
 
@@ -97,6 +101,11 @@ class WalkScene extends Scene {
   /** @param {Graphics} g */
   draw(g) {
     g.text('WALK 3D', 8, 8, Colors.white, 2);
+    if (this.fps.value > 0 && this.engine) {
+      g.text(this.fps.value + ' FPS', 410, 8, Colors.yellow, 1);
+      const p = this.engine.prof;
+      g.text('upd ' + p[0] + ' r3d ' + p[1] + ' r2d ' + p[2] + ' us', 8, 30, Colors.cyan, 1);
+    }
     g.text('X WALK  []' + ' RUN  L/R TURN', 8, 246, Colors.cyan, 1);
     g.text('Fox (c) tomkranis/Asobo/scurest CC-BY', 8, 258, Colors.gray, 1);
   }

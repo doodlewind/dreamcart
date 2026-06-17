@@ -28,6 +28,14 @@ export interface RawG3d {
    * QuickJS pointer. Optional: 2D-only or texture-less hosts may omit it.
    */
   uploadTexture?(pixels: ArrayBuffer, w: number, h: number, psm: number): number;
+  /**
+   * Optional: retain a skinned character ONCE for native skinning. `buffer`
+   * packs the joint hierarchy + inverse-bind matrices + bone-batch tables (see
+   * skin.ts SkinnedMesh). Per frame the OP_DRAW_SKIN record then ships only the
+   * local joint matrices and the host computes the bones natively. Hosts without
+   * it: SkinnedMesh falls back to JS bone math + OP_DRAW_SKINNED.
+   */
+  uploadSkin?(buffer: ArrayBuffer): number;
   /** Release native storage (optional; many games never call it). */
   freeMesh(handle: number): void;
   /**

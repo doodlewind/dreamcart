@@ -120,12 +120,31 @@ export class SkinnedMesh {
     return this.player;
   }
 
+  // Native-skin state: handle into the host's retained skin table (-2 = untried,
+  // -1 = unavailable/failed -> use the JS fallback), and a reused buffer for the
+  // per-frame local joint matrices.
+  private skinHandle = -2;
+  private localMatrices = new Float32Array(0);
+
   /**
-   * Sample the current pose and emit one OP_DRAW_SKINNED per batch. `model` is the
-   * character placement (its node world matrix, including the asset scale). Called
-   * by Scene3D after it has bound this mesh's texture.
+   * Sample the current pose and draw the character. On a host with `uploadSkin`,
+   * the hierarchy + bone math + draws run NATIVELY (JS only samples the clip and
+   * composes the per-joint LOCAL matrices); otherwise it falls back to computing
+   * bones in JS and emitting one OP_DRAW_SKINNED per batch. `model` is the
+   * character placement (node world matrix incl. the asset scale).
    */
   emit(enc: CommandEncoder, model: number[], tint: number): void {
+    const g = globalThis.g3d;
+    if (g && g.uploadSkin) {
+      if (this.skinHandle === -2) this.skinHandle = this.uploadNativeSkin(g);
+      if (this.skinHandle >= 0) {
+        this.player.sample();
+        this.composeLocals();
+        enc.drawSkin(this.skinHandle, model, this.localMatrices, this.jointCount, tint);
+        return;
+      }
+    }
+    // JS fallback: compute world + bones here, one OP_DRAW_SKINNED per batch.
     this.player.sample();
     this.skeleton.computeWorld(this.player.outT, this.player.outR, this.player.outS);
     for (const b of this.batches) {
@@ -133,6 +152,69 @@ export class SkinnedMesh {
       if (h < 0) continue;
       this.skeleton.batchBones(b.jointTable, b.boneCount, b.bones);
       enc.drawSkinned(h, model, b.bones, b.boneCount, tint);
+    }
+  }
+
+  // Upload the skeleton + bone-batch tables to the native skin once; returns the
+  // host skin handle (-1 if a mesh upload failed). Buffer layout mirrors
+  // gfx3d.rs js_g3d_upload_skin / host3d.ts uploadSkin.
+  private uploadNativeSkin(g: NonNullable<typeof globalThis.g3d>): number {
+    const jc = this.jointCount;
+    const parents = this.skeleton.parents;
+    const ibm = this.skeleton.inverseBind;
+    const nb = this.batches.length;
+    // size = jointCount + jc*parents + jc*16 ibm + batchCount + nb*(2 + 8)
+    const ints = 1 + jc + jc * 16 + 1 + nb * 10;
+    const buf = new ArrayBuffer(ints * 4);
+    const dv = new DataView(buf);
+    let o = 0;
+    dv.setUint32(o, jc, true); o += 4;
+    for (let i = 0; i < jc; i++) { dv.setInt32(o, parents[i], true); o += 4; }
+    for (let i = 0; i < jc * 16; i++) { dv.setFloat32(o, ibm[i], true); o += 4; }
+    dv.setUint32(o, nb, true); o += 4;
+    for (const b of this.batches) {
+      const h = b.mesh.handle();
+      if (h < 0) return -1;
+      dv.setInt32(o, h, true); o += 4;
+      dv.setInt32(o, b.boneCount, true); o += 4;
+      for (let k = 0; k < 8; k++) { dv.setInt32(o, k < b.jointTable.length ? b.jointTable[k] : 0, true); o += 4; }
+    }
+    this.localMatrices = new Float32Array(jc * 16);
+    return g.uploadSkin!(buf);
+  }
+
+  // Compose the per-joint LOCAL matrices from the sampled TRS straight into the
+  // localMatrices buffer — quaternion->matrix inlined, ZERO allocations and only
+  // typed-array writes (object-based Mat4.compose per joint allocated ~4 objects
+  // each and was a big chunk of the per-frame skinning cost).
+  private composeLocals(): void {
+    const t = this.player.outT;
+    const r = this.player.outR;
+    const s = this.player.outS;
+    const out = this.localMatrices;
+    for (let i = 0; i < this.jointCount; i++) {
+      const o = i * 16;
+      const x = r[i * 4], y = r[i * 4 + 1], z = r[i * 4 + 2], w = r[i * 4 + 3];
+      const sx = s[i * 3], sy = s[i * 3 + 1], sz = s[i * 3 + 2];
+      const xx = x * x, yy = y * y, zz = z * z;
+      const xy = x * y, xz = x * z, yz = y * z;
+      const wx = w * x, wy = w * y, wz = w * z;
+      out[o] = (1 - 2 * (yy + zz)) * sx;
+      out[o + 1] = 2 * (xy + wz) * sx;
+      out[o + 2] = 2 * (xz - wy) * sx;
+      out[o + 3] = 0;
+      out[o + 4] = 2 * (xy - wz) * sy;
+      out[o + 5] = (1 - 2 * (xx + zz)) * sy;
+      out[o + 6] = 2 * (yz + wx) * sy;
+      out[o + 7] = 0;
+      out[o + 8] = 2 * (xz + wy) * sz;
+      out[o + 9] = 2 * (yz - wx) * sz;
+      out[o + 10] = (1 - 2 * (xx + yy)) * sz;
+      out[o + 11] = 0;
+      out[o + 12] = t[i * 3];
+      out[o + 13] = t[i * 3 + 1];
+      out[o + 14] = t[i * 3 + 2];
+      out[o + 15] = 1;
     }
   }
 }

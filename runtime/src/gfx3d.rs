@@ -45,6 +45,7 @@ use psp::Align16;
 //   OP_SET_LIGHTS = 0x0005
 //   OP_DRAW_SKINNED = 0x0006
 //   OP_SET_FOG = 0x0007
+//   OP_DRAW_SKIN = 0x0008
 //   FMT_POS = 0x0001
 //   FMT_COLOR = 0x0002
 //   FMT_NORMAL = 0x0004
@@ -62,6 +63,7 @@ const OP_BIND_TEXTURE: u32 = 0x0004;
 const OP_SET_LIGHTS: u32 = 0x0005;
 const OP_DRAW_SKINNED: u32 = 0x0006;
 const OP_SET_FOG: u32 = 0x0007;
+const OP_DRAW_SKIN: u32 = 0x0008;
 
 // Vertex-format bitfield. The GE interleaves components in a FIXED order
 // [weights][uv][color][normal][position] regardless of bit value.
@@ -280,6 +282,56 @@ unsafe fn align_mat(m: &[f32; 16]) -> Align16<ScePspFMatrix4> {
         64,
     );
     a
+}
+
+/// Column-major 4×4 multiply r = a·b (m[col*4 + row]).
+#[inline]
+fn mat_mul4(a: &[f32; 16], b: &[f32; 16]) -> [f32; 16] {
+    let mut r = [0f32; 16];
+    let mut col = 0;
+    while col < 4 {
+        let mut row = 0;
+        while row < 4 {
+            r[col * 4 + row] = a[row] * b[col * 4]
+                + a[4 + row] * b[col * 4 + 1]
+                + a[8 + row] * b[col * 4 + 2]
+                + a[12 + row] * b[col * 4 + 3];
+            row += 1;
+        }
+        col += 1;
+    }
+    r
+}
+
+// ── Native hardware skinning ─────────────────────────────────────────────────
+// A retained skinned character: joint hierarchy + inverse-bind matrices + the
+// bone-batch tables, uploaded ONCE (uploadSkin). Per frame JS samples the clip
+// and ships only the per-joint LOCAL matrices (OP_DRAW_SKIN); the native side
+// walks the hierarchy, computes each bone = jointWorld·inverseBind, loads them
+// with sceGuBoneMatrix, and draws — moving ~150 Mat4 ops/frame off QuickJS (the
+// skinning was ~145 ms/frame in JS). See docs/psp-native-scene.md.
+const MAX_JOINTS: usize = 64;
+struct SkinBatch {
+    mesh: i32,
+    bone_count: i32,
+    joints: [i32; 8],
+}
+struct SkinEntry {
+    joint_count: usize,
+    parents: Vec<i32>,            // joint_count
+    inverse_bind: Vec<f32>,      // joint_count × 16
+    batches: Vec<SkinBatch>,
+}
+static mut SKINS: Option<Vec<SkinEntry>> = None;
+// Scratch world matrices for the hierarchy pass (single-threaded frame loop).
+static mut SKIN_WORLD: [f32; MAX_JOINTS * 16] = [0.0; MAX_JOINTS * 16];
+
+#[inline]
+unsafe fn skins() -> &'static mut Vec<SkinEntry> {
+    if SKINS.is_none() {
+        SKINS = Some(Vec::new());
+    }
+    SKINS.as_mut().unwrap()
 }
 
 /// Read the i-th JS argument as an i32 (0 if absent / not convertible). Mirrors
@@ -530,6 +582,62 @@ fn light_state(i: u32) -> GuState {
 }
 
 
+/// `g3d.uploadSkin(buffer)` -> int handle. Retain a skinned character once:
+/// joint hierarchy + inverse-bind matrices + bone-batch tables. Buffer layout:
+/// u32 jointCount, jointCount×i32 parents, jointCount×16 f32 inverseBind,
+/// u32 batchCount, batchCount×{ i32 meshHandle, i32 boneCount, 8×i32 jointTable }.
+/// Per frame OP_DRAW_SKIN then ships only the local joint matrices.
+unsafe extern "C" fn js_g3d_upload_skin(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 1 {
+        return JS_NewInt32(ctx, -1);
+    }
+    let mut len: size_t = 0;
+    let p = JS_GetArrayBuffer(ctx, &mut len, *argv.offset(0));
+    if p.is_null() {
+        return JS_NewInt32(ctx, -1);
+    }
+    let mut o = 0usize;
+    let joint_count = read_u32(p, o) as usize;
+    o += 4;
+    if joint_count == 0 || joint_count > MAX_JOINTS {
+        return JS_NewInt32(ctx, -1);
+    }
+    let mut parents = Vec::with_capacity(joint_count);
+    for _ in 0..joint_count {
+        parents.push(read_u32(p, o) as i32);
+        o += 4;
+    }
+    let mut inverse_bind = Vec::with_capacity(joint_count * 16);
+    for _ in 0..joint_count * 16 {
+        inverse_bind.push(read_f32(p, o));
+        o += 4;
+    }
+    let batch_count = read_u32(p, o) as usize;
+    o += 4;
+    let mut batches = Vec::with_capacity(batch_count);
+    for _ in 0..batch_count {
+        let mesh = read_u32(p, o) as i32;
+        o += 4;
+        let bone_count = read_u32(p, o) as i32;
+        o += 4;
+        let mut joints = [0i32; 8];
+        for j in 0..8 {
+            joints[j] = read_u32(p, o) as i32;
+            o += 4;
+        }
+        batches.push(SkinBatch { mesh, bone_count, joints });
+    }
+    let table = skins();
+    let handle = table.len() as i32;
+    table.push(SkinEntry { joint_count, parents, inverse_bind, batches });
+    JS_NewInt32(ctx, handle)
+}
+
 /// `g3d.submit(buffer: ArrayBuffer, byteLength)` -> void. THE per-frame call.
 ///
 /// Parses the one little-endian command buffer, clears color+depth, draws every
@@ -577,6 +685,7 @@ unsafe extern "C" fn js_g3d_submit(
 
     let table = meshes();
     let tex_table = textures();
+    let skin_table = skins();
 
     // --- Replay records. ---
     let mut o = 8usize; // past the 8-byte header
@@ -711,6 +820,73 @@ unsafe extern "C" fn js_g3d_submit(
                 null(),
                 mesh.bytes.as_ptr() as *const c_void,
             );
+        } else if op == OP_DRAW_SKIN {
+            // payload = u32 skinHandle, u32 tintABGR, u32 jointCount, 16 f32 model,
+            // jointCount×16 f32 LOCAL joint matrices. Native does the whole skin:
+            // walk the hierarchy -> world matrices, bone = world·inverseBind ->
+            // sceGuBoneMatrix, draw each bone-batch. (JS only sampled the clip +
+            // composed the locals — the heavy Mat4 work is here, not in QuickJS.)
+            let sh = read_u32(buf, base) as i32;
+            let tint = read_u32(buf, base + 4);
+            let jc = read_u32(buf, base + 8) as usize;
+            let model = read_matrix(buf, base + 12);
+            let local_base = base + 12 + 64;
+            if sh < 0 || (sh as usize) >= skin_table.len() {
+                continue;
+            }
+            let skin = &skin_table[sh as usize];
+            if jc != skin.joint_count || jc > MAX_JOINTS {
+                continue;
+            }
+            // World matrices, parent-first (joints are stored parent-before-child).
+            let world = &mut SKIN_WORLD;
+            for i in 0..jc {
+                let mut local = [0f32; 16];
+                for k in 0..16 {
+                    local[k] = read_f32(buf, local_base + (i * 16 + k) * 4);
+                }
+                let parent = skin.parents[i];
+                if parent < 0 {
+                    world[i * 16..i * 16 + 16].copy_from_slice(&local);
+                } else {
+                    let mut pw = [0f32; 16];
+                    pw.copy_from_slice(&world[(parent as usize) * 16..(parent as usize) * 16 + 16]);
+                    let w = mat_mul4(&pw, &local);
+                    world[i * 16..i * 16 + 16].copy_from_slice(&w);
+                }
+            }
+            sys::sceGumMatrixMode(MatrixMode::Model);
+            sys::sceGumLoadMatrix(&model.0);
+            sys::sceGuColor(if tint == NO_TINT { 0xffff_ffff } else { tint });
+            for b in skin.batches.iter() {
+                if b.mesh < 0 || (b.mesh as usize) >= table.len() {
+                    continue;
+                }
+                let mesh = &table[b.mesh as usize];
+                if mesh.count == 0 {
+                    continue;
+                }
+                let mut slot = 0i32;
+                while slot < b.bone_count && slot < 8 {
+                    let g = b.joints[slot as usize] as usize;
+                    let mut wm = [0f32; 16];
+                    wm.copy_from_slice(&world[g * 16..g * 16 + 16]);
+                    let mut ib = [0f32; 16];
+                    ib.copy_from_slice(&skin.inverse_bind[g * 16..g * 16 + 16]);
+                    // bone = jointWorld · inverseBind; align_mat packs it and
+                    // sceGuBoneMatrix reads each column's xyz (w-row ignored).
+                    let bm = align_mat(&mat_mul4(&wm, &ib));
+                    sys::sceGuBoneMatrix(slot as u32, &bm.0);
+                    slot += 1;
+                }
+                sys::sceGumDrawArray(
+                    GuPrimitive::Triangles,
+                    mesh.vtype,
+                    mesh.count,
+                    null(),
+                    mesh.bytes.as_ptr() as *const c_void,
+                );
+            }
         } else if op == OP_IMM_TRIS {
             // Inline dynamic geometry. The example games don't emit this yet; a
             // correct implementation would stage `vertexCount` vertices into a
@@ -1020,6 +1196,16 @@ pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
         0,
     );
     JS_SetPropertyStr(ctx, g3d, b"uploadTexture\0".as_ptr() as *const _, f_upload_tex);
+
+    let f_upload_skin = JS_NewCFunction2(
+        ctx,
+        Some(js_g3d_upload_skin),
+        b"uploadSkin\0".as_ptr() as *const _,
+        1,
+        JS_CFUNC_generic,
+        0,
+    );
+    JS_SetPropertyStr(ctx, g3d, b"uploadSkin\0".as_ptr() as *const _, f_upload_skin);
 
     let f_free = JS_NewCFunction2(
         ctx,
