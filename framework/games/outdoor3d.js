@@ -107,7 +107,9 @@ class OutdoorScene extends Scene {
             b.quad(a, bb, c, d);
           }
         }
-        const node = new Node3D({ mesh: b.build(), material: mat });
+        // Static: terrain never moves, so Scene3D caches its world matrix +
+        // bounds (only a cheap per-frame cull test remains).
+        const node = new Node3D({ mesh: b.build(), material: mat, isStatic: true });
         node.bounds = { min: [ox, minY, oz], max: [ox + chunkSize, maxY, oz + chunkSize] };
         this.world.add(node);
       }
@@ -145,6 +147,7 @@ class OutdoorScene extends Scene {
         position: new Vec3(px, height(px, pz), pz),
         rotation: Quat.fromEuler(0, yaw, 0),
         scale: new Vec3(s, s, s),
+        isStatic: true, // scattered props never move
       });
       const ab = bounds[kind];
       // local bounds scaled (rotation about Y kept loose; pad a touch).

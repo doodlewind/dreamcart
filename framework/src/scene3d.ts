@@ -92,6 +92,14 @@ export interface Node3DOpts {
   rotation?: Quat;
   scale?: Vec3;
   tint?: Color;
+  /**
+   * Mark a node that NEVER moves (terrain, scenery). Scene3D then computes its
+   * world matrix + world-space bounds ONCE and reuses them every frame, so a
+   * large static scene only pays a cheap cull test per node — not a matrix
+   * compose/multiply + 8-corner AABB transform + allocations. Huge win on the
+   * interpreted PSP core. Do NOT set on anything that moves or is re-parented.
+   */
+  isStatic?: boolean;
 }
 
 export class Node3D {
@@ -107,7 +115,15 @@ export class Node3D {
   bounds?: AABB;
   tint: number; // ABGR, NO_TINT = untinted
   visible = true;
+  /** When true, Scene3D caches this node's world matrix + bounds (see opts). */
+  isStatic = false;
   children: Node3D[] = [];
+  // Cached world transform + world-space AABB for static nodes (filled lazily by
+  // Scene3D.emit on the first frame, reused thereafter). Public so a game that
+  // mutates a "static" node can clear them (set to undefined) to force a recompute.
+  cw?: number[]; // cached world matrix
+  cwMin?: number[]; // cached world AABB min
+  cwMax?: number[]; // cached world AABB max
 
   constructor(opts: Node3DOpts = {}) {
     this.position = opts.position ?? new Vec3(0, 0, 0);
@@ -116,6 +132,7 @@ export class Node3D {
     this.mesh = opts.mesh;
     this.material = opts.material;
     this.skinned = opts.skinned;
+    this.isStatic = opts.isStatic ?? false;
     this.tint = opts.tint === undefined ? NO_TINT : colorToABGR(opts.tint);
   }
 
@@ -215,12 +232,31 @@ export class Scene3D {
 
   private emit(node: Node3D, parent: number[], enc: CommandEncoder): void {
     if (!node.visible) return;
-    const world = Mat4.multiply(parent, node.localMatrix());
+    // World matrix: cached for static nodes (computed once), else recomputed.
+    let world: number[];
+    if (node.isStatic && node.cw) {
+      world = node.cw;
+    } else {
+      world = Mat4.multiply(parent, node.localMatrix());
+      if (node.isStatic) node.cw = world;
+    }
     // Frustum/distance cull (bounds encompass the node's subtree by convention).
+    // Static nodes cache their world AABB; only the (cheap) plane test runs/frame.
     if (node.bounds && this.frustum) {
-      const wmin: number[] = [0, 0, 0];
-      const wmax: number[] = [0, 0, 0];
-      this.worldAABB(node.bounds, world, wmin, wmax);
+      let wmin: number[];
+      let wmax: number[];
+      if (node.isStatic && node.cwMin) {
+        wmin = node.cwMin;
+        wmax = node.cwMax!;
+      } else {
+        wmin = [0, 0, 0];
+        wmax = [0, 0, 0];
+        this.worldAABB(node.bounds, world, wmin, wmax);
+        if (node.isStatic) {
+          node.cwMin = wmin;
+          node.cwMax = wmax;
+        }
+      }
       if (aabbCulled(this.frustum, wmin, wmax)) {
         this.culledCount++;
         return;
