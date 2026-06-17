@@ -142,6 +142,27 @@ export class TexMeshBuilder {
   }
 }
 
+/**
+ * A mesh baked offline from glTF (framework/bake/bake-gltf.ts): interleaved
+ * GE-order vertex bytes + a triangle index list, plus its format/stride/AABB.
+ * The generated assets-*.ts modules export these; `meshFromBaked` wraps one into
+ * an uploadable Mesh (call once and cache — uploads on first draw).
+ */
+export interface BakedMesh {
+  format: number;
+  stride: number;
+  vertexCount: number;
+  vertices: Uint8Array; // interleaved, GE order, length = stride*vertexCount
+  indices: Uint16Array; // triangle list
+  triCount: number;
+  aabb: { min: [number, number, number]; max: [number, number, number] };
+}
+
+/** Wrap a BakedMesh into an uploadable Mesh (no copy — reuses the decoded bytes). */
+export function meshFromBaked(b: BakedMesh): Mesh {
+  return new Mesh(b.vertices.buffer as ArrayBuffer, b.indices, b.format);
+}
+
 export class Mesh {
   vertices: ArrayBuffer;
   indices: Uint16Array;

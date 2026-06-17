@@ -23,3 +23,6 @@ export * from './dialogue';
 export * from './tilemap';
 export { FONT8X8 } from './assets-font';
 export { SPRITES } from './assets-sprites';
+export { unb64 } from './b64';
+export { NATURE_FORMAT, NATURE_STRIDE, NATURE_PROPS } from './assets-kenney-nature';
+export { KENNEY_CAR } from './assets-kenney-car';
