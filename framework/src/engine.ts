@@ -78,12 +78,12 @@ export class Engine {
     const sc = this.scene;
     if (sc) {
       sc.updateTree(ctx);
-      // 3D pass first (one batched g3d.submit), then the 2D HUD on top.
+      // 3D pass first (render() submits the command buffer, or natively renders a
+      // retained all-static scene), then the 2D HUD on top.
       if (this.scene3d && hasG3d()) {
         if (!this.enc) this.enc = new CommandEncoder();
         this.enc.reset();
         this.scene3d.render(this.enc);
-        this.enc.finish();
       }
       sc.drawTree(this.g);
     }

@@ -219,12 +219,14 @@ class OutdoorScene extends Scene {
 
   /** @param {Graphics} g */
   draw(g) {
-    g.text('OUTDOOR 3D', 8, 8, Colors.white, 2);
-    // Show the culling at work: drawn vs culled node counts.
+    // Concise HUD on purpose: g.text rasterizes glyphs in JS (one fillRect run
+    // per pixel-run), which is the current per-frame floor on the PSP — fewer
+    // characters = more frame time for the scene. drawn/total shows the native
+    // frustum culling at work (the count comes back from g3d.sceneRender).
     const total = this.world.root.children.length;
-    const culled = this.world.culledCount;
-    g.text(total - culled + '/' + total + ' DRAWN  (' + culled + ' CULLED)', 8, 256, Colors.cyan, 1);
-    if (this.fps > 0) g.text(this.fps + ' FPS', 420, 8, Colors.yellow, 1);
+    const drawn = total - this.world.culledCount;
+    g.text('OUTDOOR 3D', 8, 8, Colors.white, 1);
+    if (this.fps > 0) g.text(this.fps + ' FPS  ' + drawn + '/' + total, 8, 258, Colors.yellow, 1);
   }
 }
 

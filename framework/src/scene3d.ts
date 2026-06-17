@@ -6,6 +6,7 @@
 import { CommandEncoder, NO_TINT, UNBIND_TEXTURE, colorToABGR } from './g3d';
 import { Mat4, Quat, Vec3 } from './math';
 import { SCREEN_H, SCREEN_W } from './host';
+import { hasNativeScene } from './host3d';
 import type { Color } from './color';
 import type { Mesh } from './mesh';
 import type { Material } from './material';
@@ -176,9 +177,10 @@ export class Scene3D {
   private sTint = new Int32Array(0);
   private sTex = new Int32Array(0);
 
-  /** Force the flat static list to rebuild (call if static nodes change). */
+  /** Force the flat static list + native scene to rebuild (if static nodes change). */
   invalidateStatic(): void {
     this.flatBuilt = false;
+    this.sceneUploaded = false;
   }
   // Texture currently bound on the GE during a render pass; tracked so we emit
   // OP_BIND_TEXTURE only when the active texture actually changes (and once to
@@ -199,8 +201,22 @@ export class Scene3D {
     return this.root.add(node);
   }
 
-  /** Emit SET_CAMERA, lights + fog (if any), then a DRAW per visible mesh. */
+  /**
+   * Render the scene. For an all-static scene on a host with the retained native
+   * scene API, the scene is uploaded once and the per-frame cull+draw runs
+   * NATIVELY (JS only sends the camera). Otherwise a per-frame command buffer is
+   * built (flat fast path for all-static, object walk for dynamic) and submitted.
+   * Handles submission itself (the engine no longer calls enc.finish()).
+   */
   render(enc: CommandEncoder): void {
+    if (!this.flatBuilt) this.buildFlat();
+
+    // Native retained-scene fast path (PSP): upload once, then just send camera.
+    if (this.allStatic && hasNativeScene()) {
+      this.renderNative();
+      return;
+    }
+
     enc.setCamera(this.camera.viewProj);
     if (this.lighting && this.lighting.lights.length > 0) {
       enc.setLights(this.lighting.ambientABGR(), this.lighting.encoded());
@@ -215,12 +231,75 @@ export class Scene3D {
     }
     this.boundTex = -1;
     this.culledCount = 0;
-    if (!this.flatBuilt) this.buildFlat();
     if (this.allStatic) {
       this.emitFlat(enc);
     } else {
       this.emit(this.root, Mat4.identity(), enc);
     }
+    enc.finish();
+  }
+
+  // Upload the flat static list to the native scene once, then per frame send the
+  // camera and let the host cull + draw. The flat arrays (sModel/sAabb/sHandle/
+  // sTex/sTint) were already filled by buildFlat().
+  private sceneUploaded = false;
+  private camBuf = new Float32Array(20);
+  private geomBuf = new Float32Array(22);
+
+  private renderNative(): void {
+    const g = globalThis.g3d!;
+    if (!this.sceneUploaded) {
+      g.sceneClear!();
+      const geom = this.geomBuf;
+      for (let i = 0; i < this.sCount; i++) {
+        for (let k = 0; k < 16; k++) geom[k] = this.sModel[i * 16 + k];
+        geom[16] = this.sAabb[i * 6];
+        geom[17] = this.sAabb[i * 6 + 1];
+        geom[18] = this.sAabb[i * 6 + 2];
+        geom[19] = this.sAabb[i * 6 + 3];
+        geom[20] = this.sAabb[i * 6 + 4];
+        geom[21] = this.sAabb[i * 6 + 5];
+        g.sceneAdd!(this.sHandle[i], this.sTex[i], this.sTint[i] >>> 0, geom.buffer);
+      }
+      g.sceneSetEnv!(this.packEnv());
+      this.sceneUploaded = true;
+    }
+    const vp = this.camera.viewProj;
+    const c = this.camBuf;
+    for (let i = 0; i < 16; i++) c[i] = vp[i];
+    c[16] = this.camera.eye.x;
+    c[17] = this.camera.eye.y;
+    c[18] = this.camera.eye.z;
+    c[19] = this.fog ? this.fog.far : 1e6;
+    const drawn = g.sceneRender!(this.camBuf.buffer);
+    this.culledCount = this.sCount - (drawn | 0); // for the HUD/profiling readout
+  }
+
+  // Pack lights + fog into the sceneSetEnv buffer (see host3d.ts for the layout).
+  private packEnv(): ArrayBuffer {
+    const lights = this.lighting && this.lighting.lights.length > 0 ? this.lighting.encoded() : [];
+    const count = Math.min(lights.length, 4);
+    const ambient = this.lighting ? this.lighting.ambientABGR() : 0;
+    const buf = new ArrayBuffer((2 + count * 4 + 3) * 4);
+    const dv = new DataView(buf);
+    dv.setUint32(0, count, true);
+    dv.setUint32(4, ambient >>> 0, true);
+    let o = 8;
+    for (let i = 0; i < count; i++) {
+      dv.setUint32(o, lights[i].color >>> 0, true);
+      dv.setFloat32(o + 4, lights[i].dir[0], true);
+      dv.setFloat32(o + 8, lights[i].dir[1], true);
+      dv.setFloat32(o + 12, lights[i].dir[2], true);
+      o += 16;
+    }
+    if (this.fog) {
+      dv.setUint32(o, colorToABGR(this.fog.color) >>> 0, true);
+      dv.setFloat32(o + 4, this.fog.near, true);
+      dv.setFloat32(o + 8, this.fog.far, true);
+    } else {
+      dv.setUint32(o, 0xffffffff, true);
+    }
+    return buf;
   }
 
   // Build the flat static draw list by walking the tree in DFS (emit) order. If

@@ -37,6 +37,32 @@ export interface RawG3d {
    * gfx.fillRect HUD draws on top. Called once per frame, BEFORE any fillRect.
    */
   submit(buffer: ArrayBuffer, byteLength: number): void;
+
+  // ── Optional retained native scene ──────────────────────────────────────────
+  // For ALL-STATIC scenes (terrain, scenery), a host MAY accept the scene once and
+  // do the per-frame frustum cull + draw natively, so JS only sends the camera —
+  // moving the per-node math off the interpreted core (a big PSP win). Hosts that
+  // omit these fall back to the per-frame `submit` path (identical pixels). All four
+  // must be present together.
+  /** Drop all retained static instances + env (start a rebuild). */
+  sceneClear?(): void;
+  /**
+   * Append one static instance. `geom` is 22 f32: 16 model (column-major) + 3
+   * aabbMin + 3 aabbMax (world space). `tex` is a texture handle or -1.
+   */
+  sceneAdd?(handle: number, tex: number, tint: number, geom: ArrayBuffer): void;
+  /**
+   * Set scene lighting + fog. `env` layout: u32 lightCount, u32 ambientABGR,
+   * count×{u32 colorABGR, 3 f32 dir}, u32 fogColorABGR (0xffffffff = no fog),
+   * f32 near, f32 far. Pass null to clear.
+   */
+  sceneSetEnv?(env: ArrayBuffer | null): void;
+  /**
+   * THE per-frame retained-scene call. `camera` is 20 f32: 16 viewProj
+   * (column-major) + 3 eye + 1 cull-far. Clears, culls + draws every instance.
+   * Returns the number of instances actually drawn (visible after culling).
+   */
+  sceneRender?(camera: ArrayBuffer): number;
 }
 
 declare global {
@@ -47,4 +73,9 @@ declare global {
 /** True when the host provides the 3D contract. */
 export function hasG3d(): boolean {
   return typeof globalThis.g3d !== 'undefined' && globalThis.g3d !== null;
+}
+
+/** True when the host implements the optional retained native scene API. */
+export function hasNativeScene(): boolean {
+  return hasG3d() && typeof globalThis.g3d!.sceneRender === 'function';
 }

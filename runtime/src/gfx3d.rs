@@ -198,6 +198,31 @@ struct TextureEntry {
 static mut MESHES: Option<Vec<MeshEntry>> = None;
 static mut TEXTURES: Option<Vec<TextureEntry>> = None;
 
+// ── Retained native scene ────────────────────────────────────────────────────
+// A list of static draw instances uploaded ONCE from JS (sceneAdd). Per frame JS
+// calls sceneRender(camera) and the native side frustum-culls + draws the whole
+// list — moving the per-node cull/matrix/encode math off the interpreted QuickJS
+// core (where it costs ~1ms/node) to native (~free). See docs/psp-native-scene.md.
+struct SceneInstance {
+    handle: i32,
+    tex: i32, // texture handle or -1
+    tint: u32,
+    model: [f32; 16],   // world matrix, column-major
+    amin: [f32; 3],     // world-space AABB
+    amax: [f32; 3],
+}
+struct SceneLight {
+    color: u32,
+    dir: [f32; 3],
+}
+struct SceneEnv {
+    ambient: u32,
+    lights: Vec<SceneLight>, // ≤4
+    fog: Option<(u32, f32, f32)>, // color, near, far
+}
+static mut SCENE: Option<Vec<SceneInstance>> = None;
+static mut SCENE_ENV: Option<SceneEnv> = None;
+
 #[inline]
 unsafe fn meshes() -> &'static mut Vec<MeshEntry> {
     if MESHES.is_none() {
@@ -212,6 +237,49 @@ unsafe fn textures() -> &'static mut Vec<TextureEntry> {
         TEXTURES = Some(Vec::new());
     }
     TEXTURES.as_mut().unwrap()
+}
+
+#[inline]
+unsafe fn scene() -> &'static mut Vec<SceneInstance> {
+    if SCENE.is_none() {
+        SCENE = Some(Vec::new());
+    }
+    SCENE.as_mut().unwrap()
+}
+
+/// Program the GE sampler for texture `th` (or disable texturing if `th` is the
+/// 0xffffffff unbind sentinel / out of range). Shared by the per-frame submit
+/// path (OP_BIND_TEXTURE) and the retained-scene render.
+unsafe fn apply_texture(tex_table: &[TextureEntry], th: u32) {
+    if th == 0xffff_ffff {
+        sys::sceGuDisable(GuState::Texture2D);
+    } else if (th as usize) < tex_table.len() {
+        let t = &tex_table[th as usize];
+        sys::sceGuEnable(GuState::Texture2D);
+        sys::sceGuTexMode(psm_for(t.psm), 0, 0, 0);
+        sys::sceGuTexImage(MipmapLevel::None, t.w, t.h, t.tbw, t.pixels.as_ptr() as *const c_void);
+        sys::sceGuTexFunc(TextureEffect::Modulate, TextureColorComponent::Rgba);
+        sys::sceGuTexFilter(TextureFilter::Linear, TextureFilter::Linear);
+        sys::sceGuTexScale(1.0, 1.0);
+        sys::sceGuTexOffset(0.0, 0.0);
+    }
+}
+
+/// Copy 16 f32 (column-major) into a VFPU-aligned ScePspFMatrix4 for sceGumLoadMatrix.
+#[inline]
+unsafe fn align_mat(m: &[f32; 16]) -> Align16<ScePspFMatrix4> {
+    let mut a = Align16(ScePspFMatrix4 {
+        x: sys::ScePspFVector4 { x: 0.0, y: 0.0, z: 0.0, w: 0.0 },
+        y: sys::ScePspFVector4 { x: 0.0, y: 0.0, z: 0.0, w: 0.0 },
+        z: sys::ScePspFVector4 { x: 0.0, y: 0.0, z: 0.0, w: 0.0 },
+        w: sys::ScePspFVector4 { x: 0.0, y: 0.0, z: 0.0, w: 0.0 },
+    });
+    core::ptr::copy_nonoverlapping(
+        m.as_ptr() as *const u8,
+        &mut a.0 as *mut ScePspFMatrix4 as *mut u8,
+        64,
+    );
+    a
 }
 
 /// Read the i-th JS argument as an i32 (0 if absent / not convertible). Mirrors
@@ -569,27 +637,7 @@ unsafe extern "C" fn js_g3d_submit(
             // payload = u32 texHandle (0xffffffff = unbind). Texture state is
             // sticky on the GE, so this just programs the sampler; subsequent
             // OP_DRAWs use it until the next bind/unbind.
-            let th = read_u32(buf, base);
-            if th == 0xffff_ffff {
-                sys::sceGuDisable(GuState::Texture2D);
-            } else if (th as usize) < tex_table.len() {
-                let t = &tex_table[th as usize];
-                sys::sceGuEnable(GuState::Texture2D);
-                sys::sceGuTexMode(psm_for(t.psm), 0, 0, 0);
-                sys::sceGuTexImage(
-                    MipmapLevel::None,
-                    t.w,
-                    t.h,
-                    t.tbw,
-                    t.pixels.as_ptr() as *const c_void,
-                );
-                // Modulate = texture × (lit) vertex colour; Rgba honours texture
-                // alpha. Linear min/mag; identity scale/offset (UVs are 0..1).
-                sys::sceGuTexFunc(TextureEffect::Modulate, TextureColorComponent::Rgba);
-                sys::sceGuTexFilter(TextureFilter::Linear, TextureFilter::Linear);
-                sys::sceGuTexScale(1.0, 1.0);
-                sys::sceGuTexOffset(0.0, 0.0);
-            }
+            apply_texture(tex_table, read_u32(buf, base));
         } else if op == OP_SET_LIGHTS {
             // payload = u32 count, u32 ambientABGR, count×{u32 colorABGR, 3 f32 dir}.
             let count = read_u32(buf, base);
@@ -684,6 +732,224 @@ unsafe extern "C" fn js_g3d_submit(
     JS_UNDEFINED
 }
 
+// ── Retained native scene FFI ────────────────────────────────────────────────
+
+/// `g3d.sceneClear()` — drop all retained static instances + env (rebuild start).
+unsafe extern "C" fn js_g3d_scene_clear(
+    _ctx: *mut JSContext,
+    _this: JSValue,
+    _argc: i32,
+    _argv: *mut JSValue,
+) -> JSValue {
+    SCENE = Some(Vec::new());
+    SCENE_ENV = None;
+    JS_UNDEFINED
+}
+
+/// `g3d.sceneAdd(handle, tex, tint, geom: ArrayBuffer)` — append one static draw
+/// instance. `geom` is 22 f32: 16 model (column-major) + 3 aabbMin + 3 aabbMax.
+unsafe extern "C" fn js_g3d_scene_add(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 4 {
+        return JS_UNDEFINED;
+    }
+    let handle = arg_i32(ctx, argc, argv, 0);
+    let tex = arg_i32(ctx, argc, argv, 1);
+    let tint = arg_i32(ctx, argc, argv, 2) as u32;
+    let mut len: size_t = 0;
+    let p = JS_GetArrayBuffer(ctx, &mut len, *argv.offset(3));
+    if p.is_null() || (len as usize) < 22 * 4 {
+        return JS_UNDEFINED;
+    }
+    let mut model = [0f32; 16];
+    for i in 0..16 {
+        model[i] = read_f32(p, i * 4);
+    }
+    let amin = [read_f32(p, 64), read_f32(p, 68), read_f32(p, 72)];
+    let amax = [read_f32(p, 76), read_f32(p, 80), read_f32(p, 84)];
+    scene().push(SceneInstance { handle, tex, tint, model, amin, amax });
+    JS_UNDEFINED
+}
+
+/// `g3d.sceneSetEnv(env: ArrayBuffer|null)` — set lighting + fog for the scene.
+/// Layout: u32 lightCount, u32 ambientABGR, count×{u32 colorABGR, 3 f32 dir},
+/// then u32 fogColorABGR (0xffffffff = no fog), f32 near, f32 far.
+unsafe extern "C" fn js_g3d_scene_set_env(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 1 {
+        return JS_UNDEFINED;
+    }
+    let arg = *argv.offset(0);
+    if JS_IsNull(arg) || JS_IsUndefined(arg) {
+        SCENE_ENV = None;
+        return JS_UNDEFINED;
+    }
+    let mut len: size_t = 0;
+    let p = JS_GetArrayBuffer(ctx, &mut len, arg);
+    if p.is_null() {
+        SCENE_ENV = None;
+        return JS_UNDEFINED;
+    }
+    let count = read_u32(p, 0).min(4);
+    let ambient = read_u32(p, 4);
+    let mut lights = Vec::new();
+    let mut o = 8usize;
+    for _ in 0..count {
+        let color = read_u32(p, o);
+        let dir = [read_f32(p, o + 4), read_f32(p, o + 8), read_f32(p, o + 12)];
+        lights.push(SceneLight { color, dir });
+        o += 16;
+    }
+    let fog_color = read_u32(p, o);
+    let fog = if fog_color == 0xffff_ffff {
+        None
+    } else {
+        Some((fog_color, read_f32(p, o + 4), read_f32(p, o + 8)))
+    };
+    SCENE_ENV = Some(SceneEnv { ambient, lights, fog });
+    JS_UNDEFINED
+}
+
+/// `g3d.sceneRender(camera: ArrayBuffer)` — THE per-frame retained-scene call.
+/// `camera` is 20 f32: 16 viewProj (column-major) + 3 eye + 1 cull-far. Clears,
+/// sets the camera + env, frustum-culls every retained instance NATIVELY, and
+/// draws the visible ones. Replaces the JS command-buffer build+submit for an
+/// all-static scene, so JS per-frame work is just packing the camera.
+unsafe extern "C" fn js_g3d_scene_render(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 1 {
+        return JS_UNDEFINED;
+    }
+    let mut len: size_t = 0;
+    let p = JS_GetArrayBuffer(ctx, &mut len, *argv.offset(0));
+    if p.is_null() || (len as usize) < 20 * 4 {
+        return JS_UNDEFINED;
+    }
+    let mut vp = [0f32; 16];
+    for i in 0..16 {
+        vp[i] = read_f32(p, i * 4);
+    }
+    let ex = read_f32(p, 64);
+    let ey = read_f32(p, 68);
+    let ez = read_f32(p, 72);
+    let far2 = read_f32(p, 76) * read_f32(p, 76);
+
+    // Frustum side planes (Gribb-Hartmann) from the column-major viewProj:
+    // rows r_i = [m[i], m[4+i], m[8+i], m[12+i]]; left=r3+r0, right=r3-r0, etc.
+    let r0 = [vp[0], vp[4], vp[8], vp[12]];
+    let r1 = [vp[1], vp[5], vp[9], vp[13]];
+    let r3 = [vp[3], vp[7], vp[11], vp[15]];
+    let planes = [
+        [r3[0] + r0[0], r3[1] + r0[1], r3[2] + r0[2], r3[3] + r0[3]],
+        [r3[0] - r0[0], r3[1] - r0[1], r3[2] - r0[2], r3[3] - r0[3]],
+        [r3[0] + r1[0], r3[1] + r1[1], r3[2] + r1[2], r3[3] + r1[3]],
+        [r3[0] - r1[0], r3[1] - r1[1], r3[2] - r1[2], r3[3] - r1[3]],
+    ];
+
+    // 3D pass setup (mirrors submit).
+    sys::sceGuEnable(GuState::DepthTest);
+    sys::sceGuClearColor(BG_CLEAR_ABGR);
+    sys::sceGuClearDepth(0);
+    sys::sceGuClear(ClearBuffer::COLOR_BUFFER_BIT | ClearBuffer::DEPTH_BUFFER_BIT);
+    let vpm = align_mat(&vp);
+    sys::sceGumMatrixMode(MatrixMode::Projection);
+    sys::sceGumLoadMatrix(&vpm.0);
+    sys::sceGumMatrixMode(MatrixMode::View);
+    sys::sceGumLoadIdentity();
+
+    if let Some(env) = SCENE_ENV.as_ref() {
+        if !env.lights.is_empty() {
+            sys::sceGuAmbient(env.ambient);
+            sys::sceGuColorMaterial(LightComponent::AMBIENT | LightComponent::DIFFUSE);
+            let mut i = 0usize;
+            for l in env.lights.iter().take(4) {
+                let dir = ScePspFVector3 { x: l.dir[0], y: l.dir[1], z: l.dir[2] };
+                sys::sceGuLight(i as i32, LightType::Directional, LightComponent::DIFFUSE, &dir);
+                sys::sceGuLightColor(i as i32, LightComponent::DIFFUSE, l.color);
+                sys::sceGuEnable(light_state(i as u32));
+                i += 1;
+            }
+            sys::sceGuEnable(GuState::Lighting);
+        }
+        if let Some((fc, fnear, ffar)) = env.fog {
+            sys::sceGuFog(fnear, ffar, fc);
+            sys::sceGuEnable(GuState::Fog);
+        }
+    }
+
+    let table = meshes();
+    let tex_table = textures();
+    let insts = scene();
+    let mut bound_tex: i32 = -1; // matches the JS flat path (frame starts unbound)
+    let mut drawn: i32 = 0;
+    for inst in insts.iter() {
+        // Frustum cull: 4 side planes (positive-vertex test) + far-distance cutoff.
+        let mut culled = false;
+        for pl in planes.iter() {
+            let px = if pl[0] >= 0.0 { inst.amax[0] } else { inst.amin[0] };
+            let py = if pl[1] >= 0.0 { inst.amax[1] } else { inst.amin[1] };
+            let pz = if pl[2] >= 0.0 { inst.amax[2] } else { inst.amin[2] };
+            if pl[0] * px + pl[1] * py + pl[2] * pz + pl[3] < 0.0 {
+                culled = true;
+                break;
+            }
+        }
+        if !culled {
+            let cx = (inst.amin[0] + inst.amax[0]) * 0.5 - ex;
+            let cy = (inst.amin[1] + inst.amax[1]) * 0.5 - ey;
+            let cz = (inst.amin[2] + inst.amax[2]) * 0.5 - ez;
+            if cx * cx + cy * cy + cz * cz > far2 {
+                culled = true;
+            }
+        }
+        if culled {
+            continue;
+        }
+        if inst.handle < 0 || (inst.handle as usize) >= table.len() {
+            continue;
+        }
+        let mesh = &table[inst.handle as usize];
+        if mesh.count == 0 {
+            continue;
+        }
+        if inst.tex != bound_tex {
+            apply_texture(tex_table, if inst.tex < 0 { 0xffff_ffff } else { inst.tex as u32 });
+            bound_tex = inst.tex;
+        }
+        let mm = align_mat(&inst.model);
+        sys::sceGumMatrixMode(MatrixMode::Model);
+        sys::sceGumLoadMatrix(&mm.0);
+        sys::sceGuColor(if inst.tint == NO_TINT { 0xffff_ffff } else { inst.tint });
+        sys::sceGumDrawArray(
+            GuPrimitive::Triangles,
+            mesh.vtype,
+            mesh.count,
+            null(),
+            mesh.bytes.as_ptr() as *const c_void,
+        );
+        drawn += 1;
+    }
+
+    // HUD handoff (same as submit).
+    sys::sceGuDisable(GuState::DepthTest);
+    sys::sceGuDisable(GuState::Texture2D);
+    sys::sceGuDisable(GuState::Lighting);
+    sys::sceGuDisable(GuState::Fog);
+    JS_NewInt32(ctx, drawn) // visible count, so JS can report culling
+}
+
 /// Install the `g3d` object (uploadMesh / freeMesh / submit) onto the JS global.
 /// Mirrors `gfx::register`. Hosts that install `g3d` opt into the 3D contract;
 /// 2D-only games simply never reference it.
@@ -729,6 +995,16 @@ pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
         0,
     );
     JS_SetPropertyStr(ctx, g3d, b"submit\0".as_ptr() as *const _, f_submit);
+
+    // Retained native scene: sceneClear / sceneAdd / sceneSetEnv / sceneRender.
+    let f_sclear = JS_NewCFunction2(ctx, Some(js_g3d_scene_clear), b"sceneClear\0".as_ptr() as *const _, 0, JS_CFUNC_generic, 0);
+    JS_SetPropertyStr(ctx, g3d, b"sceneClear\0".as_ptr() as *const _, f_sclear);
+    let f_sadd = JS_NewCFunction2(ctx, Some(js_g3d_scene_add), b"sceneAdd\0".as_ptr() as *const _, 4, JS_CFUNC_generic, 0);
+    JS_SetPropertyStr(ctx, g3d, b"sceneAdd\0".as_ptr() as *const _, f_sadd);
+    let f_senv = JS_NewCFunction2(ctx, Some(js_g3d_scene_set_env), b"sceneSetEnv\0".as_ptr() as *const _, 1, JS_CFUNC_generic, 0);
+    JS_SetPropertyStr(ctx, g3d, b"sceneSetEnv\0".as_ptr() as *const _, f_senv);
+    let f_srender = JS_NewCFunction2(ctx, Some(js_g3d_scene_render), b"sceneRender\0".as_ptr() as *const _, 1, JS_CFUNC_generic, 0);
+    JS_SetPropertyStr(ctx, g3d, b"sceneRender\0".as_ptr() as *const _, f_srender);
 
     // JS_SetPropertyStr consumes ownership of `g3d`.
     JS_SetPropertyStr(ctx, global, b"g3d\0".as_ptr() as *const _, g3d);
