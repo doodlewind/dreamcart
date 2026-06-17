@@ -18,6 +18,7 @@ use psp::sys::{
 use psp::vram_alloc::get_vram_allocator;
 use psp::{Align16, BUF_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 
+mod arena;
 mod bridge;
 mod c_heap;
 mod gfx;

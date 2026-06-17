@@ -11,12 +11,15 @@
 //!
 //! A 16-byte header keeps user pointers 16-byte aligned and records the request
 //! size so `free`/`realloc` can recover the layout (mirrors `qjs_alloc`).
+//!
+//! Backed by the single-arena sub-allocator (`arena.rs`), NOT the per-allocation
+//! kernel-block global allocator — newlib's dtoa/strtod can make many small
+//! allocations and would otherwise contribute to kernel-object exhaustion.
 
-extern crate alloc;
-
-use core::alloc::Layout;
 use core::ffi::c_void;
 use core::ptr;
+
+use crate::arena;
 
 const HEADER: usize = 16;
 
@@ -25,8 +28,7 @@ unsafe fn heap_alloc(size: usize) -> *mut c_void {
     if size == 0 {
         return ptr::null_mut();
     }
-    let layout = Layout::from_size_align_unchecked(size + HEADER, 16);
-    let p = alloc::alloc::alloc(layout);
+    let p = arena::alloc(size + HEADER, 16);
     if p.is_null() {
         return ptr::null_mut();
     }
@@ -41,7 +43,7 @@ unsafe fn heap_free(ptr: *mut c_void) {
     }
     let base = (ptr as *mut u8).sub(HEADER);
     let size = *(base as *mut usize);
-    alloc::alloc::dealloc(base, Layout::from_size_align_unchecked(size + HEADER, 16));
+    arena::dealloc(base, size + HEADER, 16);
 }
 
 #[inline]
@@ -55,16 +57,15 @@ unsafe fn heap_realloc(ptr: *mut c_void, size: usize) -> *mut c_void {
     }
     let base = (ptr as *mut u8).sub(HEADER);
     let old = *(base as *mut usize);
-    let np = alloc::alloc::realloc(
-        base,
-        Layout::from_size_align_unchecked(old + HEADER, 16),
-        size + HEADER,
-    );
+    // No in-place grow in the free-list heap: allocate, copy, free.
+    let np = heap_alloc(size);
     if np.is_null() {
         return ptr::null_mut();
     }
-    *(np as *mut usize) = size;
-    np.add(HEADER) as *mut c_void
+    let copy = if old < size { old } else { size };
+    ptr::copy_nonoverlapping(base.add(HEADER), np as *mut u8, copy);
+    arena::dealloc(base, old + HEADER, 16);
+    np
 }
 
 #[inline]
