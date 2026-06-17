@@ -20,7 +20,9 @@ use core::ptr::null;
 
 use libquickjs_sys::*;
 use psp::sys::{
-    self, ClearBuffer, GuPrimitive, MatrixMode, ScePspFMatrix4, VertexType,
+    self, ClearBuffer, GuPrimitive, GuState, LightComponent, LightType, MatrixMode, MipmapLevel,
+    ScePspFMatrix4, ScePspFVector3, TextureColorComponent, TextureEffect, TextureFilter,
+    TexturePixelFormat, VertexType,
 };
 use psp::Align16;
 
@@ -74,39 +76,125 @@ const NO_TINT: u32 = 0xffff_ffff;
 /// matching `BG_R/BG_G/BG_B` in raster3d.ts. Packed into PSP ABGR (opaque).
 const BG_CLEAR_ABGR: u32 = 0xff00_0000 | (0x1e << 16) | (0x14 << 8) | 0x10;
 
-/// The GE vertex type for v1 meshes: a u32 ABGR color followed by 3×f32
-/// position, transformed by the matrix stack. Matches the wire's interleaved
-/// 16-byte `[color u32][pos 3 f32]` stride. We draw NON-indexed (indices are
-/// expanded at upload), exactly like `rust-psp/examples/cube`, so no INDEX_16BIT.
-const V1_VTYPE: VertexType = VertexType::from_bits_truncate(
-    VertexType::COLOR_8888.bits()
-        | VertexType::VERTEX_32BITF.bits()
-        | VertexType::TRANSFORM_3D.bits(),
-);
-
-/// One 16-byte vertex, 16-byte aligned. The GE reads vertices straight from RAM
-/// and (like the 2D sprite path in `gfx.rs` and the cube example) needs the
-/// buffer 16-byte aligned — a plain `Vec<u8>` only guarantees 1-byte alignment,
-/// which makes the GE read garbage and draw nothing. A `Vec<Vertex16>` allocates
-/// 16-aligned because the element alignment is 16.
+/// One 16-byte chunk, 16-byte aligned. The GE reads geometry and textures
+/// straight from RAM and (like the 2D sprite path in `gfx.rs` and the cube
+/// example) needs the buffer 16-byte aligned — a plain `Vec<u8>` only guarantees
+/// 1-byte alignment, which makes the GE read garbage. A `Vec<Chunk16>` allocates
+/// 16-aligned because the element alignment is 16; we size it to ceil(bytes/16)
+/// and copy the (variable-stride) payload in. Per-vertex 4-byte alignment is
+/// guaranteed by the bake/encoder keeping every component 4-byte and the stride a
+/// multiple of 4.
 #[repr(C, align(16))]
 #[derive(Copy, Clone)]
-struct Vertex16([u8; 16]);
+struct Chunk16([u8; 16]);
 
-/// A retained mesh: an owned, 16-byte-aligned, NON-indexed vertex buffer in main
-/// RAM (the qjs_alloc heap), dcache-flushed once at upload. Indexed input is
-/// expanded to a flat vertex list here so the draw path matches the example.
-struct MeshEntry {
-    verts: Vec<Vertex16>,
-    /// Number of vertices to draw (3 per triangle).
-    count: i32,
+/// Allocate a 16-byte-aligned buffer of `len` bytes and copy `src[..len]` into it.
+unsafe fn aligned_copy(src: *const u8, len: usize) -> Vec<Chunk16> {
+    let nchunks = (len + 15) / 16;
+    let mut v: Vec<Chunk16> = alloc::vec![Chunk16([0u8; 16]); nchunks.max(1)];
+    if len > 0 {
+        core::ptr::copy_nonoverlapping(src, v.as_mut_ptr() as *mut u8, len);
+    }
+    v
 }
 
-/// The handle table. `g3d` is only ever touched from the single-threaded JS
+/// Bytes per vertex for a format+weight count. MUST match `vertexStride` in
+/// framework/src/g3d.ts (GE order `[weights][uv][color][normal][pos]`).
+fn stride_for(format: u32, weight_count: u32) -> usize {
+    let mut s = 0usize;
+    if format & FMT_WEIGHTS != 0 {
+        s += weight_count as usize * 4;
+    }
+    if format & FMT_UV != 0 {
+        s += 8;
+    }
+    if format & FMT_COLOR != 0 {
+        s += 4;
+    }
+    if format & FMT_NORMAL != 0 {
+        s += 12;
+    }
+    if format & FMT_POS != 0 {
+        s += 12;
+    }
+    s
+}
+
+/// `WEIGHTSn` vertex-type bits for n bone weights (the GE blends the first n of
+/// the 8 bone matrices). 0 selects none.
+fn weights_bits(n: u32) -> i32 {
+    match n {
+        1 => VertexType::WEIGHTS1.bits(),
+        2 => VertexType::WEIGHTS2.bits(),
+        3 => VertexType::WEIGHTS3.bits(),
+        4 => VertexType::WEIGHTS4.bits(),
+        5 => VertexType::WEIGHTS5.bits(),
+        6 => VertexType::WEIGHTS6.bits(),
+        7 => VertexType::WEIGHTS7.bits(),
+        8 => VertexType::WEIGHTS8.bits(),
+        _ => 0,
+    }
+}
+
+/// The GE `VertexType` for a mesh, built ONCE at upload from its format. Always
+/// `VERTEX_32BITF | TRANSFORM_3D`; COLOR/NORMAL/TEXTURE/WEIGHT bits are added per
+/// the format. The component *order* the GE reads is fixed regardless of bits.
+fn vtype_for(format: u32, weight_count: u32) -> VertexType {
+    let mut bits = VertexType::VERTEX_32BITF.bits() | VertexType::TRANSFORM_3D.bits();
+    if format & FMT_COLOR != 0 {
+        bits |= VertexType::COLOR_8888.bits();
+    }
+    if format & FMT_NORMAL != 0 {
+        bits |= VertexType::NORMAL_32BITF.bits();
+    }
+    if format & FMT_UV != 0 {
+        bits |= VertexType::TEXTURE_32BITF.bits();
+    }
+    if format & FMT_WEIGHTS != 0 {
+        bits |= VertexType::WEIGHT_32BITF.bits() | weights_bits(weight_count);
+    }
+    VertexType::from_bits_truncate(bits)
+}
+
+/// Map the wire PSM value to the GE texture pixel format (see g3d.ts PSM_*).
+fn psm_for(psm: u32) -> TexturePixelFormat {
+    match psm {
+        0 => TexturePixelFormat::Psm5650,
+        1 => TexturePixelFormat::Psm5551,
+        2 => TexturePixelFormat::Psm4444,
+        5 => TexturePixelFormat::PsmT8,
+        _ => TexturePixelFormat::Psm8888,
+    }
+}
+
+/// A retained mesh: an owned, 16-byte-aligned, NON-indexed, variable-stride vertex
+/// buffer in main RAM (the qjs_alloc heap), dcache-flushed once at upload. Indexed
+/// input is expanded to a flat vertex list here so the draw path is non-indexed.
+struct MeshEntry {
+    bytes: Vec<Chunk16>,
+    /// Number of vertices to draw (3 per triangle).
+    count: i32,
+    /// Precomputed GE vertex type (color/normal/uv/weight bits per the format).
+    /// The GE derives the per-vertex stride from these bits, so we don't store it.
+    vtype: VertexType,
+}
+
+/// A retained texture: 16-byte-aligned pixel bytes + the GE sampler params.
+struct TextureEntry {
+    pixels: Vec<Chunk16>,
+    w: i32,
+    h: i32,
+    /// Texture buffer width in texels (row stride); equals `w` for our uploads.
+    tbw: i32,
+    psm: u32,
+}
+
+/// The handle tables. `g3d` is only ever touched from the single-threaded JS
 /// frame loop (QuickJS has no threads here), so an `UnsafeCell`-style `static
 /// mut` matches the existing `no_std`/single-thread style of `main.rs`/`gfx.rs`
-/// without paying for a Mutex. A handle is just the index into this Vec.
+/// without paying for a Mutex. A handle is just the index into the Vec.
 static mut MESHES: Option<Vec<MeshEntry>> = None;
+static mut TEXTURES: Option<Vec<TextureEntry>> = None;
 
 #[inline]
 unsafe fn meshes() -> &'static mut Vec<MeshEntry> {
@@ -114,6 +202,14 @@ unsafe fn meshes() -> &'static mut Vec<MeshEntry> {
         MESHES = Some(Vec::new());
     }
     MESHES.as_mut().unwrap()
+}
+
+#[inline]
+unsafe fn textures() -> &'static mut Vec<TextureEntry> {
+    if TEXTURES.is_none() {
+        TEXTURES = Some(Vec::new());
+    }
+    TEXTURES.as_mut().unwrap()
 }
 
 /// Read the i-th JS argument as an i32 (0 if absent / not convertible). Mirrors
@@ -144,68 +240,125 @@ unsafe extern "C" fn js_g3d_upload_mesh(
         return JS_NewInt32(ctx, -1);
     }
 
-    // --- Borrow the source vertex bytes (16-byte stride). ---
+    // --- Borrow the source vertex bytes (interleaved at `stride`). ---
     let mut vlen: size_t = 0;
     let vptr = JS_GetArrayBuffer(ctx, &mut vlen, *argv.offset(0));
     if vptr.is_null() || vlen == 0 {
         return JS_NewInt32(ctx, -1);
     }
-    let src_vert_count = vlen as usize / 16;
-    let read_vert = |i: usize| -> Vertex16 {
-        let mut v = [0u8; 16];
-        core::ptr::copy_nonoverlapping(vptr.add(i * 16), v.as_mut_ptr(), 16);
-        Vertex16(v)
-    };
 
     let format = arg_i32(ctx, argc, argv, 2) as u32;
-    // v1 supports POS|COLOR only; reject anything else loudly via a -1 handle so
-    // the game fails fast rather than rendering garbage (matches raster3d.ts).
-    if (format & FMT_POS) == 0 || (format & FMT_COLOR) == 0 {
+    // POS is required; COLOR/UV/NORMAL are optional (v1's POS|COLOR is a subset).
+    // Reject a POS-less format loudly via a -1 handle so the game fails fast
+    // rather than rendering garbage (matches raster3d.ts).
+    if (format & FMT_POS) == 0 {
         return JS_NewInt32(ctx, -1);
     }
-    // Silence "unused" on the reserved bits while keeping them defined for the
-    // contract parity check.
-    let _ = (FMT_NORMAL, FMT_UV, FMT_WEIGHTS, DC3D_VERSION, OP_IMM_TRIS);
-    let _ = (OP_BIND_TEXTURE, OP_SET_LIGHTS, OP_DRAW_SKINNED); // v2: wired in M1+
+    // weightCount (the 4th arg) is only meaningful for skinned meshes (FMT_WEIGHTS,
+    // M4+); 0 for the static textured/lit meshes here.
+    let weight_count = arg_i32(ctx, argc, argv, 3) as u32;
+    let stride = stride_for(format, weight_count);
+    if stride == 0 {
+        return JS_NewInt32(ctx, -1);
+    }
+    // Silence "unused" on constants not consumed yet while keeping them defined
+    // for the contract parity check. OP_DRAW_SKINNED is wired in M4.
+    let _ = (DC3D_VERSION, OP_DRAW_SKINNED);
 
-    // Build a 16-byte-aligned, NON-indexed vertex list (expand indices if present),
-    // matching the proven cube-example draw path.
-    let mut verts: Vec<Vertex16> = Vec::new();
+    let src_vert_count = vlen as usize / stride;
+
+    // Build the list of source vertex indices to draw (expand the index buffer if
+    // present), then copy those (variable-stride) vertices into one 16-aligned,
+    // NON-indexed buffer — the proven cube-example draw path.
+    let mut src_idx: Vec<usize> = Vec::new();
     let indices_arg = *argv.offset(1);
     if !JS_IsNull(indices_arg) && !JS_IsUndefined(indices_arg) {
         let mut ilen: size_t = 0;
         let iptr = JS_GetArrayBuffer(ctx, &mut ilen, indices_arg);
         if !iptr.is_null() && ilen >= 2 {
             let n = ilen as usize / 2;
-            verts.reserve(n);
+            src_idx.reserve(n);
             for i in 0..n {
                 // wire indices are little-endian u16.
                 let idx = (*iptr.add(i * 2) as usize) | ((*iptr.add(i * 2 + 1) as usize) << 8);
                 if idx < src_vert_count {
-                    verts.push(read_vert(idx));
+                    src_idx.push(idx);
                 }
             }
         }
     } else {
-        verts.reserve(src_vert_count);
+        src_idx.reserve(src_vert_count);
         for i in 0..src_vert_count {
-            verts.push(read_vert(i));
+            src_idx.push(i);
         }
     }
-    if verts.is_empty() {
+    if src_idx.is_empty() {
         return JS_NewInt32(ctx, -1);
     }
 
-    let count = verts.len() as i32;
+    let count = src_idx.len();
+    let total = count * stride;
+    let nchunks = ((total + 15) / 16).max(1);
+    let mut bytes: Vec<Chunk16> = alloc::vec![Chunk16([0u8; 16]); nchunks];
+    let dst = bytes.as_mut_ptr() as *mut u8;
+    for (k, &si) in src_idx.iter().enumerate() {
+        core::ptr::copy_nonoverlapping(vptr.add(si * stride), dst.add(k * stride), stride);
+    }
+
     // The GE reads geometry from RAM, not the CPU cache — flush the copy once.
-    sys::sceKernelDcacheWritebackRange(
-        verts.as_ptr() as *const c_void,
-        (verts.len() * 16) as u32,
-    );
+    sys::sceKernelDcacheWritebackRange(bytes.as_ptr() as *const c_void, (bytes.len() * 16) as u32);
 
     let table = meshes();
     let handle = table.len() as i32;
-    table.push(MeshEntry { verts, count });
+    table.push(MeshEntry {
+        bytes,
+        count: count as i32,
+        vtype: vtype_for(format, weight_count),
+    });
+    JS_NewInt32(ctx, handle)
+}
+
+/// `g3d.uploadTexture(pixels: ArrayBuffer, w, h, psm)` -> int handle.
+///
+/// COPIES the borrowed QuickJS pixel bytes into an owned, 16-byte-aligned `Vec`
+/// (the GE samples from RAM and requires 16-byte texture alignment), dcache-
+/// flushes once, and stores `{ptr,w,h,tbw,psm}` in the TEXTURES table. Validates
+/// power-of-two dims ≤ 512 (the GE hardware limit).
+unsafe extern "C" fn js_g3d_upload_texture(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 4 {
+        return JS_NewInt32(ctx, -1);
+    }
+    let mut plen: size_t = 0;
+    let pptr = JS_GetArrayBuffer(ctx, &mut plen, *argv.offset(0));
+    if pptr.is_null() || plen == 0 {
+        return JS_NewInt32(ctx, -1);
+    }
+    let w = arg_i32(ctx, argc, argv, 1);
+    let h = arg_i32(ctx, argc, argv, 2);
+    let psm = arg_i32(ctx, argc, argv, 3) as u32;
+    // power-of-two and 1..=512 (GE hardware limits).
+    let pow2 = |n: i32| n > 0 && (n & (n - 1)) == 0;
+    if !pow2(w) || !pow2(h) || w > 512 || h > 512 {
+        return JS_NewInt32(ctx, -1);
+    }
+
+    let pixels = aligned_copy(pptr, plen as usize);
+    sys::sceKernelDcacheWritebackRange(pixels.as_ptr() as *const c_void, (pixels.len() * 16) as u32);
+
+    let table = textures();
+    let handle = table.len() as i32;
+    table.push(TextureEntry {
+        pixels,
+        w,
+        h,
+        tbw: w,
+        psm,
+    });
     JS_NewInt32(ctx, handle)
 }
 
@@ -224,7 +377,7 @@ unsafe extern "C" fn js_g3d_free_mesh(
     let table = meshes();
     if h >= 0 && (h as usize) < table.len() {
         let e = &mut table[h as usize];
-        e.verts = Vec::new();
+        e.bytes = Vec::new();
         e.count = 0;
     }
     JS_UNDEFINED
@@ -274,6 +427,23 @@ unsafe fn read_u16(base: *const u8, off: usize) -> u16 {
     (*base.add(off) as u16) | ((*base.add(off + 1) as u16) << 8)
 }
 
+/// Read a little-endian f32 from the wire buffer at `base + off`.
+#[inline]
+unsafe fn read_f32(base: *const u8, off: usize) -> f32 {
+    f32::from_bits(read_u32(base, off))
+}
+
+/// `GuState::Light0 + i` for light slot `i` (0..3).
+#[inline]
+fn light_state(i: u32) -> GuState {
+    match i {
+        0 => GuState::Light0,
+        1 => GuState::Light1,
+        2 => GuState::Light2,
+        _ => GuState::Light3,
+    }
+}
+
 
 /// `g3d.submit(buffer: ArrayBuffer, byteLength)` -> void. THE per-frame call.
 ///
@@ -321,6 +491,7 @@ unsafe extern "C" fn js_g3d_submit(
     sys::sceGuClear(ClearBuffer::COLOR_BUFFER_BIT | ClearBuffer::DEPTH_BUFFER_BIT);
 
     let table = meshes();
+    let tex_table = textures();
 
     // --- Replay records. ---
     let mut o = 8usize; // past the 8-byte header
@@ -368,14 +539,63 @@ unsafe extern "C" fn js_g3d_submit(
             // divergence from the reference renderer.
             sys::sceGuColor(if tint == NO_TINT { 0xffff_ffff } else { tint });
 
-            // Non-indexed: the 16-byte-aligned vertex list was expanded at upload.
+            // Non-indexed: the 16-byte-aligned vertex list was expanded at upload;
+            // its precomputed VertexType carries the color/uv/normal bits.
             sys::sceGumDrawArray(
                 GuPrimitive::Triangles,
-                V1_VTYPE,
+                mesh.vtype,
                 mesh.count,
                 null(),
-                mesh.verts.as_ptr() as *const c_void,
+                mesh.bytes.as_ptr() as *const c_void,
             );
+        } else if op == OP_BIND_TEXTURE {
+            // payload = u32 texHandle (0xffffffff = unbind). Texture state is
+            // sticky on the GE, so this just programs the sampler; subsequent
+            // OP_DRAWs use it until the next bind/unbind.
+            let th = read_u32(buf, base);
+            if th == 0xffff_ffff {
+                sys::sceGuDisable(GuState::Texture2D);
+            } else if (th as usize) < tex_table.len() {
+                let t = &tex_table[th as usize];
+                sys::sceGuEnable(GuState::Texture2D);
+                sys::sceGuTexMode(psm_for(t.psm), 0, 0, 0);
+                sys::sceGuTexImage(
+                    MipmapLevel::None,
+                    t.w,
+                    t.h,
+                    t.tbw,
+                    t.pixels.as_ptr() as *const c_void,
+                );
+                // Modulate = texture × (lit) vertex colour; Rgba honours texture
+                // alpha. Linear min/mag; identity scale/offset (UVs are 0..1).
+                sys::sceGuTexFunc(TextureEffect::Modulate, TextureColorComponent::Rgba);
+                sys::sceGuTexFilter(TextureFilter::Linear, TextureFilter::Linear);
+                sys::sceGuTexScale(1.0, 1.0);
+                sys::sceGuTexOffset(0.0, 0.0);
+            }
+        } else if op == OP_SET_LIGHTS {
+            // payload = u32 count, u32 ambientABGR, count×{u32 colorABGR, 3 f32 dir}.
+            let count = read_u32(buf, base);
+            let ambient = read_u32(buf, base + 4);
+            sys::sceGuAmbient(ambient);
+            // Vertex COLOR_8888 acts as the ambient+diffuse material so per-vertex
+            // colour still tints the lit result (× any bound texture).
+            sys::sceGuColorMaterial(LightComponent::AMBIENT | LightComponent::DIFFUSE);
+            let mut i = 0u32;
+            while i < count && i < 4 {
+                let lo = base + 8 + (i as usize) * 16;
+                let color = read_u32(buf, lo);
+                let dir = ScePspFVector3 {
+                    x: read_f32(buf, lo + 4),
+                    y: read_f32(buf, lo + 8),
+                    z: read_f32(buf, lo + 12),
+                };
+                sys::sceGuLight(i as i32, LightType::Directional, LightComponent::DIFFUSE, &dir);
+                sys::sceGuLightColor(i as i32, LightComponent::DIFFUSE, color);
+                sys::sceGuEnable(light_state(i));
+                i += 1;
+            }
+            sys::sceGuEnable(GuState::Lighting);
         } else if op == OP_IMM_TRIS {
             // Inline dynamic geometry. The example games don't emit this yet; a
             // correct implementation would stage `vertexCount` vertices into a
@@ -387,8 +607,12 @@ unsafe extern "C" fn js_g3d_submit(
         // Unknown opcodes are skipped via the `words` length prefix above.
     }
 
-    // --- HUD handoff: depth OFF so 2D sprites (z=0) draw unconditionally. ---
+    // --- HUD handoff: depth OFF so 2D sprites (z=0) draw unconditionally, and
+    // texturing/lighting OFF so the 2D pass (untextured, unlit TRANSFORM_2D
+    // sprites) is unaffected and the next frame starts from a clean state. ---
     sys::sceGuDisable(sys::GuState::DepthTest);
+    sys::sceGuDisable(GuState::Texture2D);
+    sys::sceGuDisable(GuState::Lighting);
     JS_UNDEFINED
 }
 
@@ -407,6 +631,16 @@ pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
         0,
     );
     JS_SetPropertyStr(ctx, g3d, b"uploadMesh\0".as_ptr() as *const _, f_upload);
+
+    let f_upload_tex = JS_NewCFunction2(
+        ctx,
+        Some(js_g3d_upload_texture),
+        b"uploadTexture\0".as_ptr() as *const _,
+        4,
+        JS_CFUNC_generic,
+        0,
+    );
+    JS_SetPropertyStr(ctx, g3d, b"uploadTexture\0".as_ptr() as *const _, f_upload_tex);
 
     let f_free = JS_NewCFunction2(
         ctx,

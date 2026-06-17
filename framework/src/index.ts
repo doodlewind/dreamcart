@@ -8,6 +8,8 @@ export * from './host3d';
 export * from './math';
 export * from './mesh';
 export * from './g3d';
+export * from './material';
+export * from './light';
 export * from './scene3d';
 export * from './color';
 export * from './input';

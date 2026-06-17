@@ -68,6 +68,14 @@ export const FMT_NORMAL = 0x0004; // 3 x f32
 export const FMT_UV = 0x0008; // 2 x f32 (texcoord)
 export const FMT_WEIGHTS = 0x0010; // bone weights; count carried per-mesh (weightCount), not in the bit
 
+// Texture pixel formats (subset of the PSP GE's `TexturePixelFormat`). The wire
+// passes the raw enum value; each host maps it to its native sampler format.
+// 16-bit (5650/5551/4444) halve VRAM vs 8888 — preferred on the VRAM-tight PSP.
+export const PSM_5650 = 0; // RGB 16-bit, no alpha
+export const PSM_5551 = 1; // RGBA 16-bit, 1-bit alpha
+export const PSM_4444 = 2; // RGBA 16-bit
+export const PSM_8888 = 3; // RGBA 32-bit (simplest; 256 KB @256²)
+
 /**
  * Bytes per vertex for a format. `weightCount` is the number of f32 bone weights
  * when FMT_WEIGHTS is set (0 otherwise). Order-independent (sums present fields).
@@ -84,6 +92,9 @@ export function vertexStride(format: number, weightCount = 0): number {
 
 /** No-tint sentinel: full white, fully opaque ABGR. */
 export const NO_TINT = 0xffffffff;
+
+/** OP_BIND_TEXTURE sentinel that disables texturing (no active texture). */
+export const UNBIND_TEXTURE = 0xffffffff;
 
 /** Pack an 0xRRGGBB color into the PSP-style ABGR u32 used in vertex/tint data. */
 export function colorToABGR(c: Color, a = 255): number {
@@ -150,6 +161,53 @@ export class CommandEncoder {
     this.view.setUint32(this.pos + 4, tintABGR >>> 0, true);
     this.pos += 8;
     this.writeMat(model);
+    this.records++;
+  }
+
+  /**
+   * Emit OP_BIND_TEXTURE: make `texHandle` (from g3d.uploadTexture) the active
+   * texture for subsequent draws. Pass `UNBIND_TEXTURE` (0xffffffff) to disable
+   * texturing. Texture binding is sticky GE state, not a per-draw field, so this
+   * is a state record between draws (Scene3D tracks the current bind to elide
+   * redundant ones).
+   */
+  bindTexture(texHandle: number): void {
+    this.ensure(4 + 4);
+    this.view.setUint16(this.pos, OP_BIND_TEXTURE, true);
+    this.view.setUint16(this.pos + 2, 1, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, texHandle >>> 0, true);
+    this.pos += 4;
+    this.records++;
+  }
+
+  /**
+   * Emit OP_SET_LIGHTS: global ambient + up to 4 directional lights (the GE
+   * hardware T&L limit). `ambient` and each `light.color` are ABGR u32; each
+   * `light.dir` is a 3-component direction (the GE reuses a directional light's
+   * "position" slot as its direction). Requires meshes carrying FMT_NORMAL.
+   */
+  setLights(
+    ambient: number,
+    lights: { dir: ArrayLike<number>; color: number }[],
+  ): void {
+    const count = Math.min(lights.length, 4);
+    const words = 2 + count * 4; // count, ambient, then per-light {color, 3×dir}
+    this.ensure(4 + words * 4);
+    this.view.setUint16(this.pos, OP_SET_LIGHTS, true);
+    this.view.setUint16(this.pos + 2, words, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, count >>> 0, true);
+    this.view.setUint32(this.pos + 4, ambient >>> 0, true);
+    this.pos += 8;
+    for (let i = 0; i < count; i++) {
+      const l = lights[i];
+      this.view.setUint32(this.pos, l.color >>> 0, true);
+      this.view.setFloat32(this.pos + 4, l.dir[0], true);
+      this.view.setFloat32(this.pos + 8, l.dir[1], true);
+      this.view.setFloat32(this.pos + 12, l.dir[2], true);
+      this.pos += 16;
+    }
     this.records++;
   }
 

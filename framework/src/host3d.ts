@@ -12,6 +12,14 @@ export interface RawG3d {
    * latter for VFPU 16-byte alignment) — the resulting image must be identical.
    */
   uploadMesh(vertices: ArrayBuffer, indices: ArrayBuffer | null, format: number): number;
+  /**
+   * Upload a texture ONCE (retained, returns a small int handle), mirroring
+   * uploadMesh. `pixels` is tightly-packed image data in pixel format `psm`
+   * (one of the PSM_* values in g3d.ts); `w`/`h` must be powers of two ≤ 512.
+   * The host COPIES the bytes (16-byte aligned for the GE) and never retains the
+   * QuickJS pointer. Optional: 2D-only or texture-less hosts may omit it.
+   */
+  uploadTexture?(pixels: ArrayBuffer, w: number, h: number, psm: number): number;
   /** Release native storage (optional; many games never call it). */
   freeMesh(handle: number): void;
   /**

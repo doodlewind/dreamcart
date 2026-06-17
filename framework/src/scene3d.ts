@@ -3,11 +3,13 @@
 // the engine walks it and emits one SET_CAMERA + one DRAW per visible mesh into
 // the CommandEncoder (see engine.ts). All transform math is shared deterministic
 // f64 (math.ts), so the emitted bytes are identical on every host.
-import { CommandEncoder, NO_TINT, colorToABGR } from './g3d';
+import { CommandEncoder, NO_TINT, UNBIND_TEXTURE, colorToABGR } from './g3d';
 import { Mat4, Quat, Vec3 } from './math';
 import { SCREEN_H, SCREEN_W } from './host';
 import type { Color } from './color';
 import type { Mesh } from './mesh';
+import type { Material } from './material';
+import type { Lighting } from './light';
 
 export class Camera {
   proj: number[] = Mat4.identity();
@@ -31,6 +33,7 @@ export class Camera {
 
 export interface Node3DOpts {
   mesh?: Mesh;
+  material?: Material;
   position?: Vec3;
   rotation?: Quat;
   scale?: Vec3;
@@ -42,6 +45,8 @@ export class Node3D {
   rotation: Quat;
   scale: Vec3;
   mesh?: Mesh;
+  /** Optional textured material; Scene3D binds its texture before drawing. */
+  material?: Material;
   tint: number; // ABGR, NO_TINT = untinted
   visible = true;
   children: Node3D[] = [];
@@ -51,6 +56,7 @@ export class Node3D {
     this.rotation = opts.rotation ?? Quat.identity();
     this.scale = opts.scale ?? new Vec3(1, 1, 1);
     this.mesh = opts.mesh;
+    this.material = opts.material;
     this.tint = opts.tint === undefined ? NO_TINT : colorToABGR(opts.tint);
   }
 
@@ -72,6 +78,15 @@ export class Node3D {
 export class Scene3D {
   root = new Node3D();
   camera = new Camera();
+  /** Optional hardware lighting; when set, one OP_SET_LIGHTS is emitted/frame. */
+  lighting?: Lighting;
+  // Texture currently bound on the GE during a render pass; tracked so we emit
+  // OP_BIND_TEXTURE only when the active texture actually changes (and once to
+  // unbind when a textured draw is followed by an untextured one). Initialized to
+  // -1 ("nothing bound") — the host starts every frame with texturing disabled —
+  // so a scene that never uses a texture emits ZERO bind records (v1 goldens stay
+  // byte-identical).
+  private boundTex = -1;
 
   constructor() {
     this.camera.setPerspective(60, SCREEN_W / SCREEN_H, 0.1, 100);
@@ -84,9 +99,13 @@ export class Scene3D {
     return this.root.add(node);
   }
 
-  /** Emit SET_CAMERA then a DRAW per visible mesh (parent*local in shared JS). */
+  /** Emit SET_CAMERA, the lights (if any), then a DRAW per visible mesh. */
   render(enc: CommandEncoder): void {
     enc.setCamera(this.camera.viewProj);
+    if (this.lighting && this.lighting.lights.length > 0) {
+      enc.setLights(this.lighting.ambientABGR(), this.lighting.encoded());
+    }
+    this.boundTex = -1;
     this.emit(this.root, Mat4.identity(), enc);
   }
 
@@ -95,7 +114,22 @@ export class Scene3D {
     const world = Mat4.multiply(parent, node.localMatrix());
     if (node.mesh) {
       const h = node.mesh.handle();
-      if (h >= 0) enc.draw(h, world, node.tint);
+      if (h >= 0) {
+        // Bind/unbind the node's texture only when it differs from the GE's
+        // current binding (state record, sticky on the host).
+        const tex = node.material?.texture;
+        const want = tex ? tex.handle() : -1;
+        if (want >= 0) {
+          if (this.boundTex !== want) {
+            enc.bindTexture(want);
+            this.boundTex = want;
+          }
+        } else if (this.boundTex !== -1) {
+          enc.bindTexture(UNBIND_TEXTURE);
+          this.boundTex = -1;
+        }
+        enc.draw(h, world, node.tint);
+      }
     }
     for (const c of node.children) this.emit(c, world, enc);
   }
