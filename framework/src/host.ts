@@ -11,6 +11,15 @@ export interface RawGfx {
    * Hosts that don't implement it (graphics.ts falls back to per-rect fillRect).
    */
   fillRects?(buffer: ArrayBuffer, count: number): void;
+  /**
+   * Optional native text. `uploadFont` installs the active font ONCE (`table` is
+   * 128 glyphs × 9 bytes: 1 width + 8 row bytes); `drawText` then rasterizes a
+   * string + draws all glyph runs in one call (`rgb` = 0xRRGGBB), returning the
+   * width drawn. Moves the per-pixel-run glyph loop off the interpreted core.
+   * Hosts without these (graphics.ts falls back to the JS fillRect/fillRects path).
+   */
+  uploadFont?(table: ArrayBuffer, height: number): void;
+  drawText?(str: string, x: number, y: number, rgb: number, scale: number): number;
 }
 
 declare global {

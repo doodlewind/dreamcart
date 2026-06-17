@@ -128,10 +128,169 @@ unsafe fn rd_i32(p: *const u8, o: usize) -> i32 {
         | ((*p.add(o + 3) as i32) << 24)
 }
 
-/// Scratch sprite buffer for the batched `fillRects` path: 2 verts per rect.
+/// Scratch sprite buffer for the batched `fillRects` / `drawText` paths: 2 verts
+/// per rect. Both build into this, then issue one `sceGuDrawArray`.
 const MAX_RECTS: usize = 4096;
 static mut SPRITES: psp::Align16<[Vertex2D; MAX_RECTS * 2]> =
     psp::Align16([Vertex2D { color: 0, x: 0, y: 0, z: 0, _pad: 0 }; MAX_RECTS * 2]);
+
+/// One bitmap glyph: pixel width + up to 8 rows (bit 0 = leftmost pixel).
+#[derive(Copy, Clone)]
+struct Glyph {
+    w: u8,
+    rows: [u8; 8],
+}
+// The active font, uploaded once from JS (gfx.uploadFont) so drawText can
+// rasterize glyphs natively instead of looping per pixel-run in interpreted JS.
+static mut FONT: Option<[Glyph; 128]> = None;
+static mut FONT_HEIGHT: i32 = 8;
+
+/// Push one screen-clipped sprite rect into `SPRITES` at slot `n`; returns the
+/// next slot (unchanged if fully off-screen or the scratch is full).
+#[inline]
+unsafe fn push_sprite(n: usize, color: u32, x: i32, y: i32, w: i32, h: i32) -> usize {
+    if n >= MAX_RECTS {
+        return n;
+    }
+    let x0 = x.max(0).min(SCREEN_WIDTH as i32);
+    let y0 = y.max(0).min(SCREEN_HEIGHT as i32);
+    let x1 = (x + w).max(0).min(SCREEN_WIDTH as i32);
+    let y1 = (y + h).max(0).min(SCREEN_HEIGHT as i32);
+    if x1 <= x0 || y1 <= y0 {
+        return n;
+    }
+    let s = &mut SPRITES.0;
+    s[n * 2] = Vertex2D { color, x: x0 as i16, y: y0 as i16, z: 0, _pad: 0 };
+    s[n * 2 + 1] = Vertex2D { color, x: x1 as i16, y: y1 as i16, z: 0, _pad: 0 };
+    n + 1
+}
+
+/// Draw the first `n` scratch sprites as one batched sprite draw.
+#[inline]
+unsafe fn flush_sprites(n: usize) {
+    if n == 0 {
+        return;
+    }
+    let s = &SPRITES.0;
+    sys::sceKernelDcacheWritebackRange(
+        s.as_ptr() as *const c_void,
+        (n * 2 * core::mem::size_of::<Vertex2D>()) as u32,
+    );
+    sys::sceGuDrawArray(
+        GuPrimitive::Sprites,
+        VertexType::COLOR_8888 | VertexType::VERTEX_16BIT | VertexType::TRANSFORM_2D,
+        (n * 2) as i32,
+        null(),
+        s.as_ptr() as *const c_void,
+    );
+}
+
+/// `gfx.uploadFont(table: ArrayBuffer, height)` — install the active font once.
+/// `table` is 128 glyphs × 9 bytes: 1 width + 8 row bytes (missing codes carry
+/// the fallback glyph, filled in JS). Lets drawText rasterize natively.
+unsafe extern "C" fn js_gfx_upload_font(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 2 {
+        return JS_UNDEFINED;
+    }
+    let mut len: size_t = 0;
+    let p = JS_GetArrayBuffer(ctx, &mut len, *argv.offset(0));
+    if p.is_null() || (len as usize) < 128 * 9 {
+        return JS_UNDEFINED;
+    }
+    let mut tbl = [Glyph { w: 0, rows: [0u8; 8] }; 128];
+    for code in 0..128 {
+        let o = code * 9;
+        tbl[code].w = *p.add(o);
+        for r in 0..8 {
+            tbl[code].rows[r] = *p.add(o + 1 + r);
+        }
+    }
+    FONT = Some(tbl);
+    FONT_HEIGHT = arg_i32(ctx, argc, argv, 1).max(1).min(8);
+    JS_UNDEFINED
+}
+
+/// `gfx.drawText(str, x, y, rgb, scale)` -> width. Rasterizes the string with the
+/// uploaded font and draws all glyph runs as ONE batched sprite draw — the whole
+/// per-pixel-run loop runs natively instead of in interpreted JS. `rgb` is
+/// 0xRRGGBB. Supports '\n'. Codes ≥ 128 (non-ASCII UTF-8 bytes) are skipped.
+unsafe extern "C" fn js_gfx_draw_text(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 5 {
+        return JS_NewInt32(ctx, 0);
+    }
+    let font = match FONT.as_ref() {
+        Some(f) => f,
+        None => return JS_NewInt32(ctx, 0),
+    };
+    let height = FONT_HEIGHT;
+    let mut slen: size_t = 0;
+    let sp = JS_ToCStringLen2(ctx, &mut slen, *argv.offset(0), 0);
+    if sp.is_null() {
+        return JS_NewInt32(ctx, 0);
+    }
+    let x = arg_i32(ctx, argc, argv, 1);
+    let y = arg_i32(ctx, argc, argv, 2);
+    let rgb = arg_i32(ctx, argc, argv, 3) as u32;
+    let scale = arg_i32(ctx, argc, argv, 4).max(1);
+    let color = 0xff00_0000 | ((rgb & 0xff) << 16) | ((rgb >> 8) & 0xff) << 8 | ((rgb >> 16) & 0xff);
+
+    let bytes = core::slice::from_raw_parts(sp as *const u8, slen as usize);
+    let mut n = 0usize;
+    let mut cx = x;
+    let mut cy = y;
+    let mut maxw = 0i32;
+    for &b in bytes {
+        let code = b as usize;
+        if code == 10 {
+            if cx - x > maxw {
+                maxw = cx - x;
+            }
+            cx = x;
+            cy += (height + 1) * scale;
+            continue;
+        }
+        if code >= 128 {
+            continue;
+        }
+        let gl = &font[code];
+        for ry in 0..height {
+            let bits = gl.rows[ry as usize] as u32;
+            if bits == 0 {
+                continue;
+            }
+            let mut col = 0i32;
+            while col < gl.w as i32 {
+                if bits & (1 << col) != 0 {
+                    let mut run = 1i32;
+                    while col + run < gl.w as i32 && bits & (1 << (col + run)) != 0 {
+                        run += 1;
+                    }
+                    n = push_sprite(n, color, cx + col * scale, cy + ry * scale, run * scale, scale);
+                    col += run;
+                } else {
+                    col += 1;
+                }
+            }
+        }
+        cx += (gl.w as i32 + 1) * scale;
+    }
+    JS_FreeCString(ctx, sp);
+    if cx - x > maxw {
+        maxw = cx - x;
+    }
+    flush_sprites(n);
+    JS_NewInt32(ctx, maxw)
+}
 
 /// `gfx.fillRects(buffer: ArrayBuffer, count)` — draw many filled rects in ONE
 /// GE draw call. `buffer` is `count` × 5 little-endian i32: `[x, y, w, h, rgb]`
@@ -230,6 +389,11 @@ pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
         0,
     );
     JS_SetPropertyStr(ctx, gfx, b"fillRects\0".as_ptr() as *const _, f_fills);
+
+    let f_upfont = JS_NewCFunction2(ctx, Some(js_gfx_upload_font), b"uploadFont\0".as_ptr() as *const _, 2, JS_CFUNC_generic, 0);
+    JS_SetPropertyStr(ctx, gfx, b"uploadFont\0".as_ptr() as *const _, f_upfont);
+    let f_text = JS_NewCFunction2(ctx, Some(js_gfx_draw_text), b"drawText\0".as_ptr() as *const _, 5, JS_CFUNC_generic, 0);
+    JS_SetPropertyStr(ctx, gfx, b"drawText\0".as_ptr() as *const _, f_text);
 
     // JS_SetPropertyStr consumes ownership of `gfx`.
     JS_SetPropertyStr(ctx, global, b"gfx\0".as_ptr() as *const _, gfx);

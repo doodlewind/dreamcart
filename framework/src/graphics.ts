@@ -12,6 +12,29 @@ export interface SpriteOpts {
 const RECT_CAP = 2048;
 const RECT_BATCH = new Int32Array(RECT_CAP * 5);
 
+// The font currently uploaded to the host's native drawText path (null until the
+// host supports it AND a font has been uploaded). Re-uploaded if the font changes.
+let nativeFont: Font | null = null;
+
+/**
+ * Ensure `font` is uploaded to the host's native text path; returns true if the
+ * host can draw it natively. Builds a dense 128-glyph table (1 width + 8 rows
+ * each, missing codes carry the fallback) and uploads it once per font.
+ */
+function ensureNativeFont(font: Font): boolean {
+  if (!gfx.drawText || !gfx.uploadFont) return false;
+  if (nativeFont === font) return true;
+  const tbl = new Uint8Array(128 * 9);
+  for (let code = 0; code < 128; code++) {
+    const gl = glyphOf(font, code);
+    tbl[code * 9] = gl.w;
+    for (let r = 0; r < 8; r++) tbl[code * 9 + 1 + r] = gl.rows[r] || 0;
+  }
+  gfx.uploadFont(tbl.buffer, Math.min(font.height, 8));
+  nativeFont = font;
+  return true;
+}
+
 // Thin wrapper over the host fillRect — the only drawing surface. Everything
 // (sprites, text) is rasterized to fillRect runs here.
 export class Graphics {
@@ -60,8 +83,12 @@ export class Graphics {
     const r = redOf(c);
     const g = greenOf(c);
     const b = blueOf(c);
-    // Fast path: accumulate every glyph pixel-run into one buffer and submit it
-    // as a single batched draw (gfx.fillRects) — turns hundreds of per-run FFI
+    // Fastest path: the host rasterizes the whole string natively in one call.
+    if (ensureNativeFont(font)) {
+      return gfx.drawText!(str, x | 0, y | 0, ((r << 16) | (g << 8) | b) >>> 0, scale);
+    }
+    // Next: accumulate every glyph pixel-run into one buffer and submit it as a
+    // single batched draw (gfx.fillRects) — turns hundreds of per-run FFI
     // crossings into one. Falls back to per-run fillRect on hosts without it.
     const batch = gfx.fillRects ? RECT_BATCH : null;
     const rgb = ((r << 16) | (g << 8) | b) >>> 0;
