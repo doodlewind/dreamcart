@@ -119,6 +119,84 @@ unsafe extern "C" fn js_gfx_fill_rect(
     JS_UNDEFINED
 }
 
+/// Read a little-endian i32 from a JS ArrayBuffer at byte offset `o`.
+#[inline]
+unsafe fn rd_i32(p: *const u8, o: usize) -> i32 {
+    (*p.add(o) as i32)
+        | ((*p.add(o + 1) as i32) << 8)
+        | ((*p.add(o + 2) as i32) << 16)
+        | ((*p.add(o + 3) as i32) << 24)
+}
+
+/// Scratch sprite buffer for the batched `fillRects` path: 2 verts per rect.
+const MAX_RECTS: usize = 4096;
+static mut SPRITES: psp::Align16<[Vertex2D; MAX_RECTS * 2]> =
+    psp::Align16([Vertex2D { color: 0, x: 0, y: 0, z: 0, _pad: 0 }; MAX_RECTS * 2]);
+
+/// `gfx.fillRects(buffer: ArrayBuffer, count)` — draw many filled rects in ONE
+/// GE draw call. `buffer` is `count` × 5 little-endian i32: `[x, y, w, h, rgb]`
+/// (rgb = 0xRRGGBB). This is the batched fast path for text (the glyph rasterizer
+/// emits hundreds of tiny rects/frame); doing them as one `sceGuDrawArray` of
+/// sprite pairs collapses hundreds of FFI crossings + GE draws into one.
+unsafe extern "C" fn js_gfx_fill_rects(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 2 {
+        return JS_UNDEFINED;
+    }
+    let mut len: size_t = 0;
+    let buf = JS_GetArrayBuffer(ctx, &mut len, *argv.offset(0));
+    if buf.is_null() {
+        return JS_UNDEFINED;
+    }
+    let want = arg_i32(ctx, argc, argv, 1).max(0) as usize;
+    let count = want.min((len as usize) / 20).min(MAX_RECTS); // 5 i32 = 20 bytes/rect
+
+    let scratch = &mut SPRITES.0;
+    let mut n = 0usize; // rects actually emitted (after clipping)
+    for i in 0..count {
+        let o = i * 20;
+        let x = rd_i32(buf, o);
+        let y = rd_i32(buf, o + 4);
+        let w = rd_i32(buf, o + 8);
+        let h = rd_i32(buf, o + 12);
+        let rgb = rd_i32(buf, o + 16) as u32;
+        let color = 0xff00_0000
+            | ((rgb & 0xff) << 16)
+            | ((rgb >> 8) & 0xff) << 8
+            | ((rgb >> 16) & 0xff);
+        // Clip to the logical screen (same as fillRect — avoid i16 wrap).
+        let x0 = x.max(0).min(SCREEN_WIDTH as i32);
+        let y0 = y.max(0).min(SCREEN_HEIGHT as i32);
+        let x1 = (x + w).max(0).min(SCREEN_WIDTH as i32);
+        let y1 = (y + h).max(0).min(SCREEN_HEIGHT as i32);
+        if x1 <= x0 || y1 <= y0 {
+            continue;
+        }
+        scratch[n * 2] = Vertex2D { color, x: x0 as i16, y: y0 as i16, z: 0, _pad: 0 };
+        scratch[n * 2 + 1] = Vertex2D { color, x: x1 as i16, y: y1 as i16, z: 0, _pad: 0 };
+        n += 1;
+    }
+    if n == 0 {
+        return JS_UNDEFINED;
+    }
+    sys::sceKernelDcacheWritebackRange(
+        scratch.as_ptr() as *const c_void,
+        (n * 2 * core::mem::size_of::<Vertex2D>()) as u32,
+    );
+    sys::sceGuDrawArray(
+        GuPrimitive::Sprites,
+        VertexType::COLOR_8888 | VertexType::VERTEX_16BIT | VertexType::TRANSFORM_2D,
+        (n * 2) as i32,
+        null(),
+        scratch.as_ptr() as *const c_void,
+    );
+    JS_UNDEFINED
+}
+
 /// Install the `gfx` object (with `clear` and `fillRect`) onto the JS global.
 pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
     let gfx = JS_NewObject(ctx);
@@ -142,6 +220,16 @@ pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
         0,
     );
     JS_SetPropertyStr(ctx, gfx, b"fillRect\0".as_ptr() as *const _, f_fill);
+
+    let f_fills = JS_NewCFunction2(
+        ctx,
+        Some(js_gfx_fill_rects),
+        b"fillRects\0".as_ptr() as *const _,
+        2,
+        JS_CFUNC_generic,
+        0,
+    );
+    JS_SetPropertyStr(ctx, gfx, b"fillRects\0".as_ptr() as *const _, f_fills);
 
     // JS_SetPropertyStr consumes ownership of `gfx`.
     JS_SetPropertyStr(ctx, global, b"gfx\0".as_ptr() as *const _, gfx);

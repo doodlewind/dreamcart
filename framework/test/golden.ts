@@ -28,6 +28,16 @@ function makeGfx(buf: Uint8Array) {
   return {
     clear: (r: number, g: number, b: number) => put(0, 0, W, H, r, g, b),
     fillRect: (x: number, y: number, w: number, h: number, r: number, g: number, b: number) => put(x, y, w, h, r, g, b),
+    // Batched path (gfx.fillRects): same pixels as N fillRect calls, so the
+    // golden image is identical whether a host batches text or not.
+    fillRects: (buffer: ArrayBuffer, count: number) => {
+      const v = new Int32Array(buffer);
+      for (let i = 0; i < count; i++) {
+        const o = i * 5;
+        const rgb = v[o + 4] >>> 0;
+        put(v[o], v[o + 1], v[o + 2], v[o + 3], (rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
+      }
+    },
   };
 }
 

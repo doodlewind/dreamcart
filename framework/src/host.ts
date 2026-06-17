@@ -4,6 +4,13 @@
 export interface RawGfx {
   clear(r: number, g: number, b: number): void;
   fillRect(x: number, y: number, w: number, h: number, r: number, g: number, b: number): void;
+  /**
+   * Optional batched fill: draw `count` rects in ONE call. `buffer` is `count`×5
+   * little-endian i32 `[x, y, w, h, rgb]` (rgb = 0xRRGGBB). The glyph rasterizer
+   * uses it so a text string is one FFI crossing + GE draw instead of hundreds.
+   * Hosts that don't implement it (graphics.ts falls back to per-rect fillRect).
+   */
+  fillRects?(buffer: ArrayBuffer, count: number): void;
 }
 
 declare global {

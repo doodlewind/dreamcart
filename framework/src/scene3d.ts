@@ -162,6 +162,24 @@ export class Scene3D {
   private frustum?: Frustum;
   /** Diagnostic: nodes culled in the last render() (for HUD/profiling). */
   culledCount = 0;
+  // Flat static draw list (built lazily). When EVERY drawable node is static, the
+  // whole scene is flattened into typed arrays and drawn by a tight loop with no
+  // per-node object property access / function calls — the interpreted PSP core
+  // spends ~1ms/node walking the object tree, which dominates a large scene.
+  private flatBuilt = false;
+  private allStatic = false;
+  private sCount = 0;
+  // f64 so culling matches the object-walk (f64) bit-for-bit -> identical .dc3d.
+  private sAabb = new Float64Array(0); // 6 per node: min xyz, max xyz
+  private sModel = new Float32Array(0); // 16 per node (world matrix)
+  private sHandle = new Int32Array(0);
+  private sTint = new Int32Array(0);
+  private sTex = new Int32Array(0);
+
+  /** Force the flat static list to rebuild (call if static nodes change). */
+  invalidateStatic(): void {
+    this.flatBuilt = false;
+  }
   // Texture currently bound on the GE during a render pass; tracked so we emit
   // OP_BIND_TEXTURE only when the active texture actually changes (and once to
   // unbind when a textured draw is followed by an untextured one). Initialized to
@@ -197,7 +215,107 @@ export class Scene3D {
     }
     this.boundTex = -1;
     this.culledCount = 0;
-    this.emit(this.root, Mat4.identity(), enc);
+    if (!this.flatBuilt) this.buildFlat();
+    if (this.allStatic) {
+      this.emitFlat(enc);
+    } else {
+      this.emit(this.root, Mat4.identity(), enc);
+    }
+  }
+
+  // Build the flat static draw list by walking the tree in DFS (emit) order. If
+  // EVERY drawable node is static (no dynamic mesh, no skinned), the scene is
+  // flattened; otherwise allStatic stays false and render() uses the object walk.
+  private buildFlat(): void {
+    this.flatBuilt = true;
+    const nodes: Node3D[] = [];
+    const worlds: number[][] = [];
+    let allStatic = true;
+    const walk = (node: Node3D, parent: number[]): void => {
+      if (!node.visible) return;
+      const world =
+        node.isStatic && node.cw ? node.cw : Mat4.multiply(parent, node.localMatrix());
+      if (node.isStatic) node.cw = world;
+      if (node.skinned) {
+        allStatic = false;
+      } else if (node.mesh) {
+        if (!node.isStatic) allStatic = false;
+        nodes.push(node);
+        worlds.push(world);
+      }
+      for (const c of node.children) walk(c, world);
+    };
+    walk(this.root, Mat4.identity());
+    this.allStatic = allStatic && nodes.length > 0;
+    if (!this.allStatic) return;
+
+    const n = nodes.length;
+    this.sCount = n;
+    this.sAabb = new Float64Array(n * 6);
+    this.sModel = new Float32Array(n * 16);
+    this.sHandle = new Int32Array(n);
+    this.sTint = new Int32Array(n);
+    this.sTex = new Int32Array(n);
+    const wmin: number[] = [0, 0, 0];
+    const wmax: number[] = [0, 0, 0];
+    for (let i = 0; i < n; i++) {
+      const node = nodes[i];
+      const world = worlds[i];
+      for (let k = 0; k < 16; k++) this.sModel[i * 16 + k] = world[k];
+      if (node.bounds) {
+        this.worldAABB(node.bounds, world, wmin, wmax);
+      } else {
+        wmin[0] = wmin[1] = wmin[2] = -1e30; // no bounds -> never cull
+        wmax[0] = wmax[1] = wmax[2] = 1e30;
+      }
+      this.sAabb[i * 6] = wmin[0];
+      this.sAabb[i * 6 + 1] = wmin[1];
+      this.sAabb[i * 6 + 2] = wmin[2];
+      this.sAabb[i * 6 + 3] = wmax[0];
+      this.sAabb[i * 6 + 4] = wmax[1];
+      this.sAabb[i * 6 + 5] = wmax[2];
+      this.sHandle[i] = node.mesh!.handle();
+      this.sTint[i] = node.tint | 0;
+      const tex = node.material?.texture;
+      this.sTex[i] = tex ? tex.handle() : -1;
+    }
+  }
+
+  // The flat static draw loop: cull + draw straight from typed arrays, no per-node
+  // object access. Emits the SAME records in the SAME order as the object walk
+  // (so the .dc3d golden is byte-identical), just far cheaper on the PSP.
+  private emitFlat(enc: CommandEncoder): void {
+    const f = this.frustum!;
+    const planes = f.planes;
+    const a = this.sAabb;
+    for (let i = 0; i < this.sCount; i++) {
+      const b = i * 6;
+      let culled = false;
+      for (let p = 0; p < 4; p++) {
+        const pl = planes[p];
+        const px = pl[0] >= 0 ? a[b + 3] : a[b];
+        const py = pl[1] >= 0 ? a[b + 4] : a[b + 1];
+        const pz = pl[2] >= 0 ? a[b + 5] : a[b + 2];
+        if (pl[0] * px + pl[1] * py + pl[2] * pz + pl[3] < 0) {
+          culled = true;
+          break;
+        }
+      }
+      if (!culled) {
+        const cx = (a[b] + a[b + 3]) * 0.5 - f.ex;
+        const cy = (a[b + 1] + a[b + 4]) * 0.5 - f.ey;
+        const cz = (a[b + 2] + a[b + 5]) * 0.5 - f.ez;
+        if (cx * cx + cy * cy + cz * cz > f.far2) culled = true;
+      }
+      if (culled) {
+        this.culledCount++;
+        continue;
+      }
+      const h = this.sHandle[i];
+      if (h < 0) continue;
+      this.bindIfChanged(this.sTex[i], enc);
+      enc.drawAt(h, this.sModel, i * 16, this.sTint[i] >>> 0);
+    }
   }
 
   // World-space AABB of a node's local bounds under `world` (transform 8 corners).

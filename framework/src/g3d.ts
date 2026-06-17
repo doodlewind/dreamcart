@@ -112,12 +112,14 @@ export function colorToABGR(c: Color, a = 255): number {
 export class CommandEncoder {
   private buf: ArrayBuffer;
   private view: DataView;
+  private bytes: Uint8Array; // byte view over buf, for fast matrix memcpy
   private pos = 8; // past header
   private records = 0;
 
   constructor(capacityBytes = 256 * 1024) {
     this.buf = new ArrayBuffer(capacityBytes);
     this.view = new DataView(this.buf);
+    this.bytes = new Uint8Array(this.buf);
   }
 
   reset(): void {
@@ -133,6 +135,7 @@ export class CommandEncoder {
     new Uint8Array(next).set(new Uint8Array(this.buf, 0, this.pos));
     this.buf = next;
     this.view = new DataView(this.buf);
+    this.bytes = new Uint8Array(this.buf);
   }
 
   private writeMat(m: ArrayLike<number>): void {
@@ -209,6 +212,27 @@ export class CommandEncoder {
       this.view.setFloat32(this.pos + 12, l.dir[2], true);
       this.pos += 16;
     }
+    this.records++;
+  }
+
+  /**
+   * Like draw(), but reads the 16-float column-major model matrix from `m` at
+   * offset `off` — no subarray/array allocation. Used by Scene3D's flat static
+   * draw fast path so a large static scene emits with zero per-node garbage.
+   */
+  drawAt(handle: number, m: Float32Array, off: number, tintABGR = NO_TINT): void {
+    this.ensure(4 + 8 + 64);
+    this.view.setUint16(this.pos, OP_DRAW, true);
+    this.view.setUint16(this.pos + 2, 18, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, handle >>> 0, true);
+    this.view.setUint32(this.pos + 4, tintABGR >>> 0, true);
+    this.pos += 8;
+    // memcpy the 16 f32 (64 bytes) straight from the source Float32Array — one
+    // typed-array copy instead of 16 setFloat32 calls. f32 little-endian bytes are
+    // identical to setFloat32(LE), so the wire/golden is unchanged.
+    this.bytes.set(new Uint8Array(m.buffer, m.byteOffset + off * 4, 64), this.pos);
+    this.pos += 64;
     this.records++;
   }
 

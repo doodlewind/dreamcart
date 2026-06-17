@@ -31,7 +31,7 @@ function height(x, z) {
 }
 
 const WORLD = 120; // terrain spans [-60,60] in X and Z
-const CHUNKS = 6; // CHUNKS×CHUNKS grid
+const CHUNKS = 4; // CHUNKS×CHUNKS grid
 const CELLS = 8; // quads per chunk edge
 
 class OutdoorScene extends Scene {
@@ -42,6 +42,12 @@ class OutdoorScene extends Scene {
   heading = Math.PI; // face -Z (into the field)
   pitch = -0.15;
   drawn = 0;
+  // real-FPS measurement via the host `now()` (microseconds on PSP; absent
+  // elsewhere -> stays 0). The engine's dt is a fixed timestep, not real time.
+  fps = 0;
+  _lastNow = 0;
+  _accUs = 0;
+  _frames = 0;
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -136,7 +142,7 @@ class OutdoorScene extends Scene {
       return seed / 4294967296;
     };
     const half = WORLD / 2 - 4;
-    for (let n = 0; n < 90; n++) {
+    for (let n = 0; n < 40; n++) {
       const px = -half + rnd() * (half * 2);
       const pz = -half + rnd() * (half * 2);
       const kind = kinds[(rnd() * kinds.length) | 0];
@@ -166,8 +172,26 @@ class OutdoorScene extends Scene {
     this.pitch = -0.15;
   }
 
+  /** Sample real wall-clock FPS from the host `now()` (µs), smoothed over ~1s. */
+  measureFps() {
+    const host = /** @type {any} */ (globalThis);
+    if (typeof host.now !== 'function') return;
+    const t = host.now();
+    if (this._lastNow) {
+      this._accUs += t - this._lastNow;
+      this._frames++;
+      if (this._accUs >= 1e6) {
+        this.fps = Math.round((this._frames * 1e6) / this._accUs);
+        this._accUs = 0;
+        this._frames = 0;
+      }
+    }
+    this._lastNow = t;
+  }
+
   /** @param {UpdateContext} ctx */
   update(ctx) {
+    this.measureFps();
     const inp = ctx.input;
     if (inp.pressed(Btn.Start)) this.reset();
     if (inp.held(Btn.Left)) this.heading += 1.1 * ctx.dt;
@@ -200,6 +224,7 @@ class OutdoorScene extends Scene {
     const total = this.world.root.children.length;
     const culled = this.world.culledCount;
     g.text(total - culled + '/' + total + ' DRAWN  (' + culled + ' CULLED)', 8, 256, Colors.cyan, 1);
+    if (this.fps > 0) g.text(this.fps + ' FPS', 420, 8, Colors.yellow, 1);
   }
 }
 
