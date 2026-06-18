@@ -29,6 +29,10 @@ class WalkScene extends Scene {
   running = false;
   fps = new Fps();
   /** @type {any} */ engine = null;
+  foxCx = 0; // fox AABB centre (× scale, local space), for framing
+  foxCy = 0.5;
+  foxCz = 0;
+  foxR = 1.5; // fox bounding radius (× scale)
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -44,6 +48,23 @@ class WalkScene extends Scene {
       skinned: this.skin,
       scale: new Vec3(FOX.scale, FOX.scale, FOX.scale),
     });
+
+    // Auto-frame from the combined (scaled) bind AABB, exactly like skin3d, so
+    // the chase camera frames the whole fox the same way.
+    const mn = [1e9, 1e9, 1e9];
+    const mx = [-1e9, -1e9, -1e9];
+    for (const b of FOX.batches) {
+      const a = b.mesh.aabb;
+      for (let k = 0; k < 3; k++) {
+        if (a.min[k] < mn[k]) mn[k] = a.min[k];
+        if (a.max[k] > mx[k]) mx[k] = a.max[k];
+      }
+    }
+    const s = FOX.scale;
+    this.foxCx = ((mn[0] + mx[0]) / 2) * s;
+    this.foxCy = ((mn[1] + mx[1]) / 2) * s;
+    this.foxCz = ((mn[2] + mx[2]) / 2) * s;
+    this.foxR = Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) * s;
 
     this.engine = ctx.engine;
     this.reset();
@@ -92,10 +113,17 @@ class WalkScene extends Scene {
     this.fox.position = new Vec3(this.x, 0, this.z);
     this.fox.rotation = Quat.fromEuler(0, this.heading, 0);
 
-    // Chase camera: behind + above, looking just ahead of the fox.
-    const eye = new Vec3(this.x - fwdX * 3.2, 1.7, this.z - fwdZ * 3.2);
-    const look = new Vec3(this.x + fwdX * 1.5, 0.5, this.z + fwdZ * 1.5);
-    this.world.camera.lookAt(eye, look, new Vec3(0, 1, 0));
+    // Chase camera framed exactly like skin3d: look AT the fox's AABB centre
+    // from a fixed angle behind it, at the same distance (radius*1.6) and height
+    // (centre + radius*0.4) ratios skin3d's orbit uses. (skin3d orbits a still
+    // fox; here the same framing simply tracks the fox from behind as it walks.)
+    // The local AABB centre is rotated by heading so it tracks turns correctly.
+    const ccx = this.x + this.foxCx * fwdZ + this.foxCz * fwdX;
+    const ccz = this.z - this.foxCx * fwdX + this.foxCz * fwdZ;
+    const ccy = this.foxCy;
+    const d = this.foxR * 1.6;
+    const eye = new Vec3(ccx - fwdX * d, ccy + this.foxR * 0.4, ccz - fwdZ * d);
+    this.world.camera.lookAt(eye, new Vec3(ccx, ccy, ccz), new Vec3(0, 1, 0));
   }
 
   /** @param {Graphics} g */
