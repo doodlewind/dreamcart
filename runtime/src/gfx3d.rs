@@ -378,6 +378,201 @@ fn rsqrt(x: f32) -> f32 {
     y
 }
 
+#[inline]
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
+#[inline]
+fn compose_trs(
+    tx: f32,
+    ty: f32,
+    tz: f32,
+    qx: f32,
+    qy: f32,
+    qz: f32,
+    qw: f32,
+    sx: f32,
+    sy: f32,
+    sz: f32,
+) -> [f32; 16] {
+    let xx = qx * qx;
+    let yy = qy * qy;
+    let zz = qz * qz;
+    let xy = qx * qy;
+    let xz = qx * qz;
+    let yz = qy * qz;
+    let wx = qw * qx;
+    let wy = qw * qy;
+    let wz = qw * qz;
+    [
+        (1.0 - 2.0 * (yy + zz)) * sx,
+        2.0 * (xy + wz) * sx,
+        2.0 * (xz - wy) * sx,
+        0.0,
+        2.0 * (xy - wz) * sy,
+        (1.0 - 2.0 * (xx + zz)) * sy,
+        2.0 * (yz + wx) * sy,
+        0.0,
+        2.0 * (xz + wy) * sz,
+        2.0 * (yz - wx) * sz,
+        (1.0 - 2.0 * (xx + yy)) * sz,
+        0.0,
+        tx,
+        ty,
+        tz,
+        1.0,
+    ]
+}
+
+/// Shared OP_DRAW_SKIN_ANIM implementation for both `submit()` and the retained
+/// scene post-pass. Keep clip sampling, hierarchy accumulation, bone setup, and
+/// batch drawing in one place so the two render paths cannot drift.
+unsafe fn draw_skin_anim_native(
+    mesh_table: &[MeshEntry],
+    skin_table: &[SkinEntry],
+    clip_table: &[ClipEntry],
+    sh: i32,
+    ch: i32,
+    tint: u32,
+    phase: f32,
+    model: &Align16<ScePspFMatrix4>,
+) {
+    if sh < 0 || (sh as usize) >= skin_table.len() {
+        return;
+    }
+    if ch < 0 || (ch as usize) >= clip_table.len() {
+        return;
+    }
+    let skin = &skin_table[sh as usize];
+    let clip = &clip_table[ch as usize];
+    let jc = skin.joint_count;
+    if jc == 0 || jc > MAX_JOINTS || clip.joint_count != jc || clip.frame_count == 0 {
+        return;
+    }
+
+    // Inclusive endpoint mapping means phase=1 lands on the last frame; normal
+    // playback sends [0,1), but clamping keeps malformed packets from
+    // extrapolating past the baked frame table.
+    let fc = clip.frame_count;
+    let p = if phase.is_nan() { 0.0 } else { phase.max(0.0).min(1.0) };
+    let fidx = if fc > 1 { p * (fc as f32 - 1.0) } else { 0.0 };
+    let mut f0 = fidx as i32;
+    let max_f0 = if fc >= 2 { (fc - 2) as i32 } else { 0 };
+    if f0 < 0 {
+        f0 = 0;
+    }
+    if f0 > max_f0 {
+        f0 = max_f0;
+    }
+    let f1 = if fc >= 2 { f0 + 1 } else { 0 };
+    let u = fidx - f0 as f32;
+    let b0 = f0 as usize * jc;
+    let b1 = f1 as usize * jc;
+
+    let mut i = 0usize;
+    while i < jc {
+        let o3a = (b0 + i) * 3;
+        let o3b = (b1 + i) * 3;
+        let o4a = (b0 + i) * 4;
+        let o4b = (b1 + i) * 4;
+        let tx = lerp(clip.t[o3a], clip.t[o3b], u);
+        let ty = lerp(clip.t[o3a + 1], clip.t[o3b + 1], u);
+        let tz = lerp(clip.t[o3a + 2], clip.t[o3b + 2], u);
+        let sx = lerp(clip.s[o3a], clip.s[o3b], u);
+        let sy = lerp(clip.s[o3a + 1], clip.s[o3b + 1], u);
+        let sz = lerp(clip.s[o3a + 2], clip.s[o3b + 2], u);
+
+        let ax = clip.r[o4a];
+        let ay = clip.r[o4a + 1];
+        let az = clip.r[o4a + 2];
+        let aw = clip.r[o4a + 3];
+        let mut bx = clip.r[o4b];
+        let mut by = clip.r[o4b + 1];
+        let mut bz = clip.r[o4b + 2];
+        let mut bw = clip.r[o4b + 3];
+        if ax * bx + ay * by + az * bz + aw * bw < 0.0 {
+            bx = -bx;
+            by = -by;
+            bz = -bz;
+            bw = -bw;
+        }
+        let mut qx = lerp(ax, bx, u);
+        let mut qy = lerp(ay, by, u);
+        let mut qz = lerp(az, bz, u);
+        let mut qw = lerp(aw, bw, u);
+        let inv_len = rsqrt(qx * qx + qy * qy + qz * qz + qw * qw);
+        qx *= inv_len;
+        qy *= inv_len;
+        qz *= inv_len;
+        qw *= inv_len;
+
+        let local = compose_trs(tx, ty, tz, qx, qy, qz, qw, sx, sy, sz);
+        core::ptr::copy_nonoverlapping(
+            local.as_ptr(),
+            SKIN_LOCAL.as_mut_ptr().add(i * 16),
+            16,
+        );
+        i += 1;
+    }
+
+    i = 0;
+    while i < jc {
+        let mut local = [0f32; 16];
+        local.copy_from_slice(&SKIN_LOCAL[i * 16..i * 16 + 16]);
+        let parent = skin.parents[i];
+        let world = if parent >= 0 && (parent as usize) < jc {
+            let p = parent as usize;
+            let mut pw = [0f32; 16];
+            pw.copy_from_slice(&SKIN_WORLD[p * 16..p * 16 + 16]);
+            mat_mul4(&pw, &local)
+        } else {
+            local
+        };
+        core::ptr::copy_nonoverlapping(
+            world.as_ptr(),
+            SKIN_WORLD.as_mut_ptr().add(i * 16),
+            16,
+        );
+        i += 1;
+    }
+
+    sys::sceGumMatrixMode(MatrixMode::Model);
+    sys::sceGumLoadMatrix(&model.0);
+    sys::sceGuColor(if tint == NO_TINT { 0xffff_ffff } else { tint });
+
+    for b in skin.batches.iter() {
+        if b.mesh < 0 || (b.mesh as usize) >= mesh_table.len() {
+            continue;
+        }
+        let mesh = &mesh_table[b.mesh as usize];
+        if mesh.count == 0 {
+            continue;
+        }
+        let mut slot = 0i32;
+        while slot < b.bone_count && slot < 8 {
+            let g = b.joints[slot as usize];
+            if g >= 0 && (g as usize) < jc {
+                let g = g as usize;
+                let mut wm = [0f32; 16];
+                wm.copy_from_slice(&SKIN_WORLD[g * 16..g * 16 + 16]);
+                let mut ib = [0f32; 16];
+                ib.copy_from_slice(&skin.inverse_bind[g * 16..g * 16 + 16]);
+                let bm = align_mat(&mat_mul4(&wm, &ib));
+                sys::sceGuBoneMatrix(slot as u32, &bm.0);
+            }
+            slot += 1;
+        }
+        sys::sceGumDrawArray(
+            GuPrimitive::Triangles,
+            mesh.vtype,
+            mesh.count,
+            null(),
+            mesh.bytes.as_ptr() as *const c_void,
+        );
+    }
+}
+
 /// Read the i-th JS argument as an i32 (0 if absent / not convertible). Mirrors
 /// `gfx::arg_i32`.
 #[inline]
@@ -921,159 +1116,12 @@ unsafe extern "C" fn js_g3d_submit(
                 mesh.bytes.as_ptr() as *const c_void,
             );
         } else if op == OP_DRAW_SKIN_ANIM {
-            // payload = u32 skinHandle, u32 clipHandle, u32 tintABGR, f32 phase,
-            // 16 f32 model. Native SAMPLES the clip (lerp T/S, nlerp R) into the
-            // per-joint local matrices, then walks the hierarchy -> world matrices,
-            // bone = jointWorld·inverseBind -> sceGuBoneMatrix, and draws each
-            // bone-batch. JS ships only the phase (1 float) instead of 24×16
-            // sampled matrices — and, crucially, never runs the per-joint sampler
-            // in QuickJS (the ~12 ms/frame bottleneck).
             let sh = read_u32(buf, base) as i32;
             let ch = read_u32(buf, base + 4) as i32;
             let tint = read_u32(buf, base + 8);
             let phase = read_f32(buf, base + 12);
             let model = read_matrix(buf, base + 16);
-            if sh < 0 || (sh as usize) >= skin_table.len() {
-                continue;
-            }
-            if ch < 0 || (ch as usize) >= clip_table.len() {
-                continue;
-            }
-            let skin = &skin_table[sh as usize];
-            let clip = &clip_table[ch as usize];
-            let jc = skin.joint_count;
-            if jc != clip.joint_count || jc > MAX_JOINTS {
-                continue;
-            }
-
-            // --- sample the clip into SKIN_LOCAL (mirrors anim.ts sample() + the
-            // JS-fallback local-matrix compose, inclusive-endpoint frames, nlerp
-            // shorter arc). phase ∈ [0,1) maps to a fractional frame in [0, frameCount-1).
-            let fc = clip.frame_count;
-            let fidx = if fc > 1 { phase * (fc as f32 - 1.0) } else { 0.0 };
-            let mut f0 = fidx as i32; // phase ≥ 0 -> truncation == floor
-            if f0 < 0 {
-                f0 = 0;
-            }
-            let max_f0 = if fc >= 2 { (fc - 2) as i32 } else { 0 };
-            if f0 > max_f0 {
-                f0 = max_f0;
-            }
-            let f1 = if fc >= 2 { f0 + 1 } else { 0 };
-            let u = fidx - f0 as f32;
-            let b0 = f0 as usize * jc;
-            let b1 = f1 as usize * jc;
-            let local = &mut SKIN_LOCAL;
-            for j in 0..jc {
-                let o3a = (b0 + j) * 3;
-                let o3b = (b1 + j) * 3;
-                let o4a = (b0 + j) * 4;
-                let o4b = (b1 + j) * 4;
-                // position + scale: component lerp.
-                let tx = clip.t[o3a] + (clip.t[o3b] - clip.t[o3a]) * u;
-                let ty = clip.t[o3a + 1] + (clip.t[o3b + 1] - clip.t[o3a + 1]) * u;
-                let tz = clip.t[o3a + 2] + (clip.t[o3b + 2] - clip.t[o3a + 2]) * u;
-                let sx = clip.s[o3a] + (clip.s[o3b] - clip.s[o3a]) * u;
-                let sy = clip.s[o3a + 1] + (clip.s[o3b + 1] - clip.s[o3a + 1]) * u;
-                let sz = clip.s[o3a + 2] + (clip.s[o3b + 2] - clip.s[o3a + 2]) * u;
-                // rotation: nlerp (shorter arc).
-                let ax = clip.r[o4a];
-                let ay = clip.r[o4a + 1];
-                let az = clip.r[o4a + 2];
-                let aw = clip.r[o4a + 3];
-                let mut bx = clip.r[o4b];
-                let mut by = clip.r[o4b + 1];
-                let mut bz = clip.r[o4b + 2];
-                let mut bw = clip.r[o4b + 3];
-                if ax * bx + ay * by + az * bz + aw * bw < 0.0 {
-                    bx = -bx;
-                    by = -by;
-                    bz = -bz;
-                    bw = -bw;
-                }
-                let mut qx = ax + (bx - ax) * u;
-                let mut qy = ay + (by - ay) * u;
-                let mut qz = az + (bz - az) * u;
-                let mut qw = aw + (bw - aw) * u;
-                let inv = rsqrt(qx * qx + qy * qy + qz * qz + qw * qw);
-                qx *= inv;
-                qy *= inv;
-                qz *= inv;
-                qw *= inv;
-                // quaternion -> column-major matrix, scaled (mirror the JS compose).
-                let xx = qx * qx;
-                let yy = qy * qy;
-                let zz = qz * qz;
-                let xy = qx * qy;
-                let xz = qx * qz;
-                let yz = qy * qz;
-                let wx = qw * qx;
-                let wy = qw * qy;
-                let wz = qw * qz;
-                let o = j * 16;
-                local[o] = (1.0 - 2.0 * (yy + zz)) * sx;
-                local[o + 1] = 2.0 * (xy + wz) * sx;
-                local[o + 2] = 2.0 * (xz - wy) * sx;
-                local[o + 3] = 0.0;
-                local[o + 4] = 2.0 * (xy - wz) * sy;
-                local[o + 5] = (1.0 - 2.0 * (xx + zz)) * sy;
-                local[o + 6] = 2.0 * (yz + wx) * sy;
-                local[o + 7] = 0.0;
-                local[o + 8] = 2.0 * (xz + wy) * sz;
-                local[o + 9] = 2.0 * (yz - wx) * sz;
-                local[o + 10] = (1.0 - 2.0 * (xx + yy)) * sz;
-                local[o + 11] = 0.0;
-                local[o + 12] = tx;
-                local[o + 13] = ty;
-                local[o + 14] = tz;
-                local[o + 15] = 1.0;
-            }
-
-            // --- hierarchy: world[i] = parent<0 ? local[i] : world[parent]·local[i]
-            let world = &mut SKIN_WORLD;
-            for i in 0..jc {
-                let parent = skin.parents[i];
-                if parent < 0 {
-                    world[i * 16..i * 16 + 16].copy_from_slice(&local[i * 16..i * 16 + 16]);
-                } else {
-                    let mut pw = [0f32; 16];
-                    pw.copy_from_slice(&world[(parent as usize) * 16..(parent as usize) * 16 + 16]);
-                    let mut lc = [0f32; 16];
-                    lc.copy_from_slice(&local[i * 16..i * 16 + 16]);
-                    let w = mat_mul4(&pw, &lc);
-                    world[i * 16..i * 16 + 16].copy_from_slice(&w);
-                }
-            }
-            sys::sceGumMatrixMode(MatrixMode::Model);
-            sys::sceGumLoadMatrix(&model.0);
-            sys::sceGuColor(if tint == NO_TINT { 0xffff_ffff } else { tint });
-            for b in skin.batches.iter() {
-                if b.mesh < 0 || (b.mesh as usize) >= table.len() {
-                    continue;
-                }
-                let mesh = &table[b.mesh as usize];
-                if mesh.count == 0 {
-                    continue;
-                }
-                let mut slot = 0i32;
-                while slot < b.bone_count && slot < 8 {
-                    let g = b.joints[slot as usize] as usize;
-                    let mut wm = [0f32; 16];
-                    wm.copy_from_slice(&world[g * 16..g * 16 + 16]);
-                    let mut ib = [0f32; 16];
-                    ib.copy_from_slice(&skin.inverse_bind[g * 16..g * 16 + 16]);
-                    let bm = align_mat(&mat_mul4(&wm, &ib));
-                    sys::sceGuBoneMatrix(slot as u32, &bm.0);
-                    slot += 1;
-                }
-                sys::sceGumDrawArray(
-                    GuPrimitive::Triangles,
-                    mesh.vtype,
-                    mesh.count,
-                    null(),
-                    mesh.bytes.as_ptr() as *const c_void,
-                );
-            }
+            draw_skin_anim_native(table, skin_table, clip_table, sh, ch, tint, phase, &model);
         } else if op == OP_IMM_TRIS {
             // Inline dynamic geometry. The example games don't emit this yet; a
             // correct implementation would stage `vertexCount` vertices into a
@@ -1255,6 +1303,8 @@ unsafe extern "C" fn js_g3d_scene_render(
     let table = meshes();
     let tex_table = textures();
     let insts = scene();
+    let skin_table = skins();
+    let clip_table = clips();
     let mut bound_tex: i32 = -1; // matches the JS flat path (frame starts unbound)
     let mut drawn: i32 = 0;
     for inst in insts.iter() {
@@ -1346,6 +1396,86 @@ unsafe extern "C" fn js_g3d_scene_render(
                     mesh.bytes.as_ptr() as *const c_void,
                 );
                 drawn += 1;
+            }
+        }
+    }
+
+    // Optional post-pass command buffer. This lets a retained static scene share
+    // one clear/depth pass with dynamic skinned characters: JS builds a small
+    // DC3D packet containing OP_BIND_TEXTURE + OP_DRAW_SKIN_ANIM/OP_DRAW_SKINNED
+    // records, and native sceneRender replays it after static + rigid dynamics.
+    // Post draws are intentionally not included in `drawn`; the return value is
+    // still the retained/static + rigid dynamic instance count used for culling
+    // diagnostics.
+    if argc >= 5 {
+        let mut plen: size_t = 0;
+        let post = JS_GetArrayBuffer(ctx, &mut plen, *argv.offset(3));
+        if !post.is_null() {
+            let mut post_len = plen as usize;
+            let bl = arg_i32(ctx, argc, argv, 4);
+            if bl >= 0 && (bl as usize) < post_len {
+                post_len = bl as usize;
+            }
+            if post_len >= 8 && read_u32(post, 0) == DC3D_MAGIC {
+                let record_count = read_u16(post, 6) as usize;
+                let mut o = 8usize;
+                for _ in 0..record_count {
+                    if o + 4 > post_len {
+                        break;
+                    }
+                    let op = read_u16(post, o) as u32;
+                    let words = read_u16(post, o + 2) as usize;
+                    let base = o + 4;
+                    o = base + words * 4;
+                    if o > post_len {
+                        break;
+                    }
+
+                    if op == OP_BIND_TEXTURE {
+                        let th = read_u32(post, base);
+                        apply_texture(tex_table, th);
+                    } else if op == OP_DRAW_SKINNED {
+                        let handle = read_u32(post, base) as i32;
+                        let tint = read_u32(post, base + 4);
+                        let bone_count = read_u32(post, base + 8);
+                        let model = read_matrix(post, base + 12);
+
+                        if handle < 0 || (handle as usize) >= table.len() {
+                            continue;
+                        }
+                        let mesh = &table[handle as usize];
+                        if mesh.count == 0 {
+                            continue;
+                        }
+
+                        sys::sceGumMatrixMode(MatrixMode::Model);
+                        sys::sceGumLoadMatrix(&model.0);
+                        sys::sceGuColor(if tint == NO_TINT { 0xffff_ffff } else { tint });
+
+                        let bones_base = base + 12 + 64;
+                        let mut i = 0u32;
+                        while i < bone_count && i < 8 {
+                            let bm = read_bone_matrix(post, bones_base + (i as usize) * 48);
+                            sys::sceGuBoneMatrix(i, &bm);
+                            i += 1;
+                        }
+
+                        sys::sceGumDrawArray(
+                            GuPrimitive::Triangles,
+                            mesh.vtype,
+                            mesh.count,
+                            null(),
+                            mesh.bytes.as_ptr() as *const c_void,
+                        );
+                    } else if op == OP_DRAW_SKIN_ANIM {
+                        let sh = read_u32(post, base) as i32;
+                        let ch = read_u32(post, base + 4) as i32;
+                        let tint = read_u32(post, base + 8);
+                        let phase = read_f32(post, base + 12);
+                        let model = read_matrix(post, base + 16);
+                        draw_skin_anim_native(table, skin_table, clip_table, sh, ch, tint, phase, &model);
+                    }
+                }
             }
         }
     }

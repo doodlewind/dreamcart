@@ -342,9 +342,19 @@ export class CommandEncoder {
 
   /** Write the header and submit the buffer to the host (no-op if no g3d). */
   finish(): void {
+    const byteLength = this.packet().byteLength;
+    if (hasG3d()) globalThis.g3d!.submit(this.buf, byteLength);
+  }
+
+  /**
+   * Seal the current command buffer and return the valid byte range without
+   * submitting it. Used by PSP retained scenes to append skinned dynamic draws
+   * after native static-scene rendering, avoiding a second clear.
+   */
+  packet(): { buffer: ArrayBuffer; byteLength: number; records: number } {
     this.view.setUint32(0, DC3D_MAGIC, true);
     this.view.setUint16(4, DC3D_VERSION, true);
     this.view.setUint16(6, this.records, true);
-    if (hasG3d()) globalThis.g3d!.submit(this.buf, this.pos);
+    return { buffer: this.buf, byteLength: this.pos, records: this.records };
   }
 }

@@ -169,8 +169,9 @@ export class Scene3D {
   // spends ~1ms/node walking the object tree, which dominates a large scene.
   private flatBuilt = false;
   private allStatic = false;
-  // True when the scene has NO skinned nodes — then the native retained scene can
-  // draw it (static instances + per-frame rigid dynamic instances like a car).
+  // True when static/rigid parts can be drawn by the native retained scene. Any
+  // skinned dynamic nodes are appended as a post-pass command buffer so the host
+  // still clears only once.
   private nativeEligible = false;
   // Top-of-subtree dynamic nodes (e.g. a moving car); their subtrees are walked
   // each frame for the native scene's dynamic-instance pass. parentWorld is the
@@ -225,7 +226,7 @@ export class Scene3D {
     // the small dynamic subtree (e.g. a car) is walked in JS each frame. Used for
     // any non-skinned scene on a host with the API.
     if (this.nativeEligible && hasNativeScene()) {
-      this.renderNative();
+      this.renderNative(enc);
       return;
     }
 
@@ -258,7 +259,7 @@ export class Scene3D {
   private camBuf = new Float32Array(20);
   private geomBuf = new Float32Array(22);
 
-  private renderNative(): void {
+  private renderNative(enc: CommandEncoder): void {
     const g = globalThis.g3d!;
     if (!this.sceneUploaded) {
       g.sceneClear!();
@@ -283,22 +284,37 @@ export class Scene3D {
     c[17] = this.camera.eye.y;
     c[18] = this.camera.eye.z;
     c[19] = this.fog ? this.fog.far : 1e6;
-    // Walk the (small) dynamic subtrees each frame, packing their world matrices.
+    // Walk the (small) dynamic subtrees each frame, packing rigid world matrices
+    // and appending skinned draws into a post-pass command buffer.
     this.dynCount = 0;
+    enc.reset();
+    this.boundTex = -2; // force the post pass to establish texture state.
     for (let i = 0; i < this.dynamicRoots.length; i++) {
       const dr = this.dynamicRoots[i];
-      this.walkDynamic(dr.node, dr.parentWorld);
+      this.walkDynamic(dr.node, dr.parentWorld, enc);
     }
-    const drawn = g.sceneRender!(this.camBuf.buffer, this.dynBytes, this.dynCount);
+    const post = enc.packet();
+    const drawn = g.sceneRender!(
+      this.camBuf.buffer,
+      this.dynBytes,
+      this.dynCount,
+      post.buffer,
+      post.byteLength,
+    );
     this.culledCount = this.sCount + this.dynCount - (drawn | 0); // HUD/profiling
   }
 
   // Pack one dynamic subtree into dynBytes (handle, tex, tint, 16 f32 model per
-  // drawable node). Few nodes (a car + wheels), so per-node JS cost is fine here.
-  private walkDynamic(node: Node3D, parent: number[]): void {
+  // rigid drawable node), and emit skinned nodes into the post-pass encoder. Few
+  // nodes (a character / car + wheels), so per-node JS cost is fine here.
+  private walkDynamic(node: Node3D, parent: number[], post: CommandEncoder): void {
     if (!node.visible) return;
     const world = Mat4.multiply(parent, node.localMatrix());
-    if (node.mesh) {
+    if (node.skinned) {
+      const tex = node.skinned.texture;
+      this.bindIfChanged(tex ? tex.handle() : -1, post);
+      node.skinned.emit(post, world, node.tint);
+    } else if (node.mesh) {
       const h = node.mesh.handle();
       if (h >= 0 && this.dynCount < 256) {
         const o = this.dynCount * 76;
@@ -311,7 +327,7 @@ export class Scene3D {
         this.dynCount++;
       }
     }
-    for (let i = 0; i < node.children.length; i++) this.walkDynamic(node.children[i], world);
+    for (let i = 0; i < node.children.length; i++) this.walkDynamic(node.children[i], world, post);
   }
 
   // Pack lights + fog into the sceneSetEnv buffer (see host3d.ts for the layout).
@@ -343,24 +359,20 @@ export class Scene3D {
 
   // Walk the tree once (DFS / emit order) and classify drawable nodes: static mesh
   // nodes go to the flat arrays (uploaded once / drawn by emitFlat); the topmost
-  // node of each dynamic subtree becomes a dynamicRoot (walked per frame). A
-  // skinned node anywhere makes the scene NOT native-eligible (skinning keeps the
-  // OP_DRAW_SKINNED submit path). `allStatic` (no dynamic mesh) still gates the
-  // non-native emitFlat fast path.
+  // node of each dynamic subtree becomes a dynamicRoot (walked per frame). Skinned
+  // nodes are dynamic roots too on native hosts, but only their small subtree is
+  // walked; static scenery stays in the retained native scene.
   private buildFlat(): void {
     this.flatBuilt = true;
     this.dynamicRoots = [];
     const nodes: Node3D[] = []; // static mesh nodes
     const worlds: number[][] = [];
     let allStatic = true;
-    let hasSkinned = false;
     const walk = (node: Node3D, parent: number[], parentStatic: boolean): void => {
       if (!node.visible) return;
       if (node.skinned) {
-        hasSkinned = true;
         allStatic = false;
-        const w = Mat4.multiply(parent, node.localMatrix());
-        for (const c of node.children) walk(c, w, false);
+        if (parentStatic) this.dynamicRoots.push({ node, parentWorld: parent });
         return;
       }
       if (node.isStatic) {
@@ -385,7 +397,7 @@ export class Scene3D {
     // The root is a pure container (identity, never moves) — treat as static origin.
     for (const c of this.root.children) walk(c, Mat4.identity(), true);
     this.allStatic = allStatic && nodes.length > 0;
-    this.nativeEligible = !hasSkinned && nodes.length + this.dynamicRoots.length > 0;
+    this.nativeEligible = nodes.length + this.dynamicRoots.length > 0;
 
     // Only flatten (and eagerly upload static meshes) when a path actually uses
     // the flat arrays: the native scene, or the non-native emitFlat fast path.

@@ -16,3 +16,10 @@ Car Kit by Kenney (kenney.nl), CC0 1.0 Universal.
 
 ## Kenney Nature Kit v2.1 (CC0 — credit optional)
 Nature Kit by Kenney (www.kenney.nl), licensed CC0 1.0.
+
+## three.js Soldier (MIT)
+Soldier.glb from the three.js examples glTF model set.
+https://github.com/mrdoob/three.js/blob/dev/examples/models/gltf/Soldier.glb
+
+The embedded JPEG diffuse texture was extracted and converted to PNG for
+DreamCart's deterministic offline bake. See `assets/vendor/three-soldier/LICENSE.txt`.

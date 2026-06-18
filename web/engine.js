@@ -72,7 +72,7 @@
   var OP_SET_CAMERA = 0x0001;
   var OP_DRAW = 0x0002;
   var OP_IMM_TRIS = 0x0003;
-  var OP_BIND_TEXTURE = 0x0004;  // v2: declared for wire-parity; WebGL impl is additive (TODO)
+  var OP_BIND_TEXTURE = 0x0004;
   var OP_SET_LIGHTS = 0x0005;
   var OP_DRAW_SKINNED = 0x0006;
   var OP_SET_FOG = 0x0007;
@@ -83,40 +83,106 @@
   var FMT_UV = 0x0008;           // 2 x f32
   var FMT_WEIGHTS = 0x0010;      // bone weights (count per-mesh)
 
-  // v1 vertex layout (FMT_POS|FMT_COLOR): 16 bytes/vertex, interleaved, matching
-  // the bytes the encoder emits — [u32 ABGR @0][3 x f32 pos @4].
-  var V1_STRIDE = 16;
-
   // GLSL ES 3.00. u_viewProj is the shared math.ts proj*view (standard Y-up NDC;
   // NO baked Y-flip — WebGL clip space is already Y-up), so the shader is a plain
-  // MVP. a_color is ABGR bytes the GPU normalizes via the vertexAttribPointer flag.
+  // MVP. Vertex attributes follow the GE order from framework/src/g3d.ts:
+  // [weights][uv][color][normal][position].
   var VERT_SRC =
     '#version 300 es\n' +
     'layout(location=0) in vec3 a_pos;\n' +
-    'layout(location=1) in vec4 a_color;\n' + // unsigned-byte normalized, ABGR order
+    'layout(location=1) in vec4 a_color;\n' +
+    'layout(location=2) in vec2 a_uv;\n' +
+    'layout(location=3) in vec3 a_normal;\n' +
+    'layout(location=4) in vec4 a_weights0;\n' +
+    'layout(location=5) in vec4 a_weights1;\n' +
     'uniform mat4 u_viewProj;\n' +
     'uniform mat4 u_model;\n' +
+    'uniform int u_useSkin;\n' +
+    'uniform int u_weightCount;\n' +
+    'uniform mat4 u_bones[8];\n' +
+    'uniform int u_useLighting;\n' +
+    'uniform int u_lightCount;\n' +
+    'uniform vec3 u_ambient;\n' +
+    'uniform vec3 u_lightDir[4];\n' +
+    'uniform vec3 u_lightColor[4];\n' +
+    'uniform int u_useFog;\n' +
+    'uniform float u_fogNear;\n' +
+    'uniform float u_fogFar;\n' +
     'out vec4 v_color;\n' +
+    'out vec2 v_uv;\n' +
+    'out float v_fog;\n' +
     'void main() {\n' +
-    '  v_color = a_color;\n' +
-    '  gl_Position = u_viewProj * u_model * vec4(a_pos, 1.0);\n' +
+    '  vec4 local = vec4(a_pos, 1.0);\n' +
+    '  vec3 localNormal = a_normal;\n' +
+    '  if (u_useSkin != 0) {\n' +
+    '    vec4 skinned = vec4(0.0);\n' +
+    '    vec3 skinnedNormal = vec3(0.0);\n' +
+    '    if (u_weightCount > 0) { skinned += (u_bones[0] * local) * a_weights0.x; skinnedNormal += (mat3(u_bones[0]) * localNormal) * a_weights0.x; }\n' +
+    '    if (u_weightCount > 1) { skinned += (u_bones[1] * local) * a_weights0.y; skinnedNormal += (mat3(u_bones[1]) * localNormal) * a_weights0.y; }\n' +
+    '    if (u_weightCount > 2) { skinned += (u_bones[2] * local) * a_weights0.z; skinnedNormal += (mat3(u_bones[2]) * localNormal) * a_weights0.z; }\n' +
+    '    if (u_weightCount > 3) { skinned += (u_bones[3] * local) * a_weights0.w; skinnedNormal += (mat3(u_bones[3]) * localNormal) * a_weights0.w; }\n' +
+    '    if (u_weightCount > 4) { skinned += (u_bones[4] * local) * a_weights1.x; skinnedNormal += (mat3(u_bones[4]) * localNormal) * a_weights1.x; }\n' +
+    '    if (u_weightCount > 5) { skinned += (u_bones[5] * local) * a_weights1.y; skinnedNormal += (mat3(u_bones[5]) * localNormal) * a_weights1.y; }\n' +
+    '    if (u_weightCount > 6) { skinned += (u_bones[6] * local) * a_weights1.z; skinnedNormal += (mat3(u_bones[6]) * localNormal) * a_weights1.z; }\n' +
+    '    if (u_weightCount > 7) { skinned += (u_bones[7] * local) * a_weights1.w; skinnedNormal += (mat3(u_bones[7]) * localNormal) * a_weights1.w; }\n' +
+    '    if (skinned.w != 0.0) local = skinned;\n' +
+    '    if (dot(skinnedNormal, skinnedNormal) > 0.0) localNormal = normalize(skinnedNormal);\n' +
+    '  }\n' +
+    '  vec4 world = u_model * local;\n' +
+    '  vec3 lit = vec3(1.0);\n' +
+    '  if (u_useLighting != 0) {\n' +
+    '    vec3 n = normalize(mat3(u_model) * localNormal);\n' +
+    '    lit = u_ambient;\n' +
+    '    for (int i = 0; i < 4; i++) {\n' +
+    '      if (i < u_lightCount) {\n' +
+    '        lit += u_lightColor[i] * max(dot(n, normalize(-u_lightDir[i])), 0.0);\n' +
+    '      }\n' +
+    '    }\n' +
+    '    lit = clamp(lit, vec3(0.0), vec3(2.0));\n' +
+    '  }\n' +
+    '  vec4 clip = u_viewProj * world;\n' +
+    '  gl_Position = clip;\n' +
+    '  v_color = vec4(lit, 1.0) * a_color;\n' +
+    '  v_uv = a_uv;\n' +
+    '  float approxDist = abs(clip.w);\n' +
+    '  v_fog = u_useFog != 0 ? clamp((approxDist - u_fogNear) / max(u_fogFar - u_fogNear, 0.001), 0.0, 1.0) : 0.0;\n' +
     '}\n';
   var FRAG_SRC =
     '#version 300 es\n' +
     'precision highp float;\n' +
     'in vec4 v_color;\n' +
+    'in vec2 v_uv;\n' +
+    'in float v_fog;\n' +
     'uniform vec4 u_tint;\n' +
+    'uniform int u_useTexture;\n' +
+    'uniform sampler2D u_tex;\n' +
+    'uniform vec3 u_fogColor;\n' +
     'out vec4 outColor;\n' +
     'void main() {\n' +
-    '  outColor = v_color * u_tint;\n' +
+    '  vec4 c = v_color * u_tint;\n' +
+    '  if (u_useTexture != 0) c *= texture(u_tex, v_uv);\n' +
+    '  c.rgb = mix(c.rgb, u_fogColor, v_fog);\n' +
+    '  outColor = c;\n' +
     '}\n';
 
   var glProgram = null;
   var uViewProj = null, uModel = null, uTint = null;
-  var meshes = [];               // handle -> { vao, ibo, indexCount, vertexCount } (or null when freed)
+  var uUseTexture = null, uUseSkin = null, uWeightCount = null, uBones = null;
+  var uUseLighting = null, uLightCount = null, uAmbient = null, uLightDir = null, uLightColor = null;
+  var uUseFog = null, uFogColor = null, uFogNear = null, uFogFar = null;
+  var meshes = [];               // handle -> retained GL mesh (or null when freed)
+  var textures = [];             // handle -> WebGLTexture (or null when freed)
   var reversedZ = false;         // true once EXT_clip_control gives a real [0,1] range
   var immVao = null, immVbo = null; // dynamic geometry (IMM_TRIS) scratch
   var camMat = new Float32Array(16); // current u_viewProj (last SET_CAMERA)
+  var boneMats = new Float32Array(16 * 8);
+  var lightDirs = new Float32Array(3 * 4);
+  var lightColors = new Float32Array(3 * 4);
+  var ambientColor = new Float32Array([1, 1, 1]);
+  var fogColor = new Float32Array([0x10 / 255, 0x14 / 255, 0x1e / 255]);
+  var currentTexture = -1;
+  var currentLighting = false;
+  var currentLightCount = 0;
 
   function compileShader(type, src) {
     var s = gl.createShader(type);
@@ -140,6 +206,10 @@
     gl.attachShader(p, fs);
     gl.bindAttribLocation(p, 0, 'a_pos');
     gl.bindAttribLocation(p, 1, 'a_color');
+    gl.bindAttribLocation(p, 2, 'a_uv');
+    gl.bindAttribLocation(p, 3, 'a_normal');
+    gl.bindAttribLocation(p, 4, 'a_weights0');
+    gl.bindAttribLocation(p, 5, 'a_weights1');
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
       logSink('g3d link error: ' + gl.getProgramInfoLog(p));
@@ -149,6 +219,19 @@
     uViewProj = gl.getUniformLocation(p, 'u_viewProj');
     uModel = gl.getUniformLocation(p, 'u_model');
     uTint = gl.getUniformLocation(p, 'u_tint');
+    uUseTexture = gl.getUniformLocation(p, 'u_useTexture');
+    uUseSkin = gl.getUniformLocation(p, 'u_useSkin');
+    uWeightCount = gl.getUniformLocation(p, 'u_weightCount');
+    uBones = gl.getUniformLocation(p, 'u_bones[0]');
+    uUseLighting = gl.getUniformLocation(p, 'u_useLighting');
+    uLightCount = gl.getUniformLocation(p, 'u_lightCount');
+    uAmbient = gl.getUniformLocation(p, 'u_ambient');
+    uLightDir = gl.getUniformLocation(p, 'u_lightDir[0]');
+    uLightColor = gl.getUniformLocation(p, 'u_lightColor[0]');
+    uUseFog = gl.getUniformLocation(p, 'u_useFog');
+    uFogColor = gl.getUniformLocation(p, 'u_fogColor');
+    uFogNear = gl.getUniformLocation(p, 'u_fogNear');
+    uFogFar = gl.getUniformLocation(p, 'u_fogFar');
 
     // Reversed-Z (the shared projection emits NDC z near->1, far->0 ALWAYS). With
     // EXT_clip_control we get a true [0,1] clip range (best precision, matches
@@ -167,37 +250,106 @@
     gl.enable(gl.DEPTH_TEST);
     // No back-face culling — match raster3d.ts (depth resolves occlusion).
     gl.disable(gl.CULL_FACE);
+    gl.useProgram(glProgram);
+    setIdentityBones();
+    gl.uniform1i(uUseTexture, 0);
+    gl.uniform1i(uUseSkin, 0);
+    gl.uniform1i(uWeightCount, 0);
+    gl.uniformMatrix4fv(uBones, false, boneMats);
+    gl.uniform1i(uUseLighting, 0);
+    gl.uniform1i(uLightCount, 0);
+    gl.uniform3fv(uAmbient, ambientColor);
+    gl.uniform3fv(uLightDir, lightDirs);
+    gl.uniform3fv(uLightColor, lightColors);
+    gl.uniform1i(uUseFog, 0);
+    gl.uniform3fv(uFogColor, fogColor);
+    gl.uniform1f(uFogNear, 0);
+    gl.uniform1f(uFogFar, 1);
+    var texLoc = gl.getUniformLocation(p, 'u_tex');
+    gl.uniform1i(texLoc, 0);
 
     // Dynamic-geometry (IMM_TRIS) scratch: one reused DYNAMIC_DRAW VBO+VAO.
     immVbo = gl.createBuffer();
     immVao = gl.createVertexArray();
     gl.bindVertexArray(immVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, immVbo);
-    setupV1Attribs();
+    setupAttribs(FMT_POS | FMT_COLOR, 0);
     gl.bindVertexArray(null);
   }
 
-  // Configure the v1 (POS|COLOR) attribute layout on the currently-bound VBO/VAO.
-  function setupV1Attribs() {
+  function vertexStride(format, weightCount) {
+    var s = 0;
+    if (format & FMT_WEIGHTS) s += (weightCount || 0) * 4;
+    if (format & FMT_UV) s += 8;
+    if (format & FMT_COLOR) s += 4;
+    if (format & FMT_NORMAL) s += 12;
+    if (format & FMT_POS) s += 12;
+    return s;
+  }
+
+  function setupAttribs(format, weightCount) {
+    var stride = vertexStride(format, weightCount);
+    var o = 0;
+    if (format & FMT_WEIGHTS) {
+      gl.enableVertexAttribArray(4);
+      gl.vertexAttribPointer(4, Math.min(weightCount, 4), gl.FLOAT, false, stride, o);
+      if (weightCount > 4) {
+        gl.enableVertexAttribArray(5);
+        gl.vertexAttribPointer(5, Math.min(weightCount - 4, 4), gl.FLOAT, false, stride, o + 16);
+      } else {
+        gl.disableVertexAttribArray(5);
+        gl.vertexAttrib4f(5, 0, 0, 0, 0);
+      }
+      o += weightCount * 4;
+    } else {
+      gl.disableVertexAttribArray(4);
+      gl.disableVertexAttribArray(5);
+      gl.vertexAttrib4f(4, 0, 0, 0, 0);
+      gl.vertexAttrib4f(5, 0, 0, 0, 0);
+    }
+    if (format & FMT_UV) {
+      gl.enableVertexAttribArray(2);
+      gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, o);
+      o += 8;
+    } else {
+      gl.disableVertexAttribArray(2);
+      gl.vertexAttrib2f(2, 0, 0);
+    }
+    if (format & FMT_COLOR) {
+      gl.enableVertexAttribArray(1);
+      // FMT_COLOR is u32 ABGR; little-endian bytes reach WebGL as RGBA.
+      gl.vertexAttribPointer(1, 4, gl.UNSIGNED_BYTE, true, stride, o);
+      o += 4;
+    } else {
+      gl.disableVertexAttribArray(1);
+      gl.vertexAttrib4f(1, 1, 1, 1, 1);
+    }
+    if (format & FMT_NORMAL) {
+      gl.enableVertexAttribArray(3);
+      gl.vertexAttribPointer(3, 3, gl.FLOAT, false, stride, o);
+      o += 12;
+    } else {
+      gl.disableVertexAttribArray(3);
+      gl.vertexAttrib3f(3, 0, 1, 0);
+    }
     gl.enableVertexAttribArray(0);
-    // a_pos: 3 x f32 at byte offset 4, stride 16.
-    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, V1_STRIDE, 4);
-    gl.enableVertexAttribArray(1);
-    // a_color: 4 unsigned bytes normalized at byte offset 0 (ABGR), stride 16.
-    gl.vertexAttribPointer(1, 4, gl.UNSIGNED_BYTE, true, V1_STRIDE, 0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, o);
   }
 
   var g3d = {
     // Upload a mesh ONCE; the host COPIES the bytes into a VBO(+IBO) and returns
-    // a small int handle. v1 format is POS|COLOR (16-byte stride).
-    uploadMesh: function (vertices, indices, format) {
+    // a small int handle.
+    uploadMesh: function (vertices, indices, format, weightCount) {
+      weightCount = weightCount || 0;
+      var stride = vertexStride(format, weightCount);
+      if (!stride || (format & FMT_POS) === 0) return -1;
       var vbo = gl.createBuffer();
       var vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
       gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
       gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW); // copies the bytes
-      setupV1Attribs();
-      var vertexCount = vertices.byteLength / V1_STRIDE | 0;
+      setupAttribs(format, weightCount);
+      var vertexCount = vertices.byteLength / stride | 0;
       var ibo = null, indexCount = 0;
       if (indices) {
         ibo = gl.createBuffer();
@@ -208,8 +360,27 @@
       }
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, null);
-      meshes.push({ vao: vao, vbo: vbo, ibo: ibo, indexCount: indexCount, vertexCount: vertexCount });
+      meshes.push({
+        vao: vao, vbo: vbo, ibo: ibo, indexCount: indexCount, vertexCount: vertexCount,
+        format: format, weightCount: weightCount, hasNormal: (format & FMT_NORMAL) !== 0,
+      });
       return meshes.length - 1;
+    },
+
+    uploadTexture: function (pixels, w, h, psm) {
+      if (psm !== 3) return -1; // Web preview currently supports the shipped RGBA8888 path.
+      var tex = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w | 0, h | 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(pixels, 0, (w | 0) * (h | 0) * 4));
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      textures.push(tex);
+      return textures.length - 1;
     },
 
     // Release native storage (optional; many games never call it).
@@ -252,6 +423,16 @@
       // SET_CAMERA defaults to identity until the first one is seen this frame.
       identity16(camMat);
       gl.uniformMatrix4fv(uViewProj, false, camMat);
+      currentTexture = -1;
+      currentLighting = false;
+      currentLightCount = 0;
+      fogColor[0] = 0x10 / 255; fogColor[1] = 0x14 / 255; fogColor[2] = 0x1e / 255;
+      gl.uniform1i(uUseTexture, 0);
+      gl.uniform1i(uUseSkin, 0);
+      gl.uniform1i(uUseLighting, 0);
+      gl.uniform1i(uLightCount, 0);
+      gl.uniform1i(uUseFog, 0);
+      gl.uniform3fv(uFogColor, fogColor);
 
       var o = 8;
       for (var r = 0; r < recordCount; r++) {
@@ -270,7 +451,22 @@
           var model = new Float32Array(buffer, base + 8, 16);
           gl.uniformMatrix4fv(uModel, false, model);
           setTint(tint);
-          drawMesh(meshes[handle]);
+          drawMesh(meshes[handle], false);
+        } else if (op === OP_BIND_TEXTURE) {
+          bindTexture(dv.getUint32(base, true));
+        } else if (op === OP_SET_LIGHTS) {
+          setLights(dv, base);
+        } else if (op === OP_SET_FOG) {
+          setFog(dv, base);
+        } else if (op === OP_DRAW_SKINNED) {
+          var sh = dv.getUint32(base, true);
+          var st = dv.getUint32(base + 4, true) >>> 0;
+          var bc = dv.getUint32(base + 8, true) >>> 0;
+          var sm = new Float32Array(buffer, base + 12, 16);
+          gl.uniformMatrix4fv(uModel, false, sm);
+          setTint(st);
+          setBones(dv, base + 12 + 64, bc);
+          drawMesh(meshes[sh], true);
         } else if (op === OP_IMM_TRIS) {
           drawImm(dv, buffer, base, words);
         }
@@ -293,14 +489,111 @@
 
   function drawMesh(m) {
     if (!m) return;
+    setDrawState(m, arguments.length > 1 ? arguments[1] : false);
     gl.bindVertexArray(m.vao);
     if (m.ibo) gl.drawElements(gl.TRIANGLES, m.indexCount, gl.UNSIGNED_SHORT, 0);
     else gl.drawArrays(gl.TRIANGLES, 0, m.vertexCount);
     gl.bindVertexArray(null);
   }
 
+  function setDrawState(m, skinned) {
+    var tex = currentTexture >= 0 ? textures[currentTexture] : null;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(uUseTexture, tex ? 1 : 0);
+    gl.uniform1i(uUseSkin, skinned ? 1 : 0);
+    gl.uniform1i(uWeightCount, skinned ? (m.weightCount || 0) : 0);
+    gl.uniform1i(uUseLighting, currentLighting && m.hasNormal ? 1 : 0);
+  }
+
+  function bindTexture(handle) {
+    if (handle === 0xffffffff || !textures[handle]) {
+      currentTexture = -1;
+      return;
+    }
+    currentTexture = handle | 0;
+  }
+
+  function setLights(dv, base) {
+    currentLighting = true;
+    currentLightCount = Math.min(dv.getUint32(base, true) >>> 0, 4);
+    abgrToVec3(dv.getUint32(base + 4, true) >>> 0, ambientColor, 0);
+    for (var i = 0; i < 4; i++) {
+      if (i < currentLightCount) {
+        var lo = base + 8 + i * 16;
+        abgrToVec3(dv.getUint32(lo, true) >>> 0, lightColors, i * 3);
+        lightDirs[i * 3] = dv.getFloat32(lo + 4, true);
+        lightDirs[i * 3 + 1] = dv.getFloat32(lo + 8, true);
+        lightDirs[i * 3 + 2] = dv.getFloat32(lo + 12, true);
+      } else {
+        lightColors[i * 3] = 0; lightColors[i * 3 + 1] = 0; lightColors[i * 3 + 2] = 0;
+        lightDirs[i * 3] = 0; lightDirs[i * 3 + 1] = -1; lightDirs[i * 3 + 2] = 0;
+      }
+    }
+    gl.uniform1i(uLightCount, currentLightCount);
+    gl.uniform3fv(uAmbient, ambientColor);
+    gl.uniform3fv(uLightDir, lightDirs);
+    gl.uniform3fv(uLightColor, lightColors);
+  }
+
+  function setFog(dv, base) {
+    var color = dv.getUint32(base, true) >>> 0;
+    if (color === 0xffffffff) {
+      gl.uniform1i(uUseFog, 0);
+      return;
+    }
+    abgrToVec3(color, fogColor, 0);
+    gl.uniform3fv(uFogColor, fogColor);
+    gl.uniform1f(uFogNear, dv.getFloat32(base + 4, true));
+    gl.uniform1f(uFogFar, dv.getFloat32(base + 8, true));
+    gl.uniform1i(uUseFog, 1);
+  }
+
+  function setIdentityBones() {
+    for (var i = 0; i < 8; i++) {
+      var o = i * 16;
+      boneMats[o] = 1; boneMats[o + 1] = 0; boneMats[o + 2] = 0; boneMats[o + 3] = 0;
+      boneMats[o + 4] = 0; boneMats[o + 5] = 1; boneMats[o + 6] = 0; boneMats[o + 7] = 0;
+      boneMats[o + 8] = 0; boneMats[o + 9] = 0; boneMats[o + 10] = 1; boneMats[o + 11] = 0;
+      boneMats[o + 12] = 0; boneMats[o + 13] = 0; boneMats[o + 14] = 0; boneMats[o + 15] = 1;
+    }
+  }
+
+  function setBones(dv, base, boneCount) {
+    setIdentityBones();
+    var n = Math.min(boneCount, 8);
+    for (var i = 0; i < n; i++) {
+      var s = base + i * 48;
+      var d = i * 16;
+      boneMats[d] = dv.getFloat32(s, true);
+      boneMats[d + 1] = dv.getFloat32(s + 4, true);
+      boneMats[d + 2] = dv.getFloat32(s + 8, true);
+      boneMats[d + 3] = 0;
+      boneMats[d + 4] = dv.getFloat32(s + 12, true);
+      boneMats[d + 5] = dv.getFloat32(s + 16, true);
+      boneMats[d + 6] = dv.getFloat32(s + 20, true);
+      boneMats[d + 7] = 0;
+      boneMats[d + 8] = dv.getFloat32(s + 24, true);
+      boneMats[d + 9] = dv.getFloat32(s + 28, true);
+      boneMats[d + 10] = dv.getFloat32(s + 32, true);
+      boneMats[d + 11] = 0;
+      boneMats[d + 12] = dv.getFloat32(s + 36, true);
+      boneMats[d + 13] = dv.getFloat32(s + 40, true);
+      boneMats[d + 14] = dv.getFloat32(s + 44, true);
+      boneMats[d + 15] = 1;
+    }
+    gl.uniformMatrix4fv(uBones, false, boneMats);
+  }
+
+  function abgrToVec3(abgr, out, off) {
+    out[off] = (abgr & 255) / 255;
+    out[off + 1] = ((abgr >>> 8) & 255) / 255;
+    out[off + 2] = ((abgr >>> 16) & 255) / 255;
+  }
+
   // OP_IMM_TRIS: inline dynamic geometry. payload = u32 vertexCount, u32 format,
-  // then 4-byte-padded interleaved vertex bytes. v1 supports POS|COLOR only.
+  // then 4-byte-padded interleaved vertex bytes. Used rarely, but supports the
+  // same non-skinned vertex layouts as retained meshes.
   function drawImm(dv, buffer, base, words) {
     var vertexCount = dv.getUint32(base, true);
     var format = dv.getUint32(base + 4, true);
@@ -311,7 +604,9 @@
     gl.bindVertexArray(immVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, immVbo);
     gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+    setupAttribs(format, 0);
     gl.uniformMatrix4fv(uModel, false, IDENTITY16); // IMM verts are world-space
+    gl.uniform1i(uUseSkin, 0);
     gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
     gl.bindVertexArray(null);
   }
