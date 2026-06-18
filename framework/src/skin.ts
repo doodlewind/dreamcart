@@ -125,6 +125,9 @@ export class SkinnedMesh {
   // per-frame local joint matrices.
   private skinHandle = -2;
   private localMatrices = new Float32Array(0);
+  // Native-sampler state: each clip uploaded once -> its host clip handle (cached
+  // here; -1 caches an upload failure so we fall back to the JS sampler for it).
+  private clipHandles = new Map<BakedClip, number>();
 
   /**
    * Sample the current pose and draw the character. On a host with `uploadSkin`,
@@ -138,6 +141,19 @@ export class SkinnedMesh {
     if (g && g.uploadSkin) {
       if (this.skinHandle === -2) this.skinHandle = this.uploadNativeSkin(g);
       if (this.skinHandle >= 0) {
+        // Fully-native path (PSP): the host SAMPLES the clip too. JS ships only
+        // the clip phase; the per-joint sampler (~12 ms/frame in QuickJS for 24
+        // joints) never runs here. JS still owns which clip plays + the phase.
+        if (g.uploadClip) {
+          const ch = this.clipHandleFor(g, this.player.clip);
+          if (ch >= 0) {
+            const d = this.player.duration;
+            const phase = d > 0 ? this.player.time / d : 0;
+            enc.drawSkinAnim(this.skinHandle, ch, model, phase, tint);
+            return;
+          }
+        }
+        // Native skin, JS sampler (host has uploadSkin but not uploadClip).
         this.player.sample();
         this.composeLocals();
         enc.drawSkin(this.skinHandle, model, this.localMatrices, this.jointCount, tint);
@@ -181,6 +197,37 @@ export class SkinnedMesh {
     }
     this.localMatrices = new Float32Array(jc * 16);
     return g.uploadSkin!(buf);
+  }
+
+  // Return the host clip handle for `clip`, uploading (and caching) it on first
+  // use. A cached -1 (upload failed / too large) means "use the JS sampler".
+  private clipHandleFor(g: NonNullable<typeof globalThis.g3d>, clip: BakedClip): number {
+    let ch = this.clipHandles.get(clip);
+    if (ch === undefined) {
+      ch = this.uploadClip(g, clip);
+      this.clipHandles.set(clip, ch);
+    }
+    return ch;
+  }
+
+  // Upload one baked clip's flat T/R/S frame tables to the native sampler once.
+  // Buffer layout mirrors gfx3d.rs js_g3d_upload_clip / host3d.ts uploadClip:
+  // u32 jointCount, u32 frameCount, then frameCount×jointCount×{3 T, 4 R, 3 S} f32.
+  private uploadClip(g: NonNullable<typeof globalThis.g3d>, clip: BakedClip): number {
+    const jc = this.jointCount;
+    const fc = clip.frameCount;
+    const nt = fc * jc * 3;
+    const nr = fc * jc * 4;
+    const ns = fc * jc * 3;
+    const buf = new ArrayBuffer((2 + nt + nr + ns) * 4);
+    const dv = new DataView(buf);
+    let o = 0;
+    dv.setUint32(o, jc, true); o += 4;
+    dv.setUint32(o, fc, true); o += 4;
+    for (let i = 0; i < nt; i++) { dv.setFloat32(o, clip.t[i], true); o += 4; }
+    for (let i = 0; i < nr; i++) { dv.setFloat32(o, clip.r[i], true); o += 4; }
+    for (let i = 0; i < ns; i++) { dv.setFloat32(o, clip.s[i], true); o += 4; }
+    return g.uploadClip!(buf);
   }
 
   // Compose the per-joint LOCAL matrices from the sampled TRS straight into the

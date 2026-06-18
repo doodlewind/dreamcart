@@ -58,6 +58,7 @@ export const OP_SET_LIGHTS = 0x0005; // payload: u32 count, u32 ambientABGR, cou
 export const OP_DRAW_SKINNED = 0x0006; // OP_DRAW + u32 boneCount, then boneCount×12 f32 (3×4 bone matrices)
 export const OP_SET_FOG = 0x0007; // payload: u32 colorABGR, f32 near, f32 far (0xffffffff color = disable)
 export const OP_DRAW_SKIN = 0x0008; // native skin: u32 skinHandle, u32 tint, u32 jointCount, 16 f32 model, jointCount×16 f32 local
+export const OP_DRAW_SKIN_ANIM = 0x0009; // native skin + native sampler: u32 skinHandle, u32 clipHandle, u32 tint, f32 phase, 16 f32 model
 
 // Vertex-format bitfield. v1 ships POS|COLOR; v2 adds NORMAL/UV/WEIGHTS.
 // IMPORTANT: bytes are ALWAYS interleaved in the PSP GE's mandated component
@@ -264,6 +265,35 @@ export class CommandEncoder {
     this.writeMat(model);
     this.bytes.set(new Uint8Array(local.buffer, local.byteOffset, jointCount * 16 * 4), this.pos);
     this.pos += jointCount * 16 * 4;
+    this.records++;
+  }
+
+  /**
+   * Emit OP_DRAW_SKIN_ANIM: a retained native-skin character drawn from a retained
+   * clip, sampled NATIVELY. JS ships only the clip `phase` ∈ [0,1) — the host
+   * samples (lerp/nlerp), composes locals, walks the hierarchy, computes bones and
+   * draws, all in native code. Removes the per-joint sampler (the QuickJS
+   * bottleneck) from the frame. Used via the host's `uploadClip` capability;
+   * SkinnedMesh falls back to drawSkin (JS sampler) on hosts without it.
+   */
+  drawSkinAnim(
+    skinHandle: number,
+    clipHandle: number,
+    model: ArrayLike<number>,
+    phase: number,
+    tintABGR = NO_TINT,
+  ): void {
+    const words = 4 + 16; // skinHandle, clipHandle, tint, phase, + 16 model
+    this.ensure(4 + words * 4);
+    this.view.setUint16(this.pos, OP_DRAW_SKIN_ANIM, true);
+    this.view.setUint16(this.pos + 2, words, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, skinHandle >>> 0, true);
+    this.view.setUint32(this.pos + 4, clipHandle >>> 0, true);
+    this.view.setUint32(this.pos + 8, tintABGR >>> 0, true);
+    this.view.setFloat32(this.pos + 12, phase, true);
+    this.pos += 16;
+    this.writeMat(model);
     this.records++;
   }
 

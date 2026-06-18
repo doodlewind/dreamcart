@@ -64,6 +64,7 @@ const OP_SET_LIGHTS: u32 = 0x0005;
 const OP_DRAW_SKINNED: u32 = 0x0006;
 const OP_SET_FOG: u32 = 0x0007;
 const OP_DRAW_SKIN: u32 = 0x0008;
+const OP_DRAW_SKIN_ANIM: u32 = 0x0009;
 
 // Vertex-format bitfield. The GE interleaves components in a FIXED order
 // [weights][uv][color][normal][position] regardless of bit value.
@@ -325,6 +326,10 @@ struct SkinEntry {
 static mut SKINS: Option<Vec<SkinEntry>> = None;
 // Scratch world matrices for the hierarchy pass (single-threaded frame loop).
 static mut SKIN_WORLD: [f32; MAX_JOINTS * 16] = [0.0; MAX_JOINTS * 16];
+// Scratch per-joint LOCAL matrices, filled by the native clip sampler before the
+// hierarchy pass (OP_DRAW_SKIN_ANIM). Distinct from SKIN_WORLD so the sampler and
+// the hierarchy accumulation don't alias.
+static mut SKIN_LOCAL: [f32; MAX_JOINTS * 16] = [0.0; MAX_JOINTS * 16];
 
 #[inline]
 unsafe fn skins() -> &'static mut Vec<SkinEntry> {
@@ -332,6 +337,47 @@ unsafe fn skins() -> &'static mut Vec<SkinEntry> {
         SKINS = Some(Vec::new());
     }
     SKINS.as_mut().unwrap()
+}
+
+// A retained animation clip: a fixed-fps table of per-joint local TRS, uploaded
+// once (uploadClip). OP_DRAW_SKIN_ANIM samples it NATIVELY (lerp T/S, nlerp R),
+// composes the per-joint local matrices, then runs the SAME hierarchy + bone +
+// draw as OP_DRAW_SKIN — moving the per-joint sampler (~12 ms/frame for 24 joints
+// of Float32Array math) off the interpreted QuickJS core. JS only tracks which
+// clip plays and the clip phase; the mechanical interpolation runs here.
+struct ClipEntry {
+    joint_count: usize,
+    frame_count: usize,
+    t: Vec<f32>, // frame_count × joint_count × 3
+    r: Vec<f32>, // frame_count × joint_count × 4
+    s: Vec<f32>, // frame_count × joint_count × 3
+}
+static mut CLIPS: Option<Vec<ClipEntry>> = None;
+
+#[inline]
+unsafe fn clips() -> &'static mut Vec<ClipEntry> {
+    if CLIPS.is_none() {
+        CLIPS = Some(Vec::new());
+    }
+    CLIPS.as_mut().unwrap()
+}
+
+// Fast reciprocal square root (two Newton iterations) for nlerp normalization,
+// avoiding a libm/intrinsics dependency in this no_std crate. ~1e-4 relative
+// error — visually exact for quaternion interpolation. (OP_DRAW_SKIN_ANIM is a
+// PSP-only fast path, never compared against the byte-exact JS golden oracle, so
+// it need only match visually, not bit-for-bit, with anim.ts's dsqrt path.)
+#[inline]
+fn rsqrt(x: f32) -> f32 {
+    if x <= 0.0 {
+        return 0.0;
+    }
+    let i = x.to_bits();
+    let i = 0x5f37_59df - (i >> 1);
+    let mut y = f32::from_bits(i);
+    y = y * (1.5 - 0.5 * x * y * y);
+    y = y * (1.5 - 0.5 * x * y * y);
+    y
 }
 
 /// Read the i-th JS argument as an i32 (0 if absent / not convertible). Mirrors
@@ -638,6 +684,61 @@ unsafe extern "C" fn js_g3d_upload_skin(
     JS_NewInt32(ctx, handle)
 }
 
+/// `g3d.uploadClip(buffer)` -> int handle. Retain one baked animation clip so the
+/// native side can sample it (OP_DRAW_SKIN_ANIM) instead of QuickJS. Buffer layout:
+/// u32 jointCount, u32 frameCount, then frameCount×jointCount×3 f32 T,
+/// frameCount×jointCount×4 f32 R, frameCount×jointCount×3 f32 S (the BakedClip's
+/// flat t/r/s arrays concatenated). Mirrors skin.ts uploadClip / host3d.ts.
+unsafe extern "C" fn js_g3d_upload_clip(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 1 {
+        return JS_NewInt32(ctx, -1);
+    }
+    let mut len: size_t = 0;
+    let p = JS_GetArrayBuffer(ctx, &mut len, *argv.offset(0));
+    if p.is_null() {
+        return JS_NewInt32(ctx, -1);
+    }
+    let mut o = 0usize;
+    let joint_count = read_u32(p, o) as usize;
+    o += 4;
+    let frame_count = read_u32(p, o) as usize;
+    o += 4;
+    if joint_count == 0 || joint_count > MAX_JOINTS || frame_count == 0 {
+        return JS_NewInt32(ctx, -1);
+    }
+    let nt = frame_count * joint_count * 3;
+    let nr = frame_count * joint_count * 4;
+    let ns = frame_count * joint_count * 3;
+    // Reject a short/corrupt buffer rather than reading out of bounds.
+    if (len as usize) < (2 + nt + nr + ns) * 4 {
+        return JS_NewInt32(ctx, -1);
+    }
+    let mut t = Vec::with_capacity(nt);
+    for _ in 0..nt {
+        t.push(read_f32(p, o));
+        o += 4;
+    }
+    let mut r = Vec::with_capacity(nr);
+    for _ in 0..nr {
+        r.push(read_f32(p, o));
+        o += 4;
+    }
+    let mut s = Vec::with_capacity(ns);
+    for _ in 0..ns {
+        s.push(read_f32(p, o));
+        o += 4;
+    }
+    let table = clips();
+    let handle = table.len() as i32;
+    table.push(ClipEntry { joint_count, frame_count, t, r, s });
+    JS_NewInt32(ctx, handle)
+}
+
 /// `g3d.submit(buffer: ArrayBuffer, byteLength)` -> void. THE per-frame call.
 ///
 /// Parses the one little-endian command buffer, clears color+depth, draws every
@@ -686,6 +787,7 @@ unsafe extern "C" fn js_g3d_submit(
     let table = meshes();
     let tex_table = textures();
     let skin_table = skins();
+    let clip_table = clips();
 
     // --- Replay records. ---
     let mut o = 8usize; // past the 8-byte header
@@ -875,6 +977,159 @@ unsafe extern "C" fn js_g3d_submit(
                     ib.copy_from_slice(&skin.inverse_bind[g * 16..g * 16 + 16]);
                     // bone = jointWorld · inverseBind; align_mat packs it and
                     // sceGuBoneMatrix reads each column's xyz (w-row ignored).
+                    let bm = align_mat(&mat_mul4(&wm, &ib));
+                    sys::sceGuBoneMatrix(slot as u32, &bm.0);
+                    slot += 1;
+                }
+                sys::sceGumDrawArray(
+                    GuPrimitive::Triangles,
+                    mesh.vtype,
+                    mesh.count,
+                    null(),
+                    mesh.bytes.as_ptr() as *const c_void,
+                );
+            }
+        } else if op == OP_DRAW_SKIN_ANIM {
+            // payload = u32 skinHandle, u32 clipHandle, u32 tintABGR, f32 phase,
+            // 16 f32 model. Native SAMPLES the clip (lerp T/S, nlerp R) into the
+            // per-joint local matrices, then runs the SAME hierarchy + bone-batch
+            // + draw as OP_DRAW_SKIN. JS ships only the phase (1 float) instead of
+            // 24×16 sampled matrices — and, crucially, never runs the per-joint
+            // sampler in QuickJS (the ~12 ms/frame bottleneck).
+            let sh = read_u32(buf, base) as i32;
+            let ch = read_u32(buf, base + 4) as i32;
+            let tint = read_u32(buf, base + 8);
+            let phase = read_f32(buf, base + 12);
+            let model = read_matrix(buf, base + 16);
+            if sh < 0 || (sh as usize) >= skin_table.len() {
+                continue;
+            }
+            if ch < 0 || (ch as usize) >= clip_table.len() {
+                continue;
+            }
+            let skin = &skin_table[sh as usize];
+            let clip = &clip_table[ch as usize];
+            let jc = skin.joint_count;
+            if jc != clip.joint_count || jc > MAX_JOINTS {
+                continue;
+            }
+
+            // --- sample the clip into SKIN_LOCAL (mirrors anim.ts sample() +
+            // skin.ts composeLocals(), inclusive-endpoint frames, nlerp shorter
+            // arc). phase ∈ [0,1) maps to a fractional frame in [0, frameCount-1).
+            let fc = clip.frame_count;
+            let fidx = if fc > 1 { phase * (fc as f32 - 1.0) } else { 0.0 };
+            let mut f0 = fidx as i32; // phase ≥ 0 -> truncation == floor
+            if f0 < 0 {
+                f0 = 0;
+            }
+            let max_f0 = if fc >= 2 { (fc - 2) as i32 } else { 0 };
+            if f0 > max_f0 {
+                f0 = max_f0;
+            }
+            let f1 = if fc >= 2 { f0 + 1 } else { 0 };
+            let u = fidx - f0 as f32;
+            let b0 = f0 as usize * jc;
+            let b1 = f1 as usize * jc;
+            let local = &mut SKIN_LOCAL;
+            for j in 0..jc {
+                let o3a = (b0 + j) * 3;
+                let o3b = (b1 + j) * 3;
+                let o4a = (b0 + j) * 4;
+                let o4b = (b1 + j) * 4;
+                // position + scale: component lerp.
+                let tx = clip.t[o3a] + (clip.t[o3b] - clip.t[o3a]) * u;
+                let ty = clip.t[o3a + 1] + (clip.t[o3b + 1] - clip.t[o3a + 1]) * u;
+                let tz = clip.t[o3a + 2] + (clip.t[o3b + 2] - clip.t[o3a + 2]) * u;
+                let sx = clip.s[o3a] + (clip.s[o3b] - clip.s[o3a]) * u;
+                let sy = clip.s[o3a + 1] + (clip.s[o3b + 1] - clip.s[o3a + 1]) * u;
+                let sz = clip.s[o3a + 2] + (clip.s[o3b + 2] - clip.s[o3a + 2]) * u;
+                // rotation: nlerp (shorter arc).
+                let ax = clip.r[o4a];
+                let ay = clip.r[o4a + 1];
+                let az = clip.r[o4a + 2];
+                let aw = clip.r[o4a + 3];
+                let mut bx = clip.r[o4b];
+                let mut by = clip.r[o4b + 1];
+                let mut bz = clip.r[o4b + 2];
+                let mut bw = clip.r[o4b + 3];
+                if ax * bx + ay * by + az * bz + aw * bw < 0.0 {
+                    bx = -bx;
+                    by = -by;
+                    bz = -bz;
+                    bw = -bw;
+                }
+                let mut qx = ax + (bx - ax) * u;
+                let mut qy = ay + (by - ay) * u;
+                let mut qz = az + (bz - az) * u;
+                let mut qw = aw + (bw - aw) * u;
+                let inv = rsqrt(qx * qx + qy * qy + qz * qz + qw * qw);
+                qx *= inv;
+                qy *= inv;
+                qz *= inv;
+                qw *= inv;
+                // quaternion -> column-major matrix, scaled (mirror composeLocals).
+                let xx = qx * qx;
+                let yy = qy * qy;
+                let zz = qz * qz;
+                let xy = qx * qy;
+                let xz = qx * qz;
+                let yz = qy * qz;
+                let wx = qw * qx;
+                let wy = qw * qy;
+                let wz = qw * qz;
+                let o = j * 16;
+                local[o] = (1.0 - 2.0 * (yy + zz)) * sx;
+                local[o + 1] = 2.0 * (xy + wz) * sx;
+                local[o + 2] = 2.0 * (xz - wy) * sx;
+                local[o + 3] = 0.0;
+                local[o + 4] = 2.0 * (xy - wz) * sy;
+                local[o + 5] = (1.0 - 2.0 * (xx + zz)) * sy;
+                local[o + 6] = 2.0 * (yz + wx) * sy;
+                local[o + 7] = 0.0;
+                local[o + 8] = 2.0 * (xz + wy) * sz;
+                local[o + 9] = 2.0 * (yz - wx) * sz;
+                local[o + 10] = (1.0 - 2.0 * (xx + yy)) * sz;
+                local[o + 11] = 0.0;
+                local[o + 12] = tx;
+                local[o + 13] = ty;
+                local[o + 14] = tz;
+                local[o + 15] = 1.0;
+            }
+
+            // --- hierarchy: world[i] = parent<0 ? local[i] : world[parent]·local[i]
+            let world = &mut SKIN_WORLD;
+            for i in 0..jc {
+                let parent = skin.parents[i];
+                if parent < 0 {
+                    world[i * 16..i * 16 + 16].copy_from_slice(&local[i * 16..i * 16 + 16]);
+                } else {
+                    let mut pw = [0f32; 16];
+                    pw.copy_from_slice(&world[(parent as usize) * 16..(parent as usize) * 16 + 16]);
+                    let mut lc = [0f32; 16];
+                    lc.copy_from_slice(&local[i * 16..i * 16 + 16]);
+                    let w = mat_mul4(&pw, &lc);
+                    world[i * 16..i * 16 + 16].copy_from_slice(&w);
+                }
+            }
+            sys::sceGumMatrixMode(MatrixMode::Model);
+            sys::sceGumLoadMatrix(&model.0);
+            sys::sceGuColor(if tint == NO_TINT { 0xffff_ffff } else { tint });
+            for b in skin.batches.iter() {
+                if b.mesh < 0 || (b.mesh as usize) >= table.len() {
+                    continue;
+                }
+                let mesh = &table[b.mesh as usize];
+                if mesh.count == 0 {
+                    continue;
+                }
+                let mut slot = 0i32;
+                while slot < b.bone_count && slot < 8 {
+                    let g = b.joints[slot as usize] as usize;
+                    let mut wm = [0f32; 16];
+                    wm.copy_from_slice(&world[g * 16..g * 16 + 16]);
+                    let mut ib = [0f32; 16];
+                    ib.copy_from_slice(&skin.inverse_bind[g * 16..g * 16 + 16]);
                     let bm = align_mat(&mat_mul4(&wm, &ib));
                     sys::sceGuBoneMatrix(slot as u32, &bm.0);
                     slot += 1;
@@ -1206,6 +1461,16 @@ pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
         0,
     );
     JS_SetPropertyStr(ctx, g3d, b"uploadSkin\0".as_ptr() as *const _, f_upload_skin);
+
+    let f_upload_clip = JS_NewCFunction2(
+        ctx,
+        Some(js_g3d_upload_clip),
+        b"uploadClip\0".as_ptr() as *const _,
+        1,
+        JS_CFUNC_generic,
+        0,
+    );
+    JS_SetPropertyStr(ctx, g3d, b"uploadClip\0".as_ptr() as *const _, f_upload_clip);
 
     let f_free = JS_NewCFunction2(
         ctx,

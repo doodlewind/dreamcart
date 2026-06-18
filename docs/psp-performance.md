@@ -14,6 +14,7 @@ from the actual debugging session that took the advanced-3D demos from 2–6 FPS
 | 4 | **Allocation-free hot math** (inline quat→matrix) | Fox 20→30 | skinning sample/compose |
 | 5 | **Native text** (`gfx.drawText`) | HUD-heavy 15→30 | all 2D text |
 | 6 | **`mergeMeshes`** (one draw for static scenery) | car3d draws 35→6 | instanced scenery |
+| 7 | **Native animation sampler** (lerp/nlerp in Rust) | Fox **30→60** | animated skinned characters |
 
 The allocator (#1) is the headline: it silently capped *every* game and masked
 everything else. Find it first.
@@ -111,6 +112,48 @@ result. For a per-frame, per-joint hot loop, inline it — write the quaternion�
 and the nlerp **straight into a reused typed array, zero object allocations**. Keep
 the inlined arithmetic byte-identical (same f64 ops, same order) so the JS-fallback
 golden still passes. Fox 32ms → 16ms (20 → 30 FPS).
+
+## #7 — When allocation-free *still* isn't enough, move the loop itself native
+
+Even after #4b made the sampler zero-allocation, walk3d/skin3d capped at **30 FPS**.
+The `engine.prof` HUD said `r3d = 16.4 ms` — the whole frame budget. So I split
+`r3d` one level finer (temporary `now()` calls around the emit vs the native
+`submit`, and around `sample()`+`composeLocals()` vs the `drawSkin` encode):
+
+```
+r3d 16418   emit 15587   submit 298      <- native submit is basically free
+            sample 12136   drawSkin 504   <- the sampler is the entire wall
+```
+
+**12 ms is the per-joint sampler** — `player.sample()` (lerp T/S + nlerp R) plus
+`composeLocals()` (quat→matrix) for **24 joints**. That's ~505 µs *per joint* for
+~60 float ops. It isn't arithmetic cost; it's QuickJS's per-access overhead on
+`Float32Array` reads/writes, ~1400 of them per frame, interpreted on a 333 MHz core.
+**There is no JS-side fix** — the math is already inlined and allocation-free; the
+cost is the interpreter touching typed arrays at all.
+
+So move the loop itself. `g3d.uploadClip(buffer)` retains a baked clip (the flat
+T/R/S frame tables) once; the new `OP_DRAW_SKIN_ANIM` record ships only the **clip
+phase** (one float). Native samples the two bracketing frames (lerp/nlerp), composes
+the per-joint local matrices, then runs the **same** hierarchy → bone → draw as
+`OP_DRAW_SKIN`. Per frame, QuickJS now does essentially nothing for the character:
+no sampler, no 24×16 matrix upload — just `enc.drawSkinAnim(skin, clip, model,
+phase, tint)`. Result: `r3d 16.4 → 4.5 ms`, **30 → 60 FPS** on both walk3d and skin3d.
+
+**The boundary, refined again.** Is sampling a clip "animation logic" (JS) or
+"plumbing" (native)? Split it where the *decision* is: **which** clip plays, the
+phase/time, blend choices, locomotion-tied playback rate — that stays in JS
+(`SkinnedMesh.play`, `AnimationPlayer.advance`, the game's `update`). The mechanical
+interpolation *between two baked frames given a phase* is plumbing, exactly like the
+bone math in #3 — it moves native. JS still owns every animation *decision*; native
+just does the per-element number-crunching the interpreter is too slow for.
+
+One subtlety: native has no `libm`, and nlerp needs a normalize. Rather than pull in
+a dependency or an intrinsic, the sampler uses a self-contained fast reciprocal
+sqrt (two Newton iterations, ~1e-4 error). `OP_DRAW_SKIN_ANIM` is a PSP-only fast
+path — it never faces the byte-exact golden oracle (raster3d/Web/3DS have no
+`uploadClip`, so they fall back to the JS sampler + `OP_DRAW_SKIN`/`OP_DRAW_SKINNED`)
+— so it need only match *visually*, not bit-for-bit, with `anim.ts`. Verify on device.
 
 ## #6 — Fewer, bigger draws beat many small ones
 

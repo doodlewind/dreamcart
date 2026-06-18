@@ -36,6 +36,15 @@ export interface RawG3d {
    * it: SkinnedMesh falls back to JS bone math + OP_DRAW_SKINNED.
    */
   uploadSkin?(buffer: ArrayBuffer): number;
+  /**
+   * Optional: retain a baked animation clip ONCE so the host can SAMPLE it
+   * natively (lerp/nlerp), instead of JS. `buffer` packs jointCount, frameCount,
+   * then the clip's flat T/R/S frame tables (see skin.ts uploadClip). Per frame
+   * the OP_DRAW_SKIN_ANIM record then ships only the clip phase — the per-joint
+   * sampler (the QuickJS bottleneck) runs in native code. Hosts without it:
+   * SkinnedMesh falls back to the JS sampler + OP_DRAW_SKIN / OP_DRAW_SKINNED.
+   */
+  uploadClip?(buffer: ArrayBuffer): number;
   /** Release native storage (optional; many games never call it). */
   freeMesh(handle: number): void;
   /**
