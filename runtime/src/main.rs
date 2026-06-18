@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![allow(static_mut_refs)]
 
 //! psp-js runtime: boots QuickJS, exposes a tiny native 2D graphics + input API
 //! to JavaScript, evaluates the PSPJS_GAME-selected file (see build.rs), then
@@ -124,7 +125,7 @@ unsafe fn run() {
 
 /// Initialize the GU for double-buffered 480x272 PSM8888 rendering.
 unsafe fn init_graphics() {
-    let mut allocator = get_vram_allocator().unwrap();
+    let allocator = get_vram_allocator().unwrap();
     let fbp0 = allocator
         .alloc_texture_pixels(BUF_WIDTH, SCREEN_HEIGHT, TexturePixelFormat::Psm8888)
         .as_mut_ptr_from_zero();
