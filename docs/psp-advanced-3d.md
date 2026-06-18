@@ -44,7 +44,7 @@ to budget.
 ### Per-scene verdict
 
 - **Walking person** (skinned): Khronos **Fox** (576 tris, 24 joints → ~3–4 bone batches) or
-  **CesiumMan** (4672 tris, 19 joints, *has normals*). Skinned in HW. → **60 fps achievable.**
+  three.js **Soldier** (larger rig, multiple skinned primitives). Skinned in HW. → **60 fps achievable.**
 - **Car** (rigid): Kenney **Car Kit** body + 4 wheel meshes spun/steered by per-frame model
   matrices in JS. No skinning; exercises the *texture* path. → **60 fps.**
 - **Outdoor** (lit + instanced): JS heightmap terrain + a few hundred instanced Kenney **Nature
@@ -243,8 +243,8 @@ Add both to `devDependencies`; add bake invocations to the `bake` script in `pac
 1. **Parse** mesh attributes; **expand non-indexed** (matches the host's draw path) per triangle.
 2. **Bone-batch partition** (the key technique): partition triangles into groups each touching ≤ 8
    (ideally ≤ 4) unique joints; remap each group's `JOINTS_0` to local bone slots 0..k-1; emit one
-   vertex buffer + a `jointTable` (local→global joint) per batch. Fox(24)→~3–4 batches,
-   CesiumMan(19)→~3. *Partition by triangle, not vertex* (a tri whose verts span > 8 joints must be
+   vertex buffer + a `jointTable` (local→global joint) per batch. Fox(24)→~3–4 batches;
+   larger rigs split into more batches. *Partition by triangle, not vertex* (a tri whose verts span > 8 joints must be
    assigned to one batch pulling in those joints).
 3. **Vertex interleave in GE order** `[weights][uv][color][normal][pos]`, padded to 4. PoC skinned
    vertex: `WEIGHTS4 (f32) + UV (f32×2) + COLOR (u32) + NORMAL? + POS (f32×3)`. Lean
@@ -266,7 +266,7 @@ Add both to `devDependencies`; add bake invocations to the `bake` script in `pac
 | Scene | Asset | License | URL | Counts |
 |---|---|---|---|---|
 | **Person (primary)** | Khronos **Fox** | **CC-BY-4.0** (PixelMannen + tomkranis + Asobo/scurest — **attribution required**) | `KhronosGroup/glTF-Sample-Assets` `Models/Fox` | 576 tris, 1728 verts, **24 joints**, 3 clips (Survey/Walk/Run), JOINTS_0 u16×4, WEIGHTS_0 f32×4, **no NORMAL**, 1024² PNG |
-| **Person (alt, has normals)** | Khronos **CesiumMan** | Khronos (royalty-free) | same repo `Models/CesiumMan` | 4672 tris, 3273 verts, **19 joints**, 1 walk clip, **HAS NORMAL** → better for lighting |
+| **Person (tactical demo)** | three.js **Soldier** | **MIT** | `three.js/examples/models/gltf/Soldier.glb` | 11376 tris after bake, **49 joints**, Idle/Walk/Run/TPose clips, split across multiple skinned primitives |
 | **Car** | Kenney **Car Kit** (sedan + 8 wheels) | **CC0 1.0** (no attribution) | `kenney.nl/assets/car-kit` | low-poly, ~600 tris body / ~200 tris/wheel, **one shared palette texture** |
 | **Outdoor props** | Kenney **Nature Kit** (trees/rocks/plants) | **CC0 1.0** | `kenney.nl/assets/nature-kit` | 330+ low-poly, shared palette texture |
 
@@ -276,8 +276,8 @@ Fox is CC-BY (not CC0)** — preserve the credits string in an in-repo `CREDITS`
 on-screen "about" credit. Prefer CC0 (Kenney/Quaternius) elsewhere to avoid attribution obligations.
 
 > Decision: **start the skinned PoC on the Fox** (lowest poly, 3 clips), shipped **unlit**
-> (vertex-color white + texture) since it has no normals. Switch to **CesiumMan** when hardware
-> lighting on the character is wanted (compute-normals-at-bake is the alternative).
+> (vertex-color white + texture) since it has no normals. For richer humanoid demos, use
+> the MIT Soldier asset and keep character lighting unlit unless normals are baked.
 
 ---
 
@@ -397,7 +397,8 @@ batch's vertex buffer (`g3d.uploadMesh`) and the texture (`g3d.uploadTexture`) o
 
 ### 6.1 Walking person — *proves HW skinning end-to-end*
 
-- **Asset:** Fox (576 tris, 24 joints → ~3–4 bone batches; unlit + textured) or CesiumMan (lit).
+- **Asset:** Fox (576 tris, 24 joints → ~3–4 bone batches; unlit + textured), with Soldier as
+  the higher-detail humanoid demo asset.
 - **Animated:** bone matrices only (Walk clip sampled in JS). **Static:** the mesh geometry (retained).
 - **Camera:** JS chase-cam. **Logic:** heading from d-pad, forward speed tied to clip phase (no foot
   sliding), `(time % duration)` loop.
@@ -482,7 +483,7 @@ so PSP can lead). The `.dc3d` golden gates cross-host correctness regardless of 
 **Hard risks (ranked):**
 
 1. **No bone palette → bake-time partitioning is mandatory.** Any rig > 8 joints (Fox 24,
-   CesiumMan 19) MUST be split into ≤ 8-bone batches with locally-remapped weights, or the GE draws
+   Soldier 49) MUST be split into ≤ 8-bone batches with locally-remapped weights, or the GE draws
    garbage. This is non-trivial bake logic and the single biggest schedule risk. *Mitigation:* the
    M4 spike validates one ≤ 4-bone batch first; partition **by triangle**.
 2. **GE vertex order vs wire bit order.** Interleaving in FMT-bit order instead of GE order
@@ -511,6 +512,6 @@ so PSP can lead). The `.dc3d` golden gates cross-host correctness regardless of 
 - Is `WEIGHT_8BIT` (4 B weights, smaller vertices) worth the precision loss for these clips, vs
   `WEIGHT_32BITF`? (Try after M5 lands with 32-bit.)
 - Should terrain switch to **indexed** draws to cut RAM, or stay chunked + non-indexed?
-- For lit characters, **compute normals at bake** for the Fox, or just use CesiumMan (ships normals)?
+- For lit characters, should normals be computed at bake time, or should character demos stay unlit?
 - 60 fps for the combined 3-scene stress test under skinning+lighting+texturing may be fill-rate
   bound — treat 30 fps as primary, 60 fps as the max-out experiment.

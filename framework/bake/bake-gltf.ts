@@ -696,27 +696,6 @@ async function bakeFox(): Promise<void> {
   });
 }
 
-async function bakeCesiumMan(): Promise<void> {
-  await bakeSkinned({
-    key: 'cesium-man',
-    constName: 'CESIUM_MAN',
-    typePrefix: 'CesiumMan',
-    sourceLabel: 'Khronos Cesium Man (CC-BY-4.0 with trademark limitations)',
-    glbPath: 'cesium-man/CesiumMan.glb',
-    texturePath: 'cesium-man/CesiumMan.png',
-    textureSize: 256,
-    scale: 4.3,
-    fps: 24,
-    boneLimit: 8,
-    defaultClipName: 'Walk',
-    headerLines: [
-      'Cesium Man © 2017, Cesium, CC BY 4.0 International with trademark limitations.',
-      'Embedded JPEG texture was extracted and converted to PNG for this deterministic bake.',
-      'Attribution REQUIRED — see assets/vendor/CREDITS.md.',
-    ],
-  });
-}
-
 async function bakeThreeSoldier(): Promise<void> {
   await bakeSkinned({
     key: 'three-soldier',
@@ -742,6 +721,5 @@ console.log('bake-gltf: baking vendored glTF assets...');
 await bakeNature();
 await bakeCar();
 await bakeFox();
-await bakeCesiumMan();
 await bakeThreeSoldier();
 console.log('bake-gltf: done.');
