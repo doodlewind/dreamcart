@@ -81,9 +81,18 @@ export interface RawG3d {
    * (column-major) + 3 eye + 1 cull-far. Clears, culls + draws every static
    * instance, then draws the optional per-frame RIGID DYNAMIC instances in `dyn`
    * (`dynCount` of them, each 76 bytes: i32 handle, i32 tex, u32 tint, 16 f32
-   * model) without culling. Returns the number of instances drawn.
+   * model) without culling. `post` is an optional sealed DC3D command buffer for
+   * extra dynamic draws that must share the same clear/depth pass, currently used
+   * for native skinned characters via OP_DRAW_SKIN_ANIM. Returns the number of
+   * retained/static + rigid dynamic instances drawn; post draws are not counted.
    */
-  sceneRender?(camera: ArrayBuffer, dyn?: ArrayBuffer | null, dynCount?: number): number;
+  sceneRender?(
+    camera: ArrayBuffer,
+    dyn?: ArrayBuffer | null,
+    dynCount?: number,
+    post?: ArrayBuffer | null,
+    postByteLength?: number,
+  ): number;
 }
 
 declare global {

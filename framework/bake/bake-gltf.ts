@@ -328,14 +328,11 @@ async function bakeCar(): Promise<void> {
 }
 
 // ===========================================================================
-// fox: skinned, animated character (WEIGHTS|UV|COLOR|POS, 36 B, no normal).
-// The PSP GE has no bone-index palette, so the mesh is partitioned BY TRIANGLE
-// into batches each touching ≤ BONE_LIMIT joints, with weights remapped to local
-// bone slots. Each clip is resampled to a fixed fps as per-joint local TRS.
+// skinned, animated characters (WEIGHTS|UV|COLOR|POS, no normal).
+// The PSP GE has no bone-index palette, so each mesh is partitioned BY TRIANGLE
+// into batches touching ≤ boneLimit joints, with weights remapped to local slots.
+// Each clip is resampled to a fixed fps as per-joint local TRS.
 // ===========================================================================
-const FOX_SCALE = 0.03;
-const FOX_FPS = 24;
-const BONE_LIMIT = 4; // safe baseline (GE reliably blends ≤4); 8 is a perf option
 
 // f32/i8 typed array -> base64 of its raw bytes.
 function abEmit(arr: Float32Array | Int8Array | Uint8Array): string {
@@ -373,12 +370,32 @@ function sampleChannel(times: Float32Array, values: Float32Array, n: number, t: 
   else for (let k = 0; k < n; k++) out[k] = a[k] + (b[k] - a[k]) * u;
 }
 
-async function bakeFox(): Promise<void> {
+interface SkinnedBakeConfig {
+  key: string;
+  constName: string;
+  typePrefix: string;
+  sourceLabel: string;
+  glbPath: string;
+  texturePath: string;
+  textureSize: number;
+  scale: number;
+  fps: number;
+  boneLimit: 4 | 8;
+  defaultClipName?: string;
+  headerLines: string[];
+}
+
+function propKey(name: string): string {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name);
+}
+
+async function bakeSkinned(config: SkinnedBakeConfig): Promise<void> {
   const format = FMT_WEIGHTS | FMT_UV | FMT_COLOR | FMT_POS; // 0x001B
-  const stride = vertexStride(format, 4); // 36
-  const doc = await io.read(vendor + 'fox/Fox.glb');
+  const stride = vertexStride(format, config.boneLimit);
+  const doc = await io.read(vendor + config.glbPath);
   const root = doc.getRoot();
   const skin = root.listSkins()[0];
+  if (!skin) throw new Error(`${config.key}: no skin found`);
   const joints = skin.listJoints();
   const jointCount = joints.length;
   const jidx = new Map<unknown, number>();
@@ -400,13 +417,19 @@ async function bakeFox(): Promise<void> {
   const e16: number[] = [];
   for (let i = 0; i < jointCount; i++) { ibmAcc.getElement(i, e16); inverseBind.set(e16, i * 16); }
 
-  // mesh attributes (non-indexed; 3 verts per tri).
+  // mesh attributes. Indexed assets are deduped inside each bone batch so an
+  // indexed human model does not inflate to three unique vertices per triangle.
   const prim = root.listMeshes()[0].listPrimitives()[0];
   const POS = prim.getAttribute('POSITION');
   const UV = prim.getAttribute('TEXCOORD_0');
   const JNT = prim.getAttribute('JOINTS_0');
   const WTS = prim.getAttribute('WEIGHTS_0');
-  const triCount = POS.getCount() / 3;
+  if (!POS || !JNT || !WTS) throw new Error(`${config.key}: POSITION/JOINTS_0/WEIGHTS_0 required`);
+  const idxA = prim.getIndices();
+  const srcIndices = idxA ? idxA.getArray() : undefined;
+  const triCount = srcIndices ? srcIndices.length / 3 : POS.getCount() / 3;
+  const srcAt = (tri: number, corner: number): number =>
+    srcIndices ? srcIndices[tri * 3 + corner] : tri * 3 + corner;
 
   const je: number[] = [0, 0, 0, 0], we: number[] = [0, 0, 0, 0];
   const vertJoints = (v: number): number[] => {
@@ -421,13 +444,13 @@ async function bakeFox(): Promise<void> {
   const batches: Batch[] = [];
   for (let t = 0; t < triCount; t++) {
     const set = new Set<number>();
-    for (let c = 0; c < 3; c++) for (const j of vertJoints(t * 3 + c)) set.add(j);
-    if (set.size > BONE_LIMIT) throw new Error(`fox tri ${t} needs ${set.size} joints > limit ${BONE_LIMIT}`);
+    for (let c = 0; c < 3; c++) for (const j of vertJoints(srcAt(t, c))) set.add(j);
+    if (set.size > config.boneLimit) throw new Error(`${config.key} tri ${t} needs ${set.size} joints > limit ${config.boneLimit}`);
     let best = -1, bestNew = Infinity;
     for (let b = 0; b < batches.length; b++) {
       const u = new Set(batches[b].joints);
       for (const j of set) u.add(j);
-      if (u.size <= BONE_LIMIT) {
+      if (u.size <= config.boneLimit) {
         const nw = u.size - batches[b].joints.size;
         if (nw < bestNew) { bestNew = nw; best = b; }
       }
@@ -441,52 +464,66 @@ async function bakeFox(): Promise<void> {
   const pe: number[] = [0, 0, 0], ue: number[] = [0, 0];
   for (const batch of batches) {
     const table = [...batch.joints].sort((a, b) => a - b);
-    while (table.length < 4) table.push(0); // pad to 4 (padding slots get weight 0)
+    while (table.length < config.boneLimit) table.push(0); // padding slots get weight 0
     const local = new Map<number, number>();
     table.forEach((g, i) => { if (!local.has(g)) local.set(g, i); });
-    const nv = batch.tris.length * 3;
-    const vbuf = new Uint8Array(nv * stride);
-    const dv = new DataView(vbuf.buffer);
-    const indices = new Uint16Array(nv);
-    const min: [number, number, number] = [Infinity, Infinity, Infinity];
-    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
-    let vi = 0;
+
+    const localBySource = new Map<number, number>();
+    const sourceVerts: number[] = [];
+    const localIndices: number[] = [];
     for (const t of batch.tris) {
       for (let c = 0; c < 3; c++) {
-        const v = t * 3 + c;
-        POS.getElement(v, pe); UV.getElement(v, ue);
-        JNT.getElement(v, je); WTS.getElement(v, we);
-        // scatter the 4 source (joint,weight) into local bone slots.
-        const lw = [0, 0, 0, 0];
-        for (let k = 0; k < 4; k++) {
-          if (we[k] > 0) { const slot = local.get(je[k]); if (slot !== undefined) lw[slot] += we[k]; }
+        const src = srcAt(t, c);
+        let li = localBySource.get(src);
+        if (li === undefined) {
+          li = sourceVerts.length;
+          localBySource.set(src, li);
+          sourceVerts.push(src);
         }
-        let o = vi * stride;
-        dv.setFloat32(o, lw[0], true); dv.setFloat32(o + 4, lw[1], true);
-        dv.setFloat32(o + 8, lw[2], true); dv.setFloat32(o + 12, lw[3], true);
-        o += 16;
-        dv.setFloat32(o, ue[0], true); dv.setFloat32(o + 4, ue[1], true);
-        o += 8;
-        dv.setUint32(o, NO_TINT >>> 0, true);
-        o += 4;
-        dv.setFloat32(o, pe[0], true); dv.setFloat32(o + 4, pe[1], true); dv.setFloat32(o + 8, pe[2], true);
-        for (let a = 0; a < 3; a++) { if (pe[a] < min[a]) min[a] = pe[a]; if (pe[a] > max[a]) max[a] = pe[a]; }
-        indices[vi] = vi;
-        vi++;
+        localIndices.push(li);
       }
     }
+    if (sourceVerts.length > 65535) throw new Error(`${config.key}: batch has ${sourceVerts.length} verts > u16`);
+
+    const nv = sourceVerts.length;
+    const vbuf = new Uint8Array(nv * stride);
+    const dv = new DataView(vbuf.buffer);
+    const indices = new Uint16Array(localIndices);
+    const min: [number, number, number] = [Infinity, Infinity, Infinity];
+    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+    for (let vi = 0; vi < sourceVerts.length; vi++) {
+      const v = sourceVerts[vi];
+      POS.getElement(v, pe);
+      if (UV) UV.getElement(v, ue);
+      else { ue[0] = 0; ue[1] = 0; }
+      JNT.getElement(v, je); WTS.getElement(v, we);
+      // scatter the 4 source (joint,weight) into local bone slots.
+      const lw = new Array<number>(config.boneLimit).fill(0);
+      for (let k = 0; k < 4; k++) {
+        if (we[k] > 0) { const slot = local.get(je[k]); if (slot !== undefined) lw[slot] += we[k]; }
+      }
+      let o = vi * stride;
+      for (let k = 0; k < config.boneLimit; k++) dv.setFloat32(o + k * 4, lw[k], true);
+      o += config.boneLimit * 4;
+      dv.setFloat32(o, ue[0], true); dv.setFloat32(o + 4, ue[1], true);
+      o += 8;
+      dv.setUint32(o, NO_TINT >>> 0, true);
+      o += 4;
+      dv.setFloat32(o, pe[0], true); dv.setFloat32(o + 4, pe[1], true); dv.setFloat32(o + 8, pe[2], true);
+      for (let a = 0; a < 3; a++) { if (pe[a] < min[a]) min[a] = pe[a]; if (pe[a] > max[a]) max[a] = pe[a]; }
+    }
     outBatches.push({
-      jointTable: table.slice(0, 4),
-      boneCount: 4,
-      mesh: { format, stride, vertexCount: nv, weightCount: 4, vertices: vbuf, indices, triCount: nv / 3, aabb: { min, max } },
+      jointTable: table.slice(0, config.boneLimit),
+      boneCount: config.boneLimit,
+      mesh: { format, stride, vertexCount: nv, weightCount: config.boneLimit, vertices: vbuf, indices, triCount: indices.length / 3, aabb: { min, max } },
     });
   }
-  console.log(`  fox: ${batches.length} bone-batches (limit ${BONE_LIMIT}), tris ${batches.reduce((s, b) => s + b.tris.length, 0)}`);
+  console.log(`  ${config.key}: ${batches.length} bone-batches (limit ${config.boneLimit}), tris ${batches.reduce((s, b) => s + b.tris.length, 0)}`);
 
-  // --- resample clips to FOX_FPS as per-joint local TRS ---
+  // --- resample clips to fixed fps as per-joint local TRS ---
   interface Clip { name: string; fps: number; frameCount: number; t: Float32Array; r: Float32Array; s: Float32Array }
   const clips: Clip[] = [];
-  for (const anim of root.listAnimations()) {
+  for (const [animIndex, anim] of root.listAnimations().entries()) {
     // gather channels: per joint, per path, (times, values).
     const chans = anim.listChannels();
     let dur = 0;
@@ -503,7 +540,7 @@ async function bakeFox(): Promise<void> {
       cs.push({ joint, path, times, values, n });
       dur = Math.max(dur, times[times.length - 1]);
     }
-    const frameCount = Math.max(2, Math.round(dur * FOX_FPS) + 1);
+    const frameCount = Math.max(2, Math.round(dur * config.fps) + 1);
     const T = new Float32Array(frameCount * jointCount * 3);
     const R = new Float32Array(frameCount * jointCount * 4);
     const S = new Float32Array(frameCount * jointCount * 3);
@@ -526,30 +563,27 @@ async function bakeFox(): Promise<void> {
         else if (ch.path === 'scale') S.set([out[0], out[1], out[2]], base * 3);
       }
     }
-    clips.push({ name: anim.getName(), fps: FOX_FPS, frameCount, t: T, r: R, s: S });
-    console.log(`    clip ${anim.getName()}: ${frameCount} frames @${FOX_FPS}fps`);
+    const animName = anim.getName() || (animIndex === 0 && config.defaultClipName ? config.defaultClipName : `Clip${animIndex + 1}`);
+    clips.push({ name: animName, fps: config.fps, frameCount, t: T, r: R, s: S });
+    console.log(`    clip ${animName}: ${frameCount} frames @${config.fps}fps`);
   }
 
-  // 128² keeps the baked module small enough for the PSP kernel partition
-  // allocator (the Fox is low-detail; 128² loses nothing visible) and saves VRAM.
-  const tex = bakeTexture(await Bun.file(vendor + 'fox/Texture.png').arrayBuffer(), 128);
+  const tex = bakeTexture(await Bun.file(vendor + config.texturePath).arrayBuffer(), config.textureSize);
 
-  // --- emit assets-fox.ts ---
-  let out = '// AUTO-GENERATED by bake/bake-gltf.ts from Khronos Fox (CC-BY-4.0).\n';
-  out += '// "Fox" by PixelMannen (CC0), rigged/animated by tomkranis (CC BY 4.0),\n';
-  out += '// glTF by @AsoboStudio + @scurest (CC BY 4.0). Attribution REQUIRED — see\n';
-  out += '// assets/vendor/CREDITS.md. Skinned: bone-batch partitioned for the PSP GE.\n';
+  // --- emit skinned asset module ---
+  let out = `// AUTO-GENERATED by bake/bake-gltf.ts from ${config.sourceLabel}.\n`;
+  for (const line of config.headerLines) out += `// ${line}\n`;
   out += "import { unb64 } from './b64';\nimport { PSM_8888 } from './g3d';\nimport type { BakedMesh } from './mesh';\n";
   out += "import type { BakedTexture } from './assets-kenney-car';\n\n";
-  out += 'export interface FoxBatch { jointTable: number[]; boneCount: number; mesh: BakedMesh }\n';
-  out += 'export interface FoxClip { fps: number; frameCount: number; t: Float32Array; r: Float32Array; s: Float32Array }\n\n';
-  out += 'export const FOX: {\n';
+  out += `export interface ${config.typePrefix}Batch { jointTable: number[]; boneCount: number; mesh: BakedMesh }\n`;
+  out += `export interface ${config.typePrefix}Clip { fps: number; frameCount: number; t: Float32Array; r: Float32Array; s: Float32Array }\n\n`;
+  out += `export const ${config.constName}: {\n`;
   out += '  scale: number; jointCount: number; jointParents: Int8Array;\n';
   out += '  inverseBindMatrices: Float32Array;\n';
   out += '  bind: { t: Float32Array; r: Float32Array; s: Float32Array };\n';
-  out += '  boneLimit: number; batches: FoxBatch[]; texture: BakedTexture;\n';
-  out += '  clips: Record<string, FoxClip>;\n} = {\n';
-  out += `  scale: ${FOX_SCALE}, jointCount: ${jointCount}, boneLimit: ${BONE_LIMIT},\n`;
+  out += `  boneLimit: number; batches: ${config.typePrefix}Batch[]; texture: BakedTexture;\n`;
+  out += `  clips: Record<string, ${config.typePrefix}Clip>;\n} = {\n`;
+  out += `  scale: ${config.scale}, jointCount: ${jointCount}, boneLimit: ${config.boneLimit},\n`;
   out += `  jointParents: new Int8Array(unb64('${abEmit(parents)}').buffer),\n`;
   out += `  inverseBindMatrices: new Float32Array(unb64('${abEmit(inverseBind)}').buffer),\n`;
   out += `  bind: {\n    t: new Float32Array(unb64('${abEmit(bindT)}').buffer),\n`;
@@ -562,7 +596,7 @@ async function bakeFox(): Promise<void> {
   out += '  ],\n';
   out += '  clips: {\n';
   for (const c of clips) {
-    out += `    ${c.name}: { fps: ${c.fps}, frameCount: ${c.frameCount},\n`;
+    out += `    ${propKey(c.name)}: { fps: ${c.fps}, frameCount: ${c.frameCount},\n`;
     out += `      t: new Float32Array(unb64('${abEmit(c.t)}').buffer),\n`;
     out += `      r: new Float32Array(unb64('${abEmit(c.r)}').buffer),\n`;
     out += `      s: new Float32Array(unb64('${abEmit(c.s)}').buffer) },\n`;
@@ -570,12 +604,77 @@ async function bakeFox(): Promise<void> {
   out += '  },\n';
   out += `  texture: ${emitTex(tex)},\n`;
   out += '};\n';
-  await Bun.write(outDir + 'assets-fox.ts', out);
-  console.log('  -> src/assets-fox.ts');
+  const outFile = `assets-${config.key}.ts`;
+  await Bun.write(outDir + outFile, out);
+  console.log(`  -> src/${outFile}`);
+}
+
+async function bakeFox(): Promise<void> {
+  await bakeSkinned({
+    key: 'fox',
+    constName: 'FOX',
+    typePrefix: 'Fox',
+    sourceLabel: 'Khronos Fox (CC-BY-4.0)',
+    glbPath: 'fox/Fox.glb',
+    texturePath: 'fox/Texture.png',
+    textureSize: 128,
+    scale: 0.03,
+    fps: 24,
+    boneLimit: 4,
+    headerLines: [
+      '"Fox" by PixelMannen (CC0), rigged/animated by tomkranis (CC BY 4.0),',
+      'glTF by @AsoboStudio + @scurest (CC BY 4.0). Attribution REQUIRED — see',
+      'assets/vendor/CREDITS.md. Skinned: bone-batch partitioned for the PSP GE.',
+    ],
+  });
+}
+
+async function bakeCesiumMan(): Promise<void> {
+  await bakeSkinned({
+    key: 'cesium-man',
+    constName: 'CESIUM_MAN',
+    typePrefix: 'CesiumMan',
+    sourceLabel: 'Khronos Cesium Man (CC-BY-4.0 with trademark limitations)',
+    glbPath: 'cesium-man/CesiumMan.glb',
+    texturePath: 'cesium-man/CesiumMan.png',
+    textureSize: 256,
+    scale: 4.3,
+    fps: 24,
+    boneLimit: 8,
+    defaultClipName: 'Walk',
+    headerLines: [
+      'Cesium Man © 2017, Cesium, CC BY 4.0 International with trademark limitations.',
+      'Embedded JPEG texture was extracted and converted to PNG for this deterministic bake.',
+      'Attribution REQUIRED — see assets/vendor/CREDITS.md.',
+    ],
+  });
+}
+
+async function bakeThreeSoldier(): Promise<void> {
+  await bakeSkinned({
+    key: 'three-soldier',
+    constName: 'THREE_SOLDIER',
+    typePrefix: 'ThreeSoldier',
+    sourceLabel: 'three.js Soldier.glb (MIT)',
+    glbPath: 'three-soldier/Soldier.glb',
+    texturePath: 'three-soldier/Soldier.png',
+    textureSize: 256,
+    scale: 0.012,
+    fps: 24,
+    boneLimit: 8,
+    defaultClipName: 'Walk',
+    headerLines: [
+      'Soldier.glb from the three.js examples model set, MIT licensed.',
+      'The embedded JPEG diffuse texture was extracted and converted to PNG for',
+      'DreamCart deterministic baking. See assets/vendor/CREDITS.md.',
+    ],
+  });
 }
 
 console.log('bake-gltf: baking vendored glTF assets...');
 await bakeNature();
 await bakeCar();
 await bakeFox();
+await bakeCesiumMan();
+await bakeThreeSoldier();
 console.log('bake-gltf: done.');
