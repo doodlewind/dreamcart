@@ -6,7 +6,6 @@
 // simple collision, and a skinned soldier character on the native PSP skin path.
 import {
   start, Scene, Scene3D, Node3D, Mesh, SkinnedMesh,
-  Lighting, DirectionalLight,
   Vec3, Quat, Colors, rgb, Btn, dsin, dcos, PI, HALF_PI,
 } from '../src/index';
 import { THREE_SOLDIER } from '../src/assets-three-soldier';
@@ -41,10 +40,6 @@ class TacticalScene extends Scene {
     this.world = new Scene3D();
     this.world.camera.setPerspective(62, 480 / 272, 0.08, 92);
 
-    const lighting = new Lighting(0x4f5558);
-    lighting.add(new DirectionalLight(new Vec3(-0.35, -1, -0.22), 0xffecd0));
-    lighting.add(new DirectionalLight(new Vec3(0.45, -0.35, 0.58), 0x9bb5ff));
-    this.world.lighting = lighting;
     this.world.fog = { color: rgb(27, 31, 34), near: 34, far: 62 };
 
     this.buildArena();

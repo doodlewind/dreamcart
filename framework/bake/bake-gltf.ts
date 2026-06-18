@@ -394,131 +394,198 @@ async function bakeSkinned(config: SkinnedBakeConfig): Promise<void> {
   const stride = vertexStride(format, config.boneLimit);
   const doc = await io.read(vendor + config.glbPath);
   const root = doc.getRoot();
-  const skin = root.listSkins()[0];
-  if (!skin) throw new Error(`${config.key}: no skin found`);
-  const joints = skin.listJoints();
-  const jointCount = joints.length;
+  const skins = root.listSkins();
+  if (!skins.length) throw new Error(`${config.key}: no skin found`);
+  const joints: unknown[] = [];
   const jidx = new Map<unknown, number>();
-  joints.forEach((j, i) => jidx.set(j, i));
+  for (const skin of skins) {
+    for (const j of skin.listJoints()) {
+      if (!jidx.has(j)) {
+        jidx.set(j, joints.length);
+        joints.push(j);
+      }
+    }
+  }
+  const jointCount = joints.length;
+
+  interface SkinnedPrimSrc {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prim: any;
+    jointMap: number[];
+    label: string;
+  }
+  const skinnedPrims: SkinnedPrimSrc[] = [];
+  for (const n of root.listNodes()) {
+    const nodeSkin = n.getSkin();
+    const mesh = n.getMesh();
+    if (!nodeSkin || !mesh) continue;
+    const jointMap = nodeSkin.listJoints().map((j) => {
+      const mapped = jidx.get(j);
+      if (mapped === undefined) throw new Error(`${config.key}: skin ${nodeSkin.getName()} references unknown joint`);
+      return mapped;
+    });
+    for (const [pi, prim] of mesh.listPrimitives().entries()) {
+      skinnedPrims.push({ prim, jointMap, label: `${n.getName() || mesh.getName() || 'mesh'}#${pi}` });
+    }
+  }
+  if (!skinnedPrims.length) {
+    const mesh = root.listMeshes()[0];
+    if (!mesh) throw new Error(`${config.key}: no skinned mesh nodes found`);
+    const jointMap = joints.map((_, i) => i);
+    for (const [pi, prim] of mesh.listPrimitives().entries()) {
+      skinnedPrims.push({ prim, jointMap, label: `${mesh.getName() || 'mesh'}#${pi}` });
+    }
+  }
+  if (jointCount > 64) throw new Error(`${config.key}: ${jointCount} joints > PSP native limit 64`);
+
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  const inverseBindByJoint = new Map<unknown, number[]>();
+  const e16: number[] = [];
+  for (const skin of skins) {
+    const ibmAcc = skin.getInverseBindMatrices();
+    if (!ibmAcc) continue;
+    for (const [i, j] of skin.listJoints().entries()) {
+      if (!inverseBindByJoint.has(j)) {
+        ibmAcc.getElement(i, e16);
+        inverseBindByJoint.set(j, e16.slice());
+      }
+    }
+  }
 
   // hierarchy parents + bind local TRS + inverse-bind matrices.
   const parents = new Int8Array(jointCount);
   const bindT = new Float32Array(jointCount * 3);
   const bindR = new Float32Array(jointCount * 4);
   const bindS = new Float32Array(jointCount * 3);
-  joints.forEach((j, i) => {
+  joints.forEach((j: any, i) => {
     const p = j.getParentNode();
     parents[i] = p && jidx.has(p) ? (jidx.get(p) as number) : -1;
     const t = j.getTranslation(), r = j.getRotation(), s = j.getScale();
     bindT.set(t, i * 3); bindR.set(r, i * 4); bindS.set(s, i * 3);
   });
-  const ibmAcc = skin.getInverseBindMatrices();
   const inverseBind = new Float32Array(jointCount * 16);
-  const e16: number[] = [];
-  for (let i = 0; i < jointCount; i++) { ibmAcc.getElement(i, e16); inverseBind.set(e16, i * 16); }
+  for (let i = 0; i < jointCount; i++) inverseBind.set(inverseBindByJoint.get(joints[i]) ?? identity, i * 16);
 
   // mesh attributes. Indexed assets are deduped inside each bone batch so an
   // indexed human model does not inflate to three unique vertices per triangle.
-  const prim = root.listMeshes()[0].listPrimitives()[0];
-  const POS = prim.getAttribute('POSITION');
-  const UV = prim.getAttribute('TEXCOORD_0');
-  const JNT = prim.getAttribute('JOINTS_0');
-  const WTS = prim.getAttribute('WEIGHTS_0');
-  if (!POS || !JNT || !WTS) throw new Error(`${config.key}: POSITION/JOINTS_0/WEIGHTS_0 required`);
-  const idxA = prim.getIndices();
-  const srcIndices = idxA ? idxA.getArray() : undefined;
-  const triCount = srcIndices ? srcIndices.length / 3 : POS.getCount() / 3;
-  const srcAt = (tri: number, corner: number): number =>
-    srcIndices ? srcIndices[tri * 3 + corner] : tri * 3 + corner;
-
-  const je: number[] = [0, 0, 0, 0], we: number[] = [0, 0, 0, 0];
-  const vertJoints = (v: number): number[] => {
-    JNT.getElement(v, je); WTS.getElement(v, we);
-    const out: number[] = [];
-    for (let k = 0; k < 4; k++) if (we[k] > 0 && !out.includes(je[k])) out.push(je[k]);
-    return out;
-  };
-
-  // --- greedy bone-batch partition (by triangle) ---
   interface Batch { joints: Set<number>; tris: number[] }
-  const batches: Batch[] = [];
-  for (let t = 0; t < triCount; t++) {
-    const set = new Set<number>();
-    for (let c = 0; c < 3; c++) for (const j of vertJoints(srcAt(t, c))) set.add(j);
-    if (set.size > config.boneLimit) throw new Error(`${config.key} tri ${t} needs ${set.size} joints > limit ${config.boneLimit}`);
-    let best = -1, bestNew = Infinity;
-    for (let b = 0; b < batches.length; b++) {
-      const u = new Set(batches[b].joints);
-      for (const j of set) u.add(j);
-      if (u.size <= config.boneLimit) {
-        const nw = u.size - batches[b].joints.size;
-        if (nw < bestNew) { bestNew = nw; best = b; }
-      }
-    }
-    if (best < 0) batches.push({ joints: new Set(set), tris: [t] });
-    else { for (const j of set) batches[best].joints.add(j); batches[best].tris.push(t); }
-  }
-
-  // --- build each batch's interleaved VB (weights scattered to local slots) ---
   const outBatches: { jointTable: number[]; boneCount: number; mesh: Baked }[] = [];
+  let totalTriCount = 0;
+  const je: number[] = [0, 0, 0, 0], we: number[] = [0, 0, 0, 0];
   const pe: number[] = [0, 0, 0], ue: number[] = [0, 0];
-  for (const batch of batches) {
-    const table = [...batch.joints].sort((a, b) => a - b);
-    while (table.length < config.boneLimit) table.push(0); // padding slots get weight 0
-    const local = new Map<number, number>();
-    table.forEach((g, i) => { if (!local.has(g)) local.set(g, i); });
 
-    const localBySource = new Map<number, number>();
-    const sourceVerts: number[] = [];
-    const localIndices: number[] = [];
-    for (const t of batch.tris) {
-      for (let c = 0; c < 3; c++) {
-        const src = srcAt(t, c);
-        let li = localBySource.get(src);
-        if (li === undefined) {
-          li = sourceVerts.length;
-          localBySource.set(src, li);
-          sourceVerts.push(src);
-        }
-        localIndices.push(li);
-      }
-    }
-    if (sourceVerts.length > 65535) throw new Error(`${config.key}: batch has ${sourceVerts.length} verts > u16`);
+  for (const src of skinnedPrims) {
+    const prim = src.prim;
+    const POS = prim.getAttribute('POSITION');
+    const UV = prim.getAttribute('TEXCOORD_0');
+    const JNT = prim.getAttribute('JOINTS_0');
+    const WTS = prim.getAttribute('WEIGHTS_0');
+    if (!POS || !JNT || !WTS) throw new Error(`${config.key}/${src.label}: POSITION/JOINTS_0/WEIGHTS_0 required`);
+    const idxA = prim.getIndices();
+    const srcIndices = idxA ? idxA.getArray() : undefined;
+    const triCount = srcIndices ? srcIndices.length / 3 : POS.getCount() / 3;
+    totalTriCount += triCount;
+    const srcAt = (tri: number, corner: number): number =>
+      srcIndices ? srcIndices[tri * 3 + corner] : tri * 3 + corner;
 
-    const nv = sourceVerts.length;
-    const vbuf = new Uint8Array(nv * stride);
-    const dv = new DataView(vbuf.buffer);
-    const indices = new Uint16Array(localIndices);
-    const min: [number, number, number] = [Infinity, Infinity, Infinity];
-    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
-    for (let vi = 0; vi < sourceVerts.length; vi++) {
-      const v = sourceVerts[vi];
-      POS.getElement(v, pe);
-      if (UV) UV.getElement(v, ue);
-      else { ue[0] = 0; ue[1] = 0; }
+    const mappedJoint = (localJoint: number): number => {
+      const mapped = src.jointMap[localJoint];
+      if (mapped === undefined) throw new Error(`${config.key}/${src.label}: JOINTS_0 references joint ${localJoint} outside skin`);
+      return mapped;
+    };
+    const vertJoints = (v: number): number[] => {
       JNT.getElement(v, je); WTS.getElement(v, we);
-      // scatter the 4 source (joint,weight) into local bone slots.
-      const lw = new Array<number>(config.boneLimit).fill(0);
+      const out: number[] = [];
       for (let k = 0; k < 4; k++) {
-        if (we[k] > 0) { const slot = local.get(je[k]); if (slot !== undefined) lw[slot] += we[k]; }
+        if (we[k] > 0) {
+          const j = mappedJoint(je[k]);
+          if (!out.includes(j)) out.push(j);
+        }
       }
-      let o = vi * stride;
-      for (let k = 0; k < config.boneLimit; k++) dv.setFloat32(o + k * 4, lw[k], true);
-      o += config.boneLimit * 4;
-      dv.setFloat32(o, ue[0], true); dv.setFloat32(o + 4, ue[1], true);
-      o += 8;
-      dv.setUint32(o, NO_TINT >>> 0, true);
-      o += 4;
-      dv.setFloat32(o, pe[0], true); dv.setFloat32(o + 4, pe[1], true); dv.setFloat32(o + 8, pe[2], true);
-      for (let a = 0; a < 3; a++) { if (pe[a] < min[a]) min[a] = pe[a]; if (pe[a] > max[a]) max[a] = pe[a]; }
+      return out;
+    };
+
+    // --- greedy bone-batch partition (by triangle) ---
+    const batches: Batch[] = [];
+    for (let t = 0; t < triCount; t++) {
+      const set = new Set<number>();
+      for (let c = 0; c < 3; c++) for (const j of vertJoints(srcAt(t, c))) set.add(j);
+      if (set.size > config.boneLimit) throw new Error(`${config.key}/${src.label} tri ${t} needs ${set.size} joints > limit ${config.boneLimit}`);
+      let best = -1, bestNew = Infinity;
+      for (let b = 0; b < batches.length; b++) {
+        const u = new Set(batches[b].joints);
+        for (const j of set) u.add(j);
+        if (u.size <= config.boneLimit) {
+          const nw = u.size - batches[b].joints.size;
+          if (nw < bestNew) { bestNew = nw; best = b; }
+        }
+      }
+      if (best < 0) batches.push({ joints: new Set(set), tris: [t] });
+      else { for (const j of set) batches[best].joints.add(j); batches[best].tris.push(t); }
     }
-    outBatches.push({
-      jointTable: table.slice(0, config.boneLimit),
-      boneCount: config.boneLimit,
-      mesh: { format, stride, vertexCount: nv, weightCount: config.boneLimit, vertices: vbuf, indices, triCount: indices.length / 3, aabb: { min, max } },
-    });
+
+    // --- build each batch's interleaved VB (weights scattered to local slots) ---
+    for (const batch of batches) {
+      const table = [...batch.joints].sort((a, b) => a - b);
+      while (table.length < config.boneLimit) table.push(0); // padding slots get weight 0
+      const local = new Map<number, number>();
+      table.forEach((g, i) => { if (!local.has(g)) local.set(g, i); });
+
+      const localBySource = new Map<number, number>();
+      const sourceVerts: number[] = [];
+      const localIndices: number[] = [];
+      for (const t of batch.tris) {
+        for (let c = 0; c < 3; c++) {
+          const srcVert = srcAt(t, c);
+          let li = localBySource.get(srcVert);
+          if (li === undefined) {
+            li = sourceVerts.length;
+            localBySource.set(srcVert, li);
+            sourceVerts.push(srcVert);
+          }
+          localIndices.push(li);
+        }
+      }
+      if (sourceVerts.length > 65535) throw new Error(`${config.key}/${src.label}: batch has ${sourceVerts.length} verts > u16`);
+
+      const nv = sourceVerts.length;
+      const vbuf = new Uint8Array(nv * stride);
+      const dv = new DataView(vbuf.buffer);
+      const indices = new Uint16Array(localIndices);
+      const min: [number, number, number] = [Infinity, Infinity, Infinity];
+      const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+      for (let vi = 0; vi < sourceVerts.length; vi++) {
+        const v = sourceVerts[vi];
+        POS.getElement(v, pe);
+        if (UV) UV.getElement(v, ue);
+        else { ue[0] = 0; ue[1] = 0; }
+        JNT.getElement(v, je); WTS.getElement(v, we);
+        // scatter the 4 source (joint,weight) into local bone slots.
+        const lw = new Array<number>(config.boneLimit).fill(0);
+        for (let k = 0; k < 4; k++) {
+          if (we[k] > 0) {
+            const slot = local.get(mappedJoint(je[k]));
+            if (slot !== undefined) lw[slot] += we[k];
+          }
+        }
+        let o = vi * stride;
+        for (let k = 0; k < config.boneLimit; k++) dv.setFloat32(o + k * 4, lw[k], true);
+        o += config.boneLimit * 4;
+        dv.setFloat32(o, ue[0], true); dv.setFloat32(o + 4, ue[1], true);
+        o += 8;
+        dv.setUint32(o, NO_TINT >>> 0, true);
+        o += 4;
+        dv.setFloat32(o, pe[0], true); dv.setFloat32(o + 4, pe[1], true); dv.setFloat32(o + 8, pe[2], true);
+        for (let a = 0; a < 3; a++) { if (pe[a] < min[a]) min[a] = pe[a]; if (pe[a] > max[a]) max[a] = pe[a]; }
+      }
+      outBatches.push({
+        jointTable: table.slice(0, config.boneLimit),
+        boneCount: config.boneLimit,
+        mesh: { format, stride, vertexCount: nv, weightCount: config.boneLimit, vertices: vbuf, indices, triCount: indices.length / 3, aabb: { min, max } },
+      });
+    }
   }
-  console.log(`  ${config.key}: ${batches.length} bone-batches (limit ${config.boneLimit}), tris ${batches.reduce((s, b) => s + b.tris.length, 0)}`);
+  console.log(`  ${config.key}: ${outBatches.length} bone-batches across ${skinnedPrims.length} prims (limit ${config.boneLimit}), tris ${totalTriCount}`);
 
   // --- resample clips to fixed fps as per-joint local TRS ---
   interface Clip { name: string; fps: number; frameCount: number; t: Float32Array; r: Float32Array; s: Float32Array }
