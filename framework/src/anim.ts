@@ -3,7 +3,7 @@
 // a fixed-fps table of per-joint local TRS; the player loops a time cursor and
 // samples two bracketing frames (lerp position/scale, nlerp rotation) into
 // preallocated buffers (no per-frame GC). The result feeds Skeleton (skin.ts).
-import { Quat } from './math';
+import { dsqrt } from './math';
 
 /** A clip baked to a fixed fps: frameCount × jointCount TRS, flat arrays. */
 export interface BakedClip {
@@ -79,14 +79,22 @@ export class AnimationPlayer {
         this.outT[j * 3 + k] = t[o3a + k] + (t[o3b + k] - t[o3a + k]) * u;
         this.outS[j * 3 + k] = s[o3a + k] + (s[o3b + k] - s[o3a + k]) * u;
       }
-      // rotation: nlerp (shorter arc) — slerp's acos/sin are banned by the guard.
-      const qa = new Quat(r[o4a], r[o4a + 1], r[o4a + 2], r[o4a + 3]);
-      const qb = new Quat(r[o4b], r[o4b + 1], r[o4b + 2], r[o4b + 3]);
-      const q = Quat.nlerp(qa, qb, u);
-      this.outR[j * 4] = q.x;
-      this.outR[j * 4 + 1] = q.y;
-      this.outR[j * 4 + 2] = q.z;
-      this.outR[j * 4 + 3] = q.w;
+      // rotation: nlerp (shorter arc) — inlined, ZERO allocations (this runs for
+      // every joint every frame; allocating two Quats + a result here was hot).
+      const ax = r[o4a], ay = r[o4a + 1], az = r[o4a + 2], aw = r[o4a + 3];
+      let bx = r[o4b], by = r[o4b + 1], bz = r[o4b + 2], bw = r[o4b + 3];
+      if (ax * bx + ay * by + az * bz + aw * bw < 0) {
+        bx = -bx; by = -by; bz = -bz; bw = -bw;
+      }
+      const qx = ax + (bx - ax) * u;
+      const qy = ay + (by - ay) * u;
+      const qz = az + (bz - az) * u;
+      const qw = aw + (bw - aw) * u;
+      const ql = dsqrt(qx * qx + qy * qy + qz * qz + qw * qw) || 1;
+      this.outR[j * 4] = qx / ql;
+      this.outR[j * 4 + 1] = qy / ql;
+      this.outR[j * 4 + 2] = qz / ql;
+      this.outR[j * 4 + 3] = qw / ql;
     }
   }
 }

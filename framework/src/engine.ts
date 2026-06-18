@@ -70,14 +70,28 @@ export class Engine {
     globalThis.frame = (mask: number) => this.tick(mask);
   }
 
+  /**
+   * Average µs/frame for [updateTree, 3D render, 2D draw], smoothed over ~1 s.
+   * Populated only on hosts exposing `now()` (PSP); a game can render it to
+   * profile on-device (the 3D clear erases the dprintln overlay, so it must be
+   * drawn as 2D). Zeroes elsewhere — costs nothing without `now()`.
+   */
+  prof = [0, 0, 0];
+  private _pAcc = [0, 0, 0];
+  private _pN = 0;
+
   /** Advance one frame. Public so the golden-test harness can drive it directly. */
   tick(mask: number): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nowF = (globalThis as any).now as undefined | (() => number);
     this.input.update(mask);
     this.frameCount++;
     const ctx = this.ctx();
     const sc = this.scene;
     if (sc) {
+      const ta = nowF ? nowF() : 0;
       sc.updateTree(ctx);
+      const tb = nowF ? nowF() : 0;
       // 3D pass first (render() submits the command buffer, or natively renders a
       // retained all-static scene), then the 2D HUD on top.
       if (this.scene3d && hasG3d()) {
@@ -85,7 +99,21 @@ export class Engine {
         this.enc.reset();
         this.scene3d.render(this.enc);
       }
+      const tc = nowF ? nowF() : 0;
       sc.drawTree(this.g);
+      if (nowF) {
+        const td = nowF();
+        this._pAcc[0] += tb - ta;
+        this._pAcc[1] += tc - tb;
+        this._pAcc[2] += td - tc;
+        if ((this._pN += 1) >= 60) {
+          for (let i = 0; i < 3; i++) {
+            this.prof[i] = (this._pAcc[i] / this._pN) | 0;
+            this._pAcc[i] = 0;
+          }
+          this._pN = 0;
+        }
+      }
     }
   }
 }

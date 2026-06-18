@@ -76,6 +76,7 @@
   var OP_SET_LIGHTS = 0x0005;
   var OP_DRAW_SKINNED = 0x0006;
   var OP_SET_FOG = 0x0007;
+  var OP_DRAW_SKIN_ANIM = 0x0009; // v2: native-sampler skin (PSP only); web has no uploadClip so it never receives this — declared for wire-parity
   var FMT_POS = 0x0001;          // 3 x f32
   var FMT_COLOR = 0x0002;        // u32 ABGR
   var FMT_NORMAL = 0x0004;       // 3 x f32

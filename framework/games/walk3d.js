@@ -9,7 +9,7 @@
 //
 // Fox: CC-BY-4.0 — model PixelMannen (CC0), rig/anim tomkranis, glTF Asobo/scurest.
 import {
-  start, Scene, Scene3D, Mesh, SkinnedMesh,
+  start, Scene, Scene3D, Mesh, SkinnedMesh, Fps,
   Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
 } from '../src/index';
 import { FOX } from '../src/assets-fox';
@@ -27,6 +27,12 @@ class WalkScene extends Scene {
   z = 0;
   heading = 0;
   running = false;
+  fps = new Fps();
+  /** @type {any} */ engine = null;
+  foxCx = 0; // fox AABB centre (× scale, local space), for framing
+  foxCy = 0.5;
+  foxCz = 0;
+  foxR = 1.5; // fox bounding radius (× scale)
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -43,6 +49,24 @@ class WalkScene extends Scene {
       scale: new Vec3(FOX.scale, FOX.scale, FOX.scale),
     });
 
+    // Auto-frame from the combined (scaled) bind AABB, exactly like skin3d, so
+    // the chase camera frames the whole fox the same way.
+    const mn = [1e9, 1e9, 1e9];
+    const mx = [-1e9, -1e9, -1e9];
+    for (const b of FOX.batches) {
+      const a = b.mesh.aabb;
+      for (let k = 0; k < 3; k++) {
+        if (a.min[k] < mn[k]) mn[k] = a.min[k];
+        if (a.max[k] > mx[k]) mx[k] = a.max[k];
+      }
+    }
+    const s = FOX.scale;
+    this.foxCx = ((mn[0] + mx[0]) / 2) * s;
+    this.foxCy = ((mn[1] + mx[1]) / 2) * s;
+    this.foxCz = ((mn[2] + mx[2]) / 2) * s;
+    this.foxR = Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) * s;
+
+    this.engine = ctx.engine;
     this.reset();
     ctx.engine.scene3d = this.world;
   }
@@ -56,6 +80,7 @@ class WalkScene extends Scene {
 
   /** @param {UpdateContext} ctx */
   update(ctx) {
+    this.fps.sample();
     const inp = ctx.input;
     if (inp.pressed(Btn.Start)) this.reset();
 
@@ -88,15 +113,27 @@ class WalkScene extends Scene {
     this.fox.position = new Vec3(this.x, 0, this.z);
     this.fox.rotation = Quat.fromEuler(0, this.heading, 0);
 
-    // Chase camera: behind + above, looking just ahead of the fox.
-    const eye = new Vec3(this.x - fwdX * 3.2, 1.7, this.z - fwdZ * 3.2);
-    const look = new Vec3(this.x + fwdX * 1.5, 0.5, this.z + fwdZ * 1.5);
-    this.world.camera.lookAt(eye, look, new Vec3(0, 1, 0));
+    // Chase camera framed exactly like skin3d: look AT the fox's AABB centre
+    // from a fixed angle behind it, at the same distance (radius*1.6) and height
+    // (centre + radius*0.4) ratios skin3d's orbit uses. (skin3d orbits a still
+    // fox; here the same framing simply tracks the fox from behind as it walks.)
+    // The local AABB centre is rotated by heading so it tracks turns correctly.
+    const ccx = this.x + this.foxCx * fwdZ + this.foxCz * fwdX;
+    const ccz = this.z - this.foxCx * fwdX + this.foxCz * fwdZ;
+    const ccy = this.foxCy;
+    const d = this.foxR * 1.6;
+    const eye = new Vec3(ccx - fwdX * d, ccy + this.foxR * 0.4, ccz - fwdZ * d);
+    this.world.camera.lookAt(eye, new Vec3(ccx, ccy, ccz), new Vec3(0, 1, 0));
   }
 
   /** @param {Graphics} g */
   draw(g) {
     g.text('WALK 3D', 8, 8, Colors.white, 2);
+    if (this.fps.value > 0 && this.engine) {
+      g.text(this.fps.value + ' FPS', 410, 8, Colors.yellow, 1);
+      const p = this.engine.prof;
+      g.text('upd ' + p[0] + ' r3d ' + p[1] + ' r2d ' + p[2] + ' us', 8, 30, Colors.cyan, 1);
+    }
     g.text('X WALK  []' + ' RUN  L/R TURN', 8, 246, Colors.cyan, 1);
     g.text('Fox (c) tomkranis/Asobo/scurest CC-BY', 8, 258, Colors.gray, 1);
   }

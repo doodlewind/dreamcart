@@ -106,7 +106,7 @@ if (trigProblems === 0) console.log(`PASS  3D SDK uses only deterministic math (
 // (2) The 3D wire constants (opcodes / format bits / magic) are defined in
 // framework/src/g3d.ts and must be byte-identical in every host that implements
 // `g3d`. Hosts are parsed only once they've been wired (contain DC3D_MAGIC).
-const NAMES = ["DC3D_MAGIC", "DC3D_VERSION", "OP_SET_CAMERA", "OP_DRAW", "OP_IMM_TRIS", "OP_BIND_TEXTURE", "OP_SET_LIGHTS", "OP_DRAW_SKINNED", "OP_SET_FOG", "FMT_POS", "FMT_COLOR", "FMT_NORMAL", "FMT_UV", "FMT_WEIGHTS"];
+const NAMES = ["DC3D_MAGIC", "DC3D_VERSION", "OP_SET_CAMERA", "OP_DRAW", "OP_IMM_TRIS", "OP_BIND_TEXTURE", "OP_SET_LIGHTS", "OP_DRAW_SKINNED", "OP_SET_FOG", "OP_DRAW_SKIN_ANIM", "FMT_POS", "FMT_COLOR", "FMT_NORMAL", "FMT_UV", "FMT_WEIGHTS"];
 // Match NAME then the next 0x-literal on the SAME line, across all three host
 // syntaxes: JS `var NAME = 0x..`, C `#define NAME 0x..`, Rust `const NAME: u32 =
 // 0x4443_3344;`. `[^\n]*?` (not `[^0-9xX]`) is needed so the digits in Rust's

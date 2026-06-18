@@ -120,12 +120,38 @@ export class SkinnedMesh {
     return this.player;
   }
 
+  // Native-skin state: handle into the host's retained skin table (-2 = untried,
+  // -1 = unavailable/failed -> use the JS fallback).
+  private skinHandle = -2;
+  // Native-sampler state: each clip uploaded once -> its host clip handle (cached
+  // here; -1 caches an upload failure so we fall back to the JS sampler for it).
+  private clipHandles = new Map<BakedClip, number>();
+
   /**
-   * Sample the current pose and emit one OP_DRAW_SKINNED per batch. `model` is the
-   * character placement (its node world matrix, including the asset scale). Called
-   * by Scene3D after it has bound this mesh's texture.
+   * Sample the current pose and draw the character. On a host with BOTH
+   * `uploadSkin` and `uploadClip`, the clip sampling + hierarchy + bone math +
+   * draws all run NATIVELY (JS ships only the clip phase); otherwise it falls
+   * back to computing bones in JS and emitting one OP_DRAW_SKINNED per batch.
+   * `model` is the character placement (node world matrix incl. the asset scale).
    */
   emit(enc: CommandEncoder, model: number[], tint: number): void {
+    const g = globalThis.g3d;
+    // Fully-native path (PSP): retain the skeleton + clip once, then per frame
+    // ship only the clip phase — native samples, composes, skins and draws.
+    // Needs BOTH uploadSkin (skeleton retain) and uploadClip (native sampler).
+    if (g && g.uploadSkin && g.uploadClip) {
+      if (this.skinHandle === -2) this.skinHandle = this.uploadNativeSkin(g);
+      if (this.skinHandle >= 0) {
+        const ch = this.clipHandleFor(g, this.player.clip);
+        if (ch >= 0) {
+          const d = this.player.duration;
+          const phase = d > 0 ? this.player.time / d : 0;
+          enc.drawSkinAnim(this.skinHandle, ch, model, phase, tint);
+          return;
+        }
+      }
+    }
+    // JS fallback: compute world + bones here, one OP_DRAW_SKINNED per batch.
     this.player.sample();
     this.skeleton.computeWorld(this.player.outT, this.player.outR, this.player.outS);
     for (const b of this.batches) {
@@ -134,5 +160,63 @@ export class SkinnedMesh {
       this.skeleton.batchBones(b.jointTable, b.boneCount, b.bones);
       enc.drawSkinned(h, model, b.bones, b.boneCount, tint);
     }
+  }
+
+  // Upload the skeleton + bone-batch tables to the native skin once; returns the
+  // host skin handle (-1 if a mesh upload failed). Buffer layout mirrors
+  // gfx3d.rs js_g3d_upload_skin / host3d.ts uploadSkin.
+  private uploadNativeSkin(g: NonNullable<typeof globalThis.g3d>): number {
+    const jc = this.jointCount;
+    const parents = this.skeleton.parents;
+    const ibm = this.skeleton.inverseBind;
+    const nb = this.batches.length;
+    // size = jointCount + jc*parents + jc*16 ibm + batchCount + nb*(2 + 8)
+    const ints = 1 + jc + jc * 16 + 1 + nb * 10;
+    const buf = new ArrayBuffer(ints * 4);
+    const dv = new DataView(buf);
+    let o = 0;
+    dv.setUint32(o, jc, true); o += 4;
+    for (let i = 0; i < jc; i++) { dv.setInt32(o, parents[i], true); o += 4; }
+    for (let i = 0; i < jc * 16; i++) { dv.setFloat32(o, ibm[i], true); o += 4; }
+    dv.setUint32(o, nb, true); o += 4;
+    for (const b of this.batches) {
+      const h = b.mesh.handle();
+      if (h < 0) return -1;
+      dv.setInt32(o, h, true); o += 4;
+      dv.setInt32(o, b.boneCount, true); o += 4;
+      for (let k = 0; k < 8; k++) { dv.setInt32(o, k < b.jointTable.length ? b.jointTable[k] : 0, true); o += 4; }
+    }
+    return g.uploadSkin!(buf);
+  }
+
+  // Return the host clip handle for `clip`, uploading (and caching) it on first
+  // use. A cached -1 (upload failed / too large) means "use the JS sampler".
+  private clipHandleFor(g: NonNullable<typeof globalThis.g3d>, clip: BakedClip): number {
+    let ch = this.clipHandles.get(clip);
+    if (ch === undefined) {
+      ch = this.uploadClip(g, clip);
+      this.clipHandles.set(clip, ch);
+    }
+    return ch;
+  }
+
+  // Upload one baked clip's flat T/R/S frame tables to the native sampler once.
+  // Buffer layout mirrors gfx3d.rs js_g3d_upload_clip / host3d.ts uploadClip:
+  // u32 jointCount, u32 frameCount, then frameCount×jointCount×{3 T, 4 R, 3 S} f32.
+  private uploadClip(g: NonNullable<typeof globalThis.g3d>, clip: BakedClip): number {
+    const jc = this.jointCount;
+    const fc = clip.frameCount;
+    const nt = fc * jc * 3;
+    const nr = fc * jc * 4;
+    const ns = fc * jc * 3;
+    const buf = new ArrayBuffer((2 + nt + nr + ns) * 4);
+    const dv = new DataView(buf);
+    let o = 0;
+    dv.setUint32(o, jc, true); o += 4;
+    dv.setUint32(o, fc, true); o += 4;
+    for (let i = 0; i < nt; i++) { dv.setFloat32(o, clip.t[i], true); o += 4; }
+    for (let i = 0; i < nr; i++) { dv.setFloat32(o, clip.r[i], true); o += 4; }
+    for (let i = 0; i < ns; i++) { dv.setFloat32(o, clip.s[i], true); o += 4; }
+    return g.uploadClip!(buf);
   }
 }
