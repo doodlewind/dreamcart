@@ -89,10 +89,11 @@ logic: where is the camera, what moved, what time is the clip at.
   `sceneAdd`/`sceneRender`): upload an all-static (or mixed: static + per-frame
   rigid-dynamic) scene once; per frame JS sends only the camera (+ a handful of
   dynamic matrices) and native frustum-culls + draws the list.
-- **Native skinning** (`gfx3d.rs` `uploadSkin` + `OP_DRAW_SKIN`): retain the joint
-  hierarchy + inverse-bind matrices + bone-batch tables; per frame JS ships only
-  the per-joint *local* matrices and native walks the hierarchy → world →
-  `bone = world·inverseBind` → `sceGuBoneMatrix` → draw. Fox skinning 145ms → 32ms.
+- **Native skinning** (`gfx3d.rs` `uploadSkin` + `uploadClip` + `OP_DRAW_SKIN_ANIM`):
+  retain the joint hierarchy + inverse-bind matrices + bone-batch tables (and the
+  clip); per frame JS ships only the clip *phase* and native samples, walks the
+  hierarchy → world → `bone = world·inverseBind` → `sceGuBoneMatrix` → draw. Fox
+  skinning 145ms → 32ms (then → 4.5ms once the sampler moved native too; see #7).
 - **Native text** (`gfx.uploadFont` + `gfx.drawText`): the glyph rasterization loop
   (one fill-run per pixel-row-run, hundreds of iterations/frame) moves to Rust as
   one batched sprite draw.
@@ -118,15 +119,15 @@ golden still passes. Fox 32ms → 16ms (20 → 30 FPS).
 Even after #4b made the sampler zero-allocation, walk3d/skin3d capped at **30 FPS**.
 The `engine.prof` HUD said `r3d = 16.4 ms` — the whole frame budget. So I split
 `r3d` one level finer (temporary `now()` calls around the emit vs the native
-`submit`, and around `sample()`+`composeLocals()` vs the `drawSkin` encode):
+`submit`, and around `sample()`+the local-compose pass vs the encode):
 
 ```
 r3d 16418   emit 15587   submit 298      <- native submit is basically free
-            sample 12136   drawSkin 504   <- the sampler is the entire wall
+            sample 12136   encode 504     <- the sampler is the entire wall
 ```
 
 **12 ms is the per-joint sampler** — `player.sample()` (lerp T/S + nlerp R) plus
-`composeLocals()` (quat→matrix) for **24 joints**. That's ~505 µs *per joint* for
+the local-matrix compose (quat→matrix) for **24 joints**. That's ~505 µs *per joint* for
 ~60 float ops. It isn't arithmetic cost; it's QuickJS's per-access overhead on
 `Float32Array` reads/writes, ~1400 of them per frame, interpreted on a 333 MHz core.
 **There is no JS-side fix** — the math is already inlined and allocation-free; the
@@ -135,8 +136,8 @@ cost is the interpreter touching typed arrays at all.
 So move the loop itself. `g3d.uploadClip(buffer)` retains a baked clip (the flat
 T/R/S frame tables) once; the new `OP_DRAW_SKIN_ANIM` record ships only the **clip
 phase** (one float). Native samples the two bracketing frames (lerp/nlerp), composes
-the per-joint local matrices, then runs the **same** hierarchy → bone → draw as
-`OP_DRAW_SKIN`. Per frame, QuickJS now does essentially nothing for the character:
+the per-joint local matrices, then walks the same hierarchy → bone → draw it always
+ran for the retained skin. Per frame, QuickJS now does essentially nothing for the character:
 no sampler, no 24×16 matrix upload — just `enc.drawSkinAnim(skin, clip, model,
 phase, tint)`. Result: `r3d 16.4 → 4.5 ms`, **30 → 60 FPS** on both walk3d and skin3d.
 
@@ -152,8 +153,12 @@ One subtlety: native has no `libm`, and nlerp needs a normalize. Rather than pul
 a dependency or an intrinsic, the sampler uses a self-contained fast reciprocal
 sqrt (two Newton iterations, ~1e-4 error). `OP_DRAW_SKIN_ANIM` is a PSP-only fast
 path — it never faces the byte-exact golden oracle (raster3d/Web/3DS have no
-`uploadClip`, so they fall back to the JS sampler + `OP_DRAW_SKIN`/`OP_DRAW_SKINNED`)
+`uploadClip`, so they fall back to the JS sampler + `OP_DRAW_SKINNED`)
 — so it need only match *visually*, not bit-for-bit, with `anim.ts`. Verify on device.
+
+(Historical note: an intermediate tier — native skin with a *JS* sampler, an op that
+shipped the per-joint local matrices each frame — was collapsed once the native
+sampler above superseded it; no shipped host ever needed the in-between path.)
 
 ## #6 — Fewer, bigger draws beat many small ones
 

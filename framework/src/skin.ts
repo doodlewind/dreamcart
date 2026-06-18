@@ -121,43 +121,34 @@ export class SkinnedMesh {
   }
 
   // Native-skin state: handle into the host's retained skin table (-2 = untried,
-  // -1 = unavailable/failed -> use the JS fallback), and a reused buffer for the
-  // per-frame local joint matrices.
+  // -1 = unavailable/failed -> use the JS fallback).
   private skinHandle = -2;
-  private localMatrices = new Float32Array(0);
   // Native-sampler state: each clip uploaded once -> its host clip handle (cached
   // here; -1 caches an upload failure so we fall back to the JS sampler for it).
   private clipHandles = new Map<BakedClip, number>();
 
   /**
-   * Sample the current pose and draw the character. On a host with `uploadSkin`,
-   * the hierarchy + bone math + draws run NATIVELY (JS only samples the clip and
-   * composes the per-joint LOCAL matrices); otherwise it falls back to computing
-   * bones in JS and emitting one OP_DRAW_SKINNED per batch. `model` is the
-   * character placement (node world matrix incl. the asset scale).
+   * Sample the current pose and draw the character. On a host with BOTH
+   * `uploadSkin` and `uploadClip`, the clip sampling + hierarchy + bone math +
+   * draws all run NATIVELY (JS ships only the clip phase); otherwise it falls
+   * back to computing bones in JS and emitting one OP_DRAW_SKINNED per batch.
+   * `model` is the character placement (node world matrix incl. the asset scale).
    */
   emit(enc: CommandEncoder, model: number[], tint: number): void {
     const g = globalThis.g3d;
-    if (g && g.uploadSkin) {
+    // Fully-native path (PSP): retain the skeleton + clip once, then per frame
+    // ship only the clip phase — native samples, composes, skins and draws.
+    // Needs BOTH uploadSkin (skeleton retain) and uploadClip (native sampler).
+    if (g && g.uploadSkin && g.uploadClip) {
       if (this.skinHandle === -2) this.skinHandle = this.uploadNativeSkin(g);
       if (this.skinHandle >= 0) {
-        // Fully-native path (PSP): the host SAMPLES the clip too. JS ships only
-        // the clip phase; the per-joint sampler (~12 ms/frame in QuickJS for 24
-        // joints) never runs here. JS still owns which clip plays + the phase.
-        if (g.uploadClip) {
-          const ch = this.clipHandleFor(g, this.player.clip);
-          if (ch >= 0) {
-            const d = this.player.duration;
-            const phase = d > 0 ? this.player.time / d : 0;
-            enc.drawSkinAnim(this.skinHandle, ch, model, phase, tint);
-            return;
-          }
+        const ch = this.clipHandleFor(g, this.player.clip);
+        if (ch >= 0) {
+          const d = this.player.duration;
+          const phase = d > 0 ? this.player.time / d : 0;
+          enc.drawSkinAnim(this.skinHandle, ch, model, phase, tint);
+          return;
         }
-        // Native skin, JS sampler (host has uploadSkin but not uploadClip).
-        this.player.sample();
-        this.composeLocals();
-        enc.drawSkin(this.skinHandle, model, this.localMatrices, this.jointCount, tint);
-        return;
       }
     }
     // JS fallback: compute world + bones here, one OP_DRAW_SKINNED per batch.
@@ -195,7 +186,6 @@ export class SkinnedMesh {
       dv.setInt32(o, b.boneCount, true); o += 4;
       for (let k = 0; k < 8; k++) { dv.setInt32(o, k < b.jointTable.length ? b.jointTable[k] : 0, true); o += 4; }
     }
-    this.localMatrices = new Float32Array(jc * 16);
     return g.uploadSkin!(buf);
   }
 
@@ -228,40 +218,5 @@ export class SkinnedMesh {
     for (let i = 0; i < nr; i++) { dv.setFloat32(o, clip.r[i], true); o += 4; }
     for (let i = 0; i < ns; i++) { dv.setFloat32(o, clip.s[i], true); o += 4; }
     return g.uploadClip!(buf);
-  }
-
-  // Compose the per-joint LOCAL matrices from the sampled TRS straight into the
-  // localMatrices buffer — quaternion->matrix inlined, ZERO allocations and only
-  // typed-array writes (object-based Mat4.compose per joint allocated ~4 objects
-  // each and was a big chunk of the per-frame skinning cost).
-  private composeLocals(): void {
-    const t = this.player.outT;
-    const r = this.player.outR;
-    const s = this.player.outS;
-    const out = this.localMatrices;
-    for (let i = 0; i < this.jointCount; i++) {
-      const o = i * 16;
-      const x = r[i * 4], y = r[i * 4 + 1], z = r[i * 4 + 2], w = r[i * 4 + 3];
-      const sx = s[i * 3], sy = s[i * 3 + 1], sz = s[i * 3 + 2];
-      const xx = x * x, yy = y * y, zz = z * z;
-      const xy = x * y, xz = x * z, yz = y * z;
-      const wx = w * x, wy = w * y, wz = w * z;
-      out[o] = (1 - 2 * (yy + zz)) * sx;
-      out[o + 1] = 2 * (xy + wz) * sx;
-      out[o + 2] = 2 * (xz - wy) * sx;
-      out[o + 3] = 0;
-      out[o + 4] = 2 * (xy - wz) * sy;
-      out[o + 5] = (1 - 2 * (xx + zz)) * sy;
-      out[o + 6] = 2 * (yz + wx) * sy;
-      out[o + 7] = 0;
-      out[o + 8] = 2 * (xz + wy) * sz;
-      out[o + 9] = 2 * (yz - wx) * sz;
-      out[o + 10] = (1 - 2 * (xx + yy)) * sz;
-      out[o + 11] = 0;
-      out[o + 12] = t[i * 3];
-      out[o + 13] = t[i * 3 + 1];
-      out[o + 14] = t[i * 3 + 2];
-      out[o + 15] = 1;
-    }
   }
 }

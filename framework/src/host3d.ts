@@ -31,9 +31,11 @@ export interface RawG3d {
   /**
    * Optional: retain a skinned character ONCE for native skinning. `buffer`
    * packs the joint hierarchy + inverse-bind matrices + bone-batch tables (see
-   * skin.ts SkinnedMesh). Per frame the OP_DRAW_SKIN record then ships only the
-   * local joint matrices and the host computes the bones natively. Hosts without
-   * it: SkinnedMesh falls back to JS bone math + OP_DRAW_SKINNED.
+   * skin.ts SkinnedMesh). The skeleton is held so that, per frame, the
+   * OP_DRAW_SKIN_ANIM record ships only the clip phase and the host samples,
+   * composes locals, walks the hierarchy and skins natively (requires uploadClip
+   * too). Hosts without it: SkinnedMesh falls back to JS bone math +
+   * OP_DRAW_SKINNED.
    */
   uploadSkin?(buffer: ArrayBuffer): number;
   /**
@@ -42,7 +44,7 @@ export interface RawG3d {
    * then the clip's flat T/R/S frame tables (see skin.ts uploadClip). Per frame
    * the OP_DRAW_SKIN_ANIM record then ships only the clip phase — the per-joint
    * sampler (the QuickJS bottleneck) runs in native code. Hosts without it:
-   * SkinnedMesh falls back to the JS sampler + OP_DRAW_SKIN / OP_DRAW_SKINNED.
+   * SkinnedMesh falls back to the JS sampler + OP_DRAW_SKINNED.
    */
   uploadClip?(buffer: ArrayBuffer): number;
   /** Release native storage (optional; many games never call it). */

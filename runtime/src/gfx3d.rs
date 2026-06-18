@@ -45,7 +45,6 @@ use psp::Align16;
 //   OP_SET_LIGHTS = 0x0005
 //   OP_DRAW_SKINNED = 0x0006
 //   OP_SET_FOG = 0x0007
-//   OP_DRAW_SKIN = 0x0008
 //   FMT_POS = 0x0001
 //   FMT_COLOR = 0x0002
 //   FMT_NORMAL = 0x0004
@@ -63,7 +62,6 @@ const OP_BIND_TEXTURE: u32 = 0x0004;
 const OP_SET_LIGHTS: u32 = 0x0005;
 const OP_DRAW_SKINNED: u32 = 0x0006;
 const OP_SET_FOG: u32 = 0x0007;
-const OP_DRAW_SKIN: u32 = 0x0008;
 const OP_DRAW_SKIN_ANIM: u32 = 0x0009;
 
 // Vertex-format bitfield. The GE interleaves components in a FIXED order
@@ -306,9 +304,9 @@ fn mat_mul4(a: &[f32; 16], b: &[f32; 16]) -> [f32; 16] {
 
 // ── Native hardware skinning ─────────────────────────────────────────────────
 // A retained skinned character: joint hierarchy + inverse-bind matrices + the
-// bone-batch tables, uploaded ONCE (uploadSkin). Per frame JS samples the clip
-// and ships only the per-joint LOCAL matrices (OP_DRAW_SKIN); the native side
-// walks the hierarchy, computes each bone = jointWorld·inverseBind, loads them
+// bone-batch tables, uploaded ONCE (uploadSkin). Per frame JS ships only the
+// clip phase (OP_DRAW_SKIN_ANIM); the native side samples the clip, walks the
+// hierarchy, computes each bone = jointWorld·inverseBind, loads them
 // with sceGuBoneMatrix, and draws — moving ~150 Mat4 ops/frame off QuickJS (the
 // skinning was ~145 ms/frame in JS). See docs/psp-native-scene.md.
 const MAX_JOINTS: usize = 64;
@@ -341,8 +339,8 @@ unsafe fn skins() -> &'static mut Vec<SkinEntry> {
 
 // A retained animation clip: a fixed-fps table of per-joint local TRS, uploaded
 // once (uploadClip). OP_DRAW_SKIN_ANIM samples it NATIVELY (lerp T/S, nlerp R),
-// composes the per-joint local matrices, then runs the SAME hierarchy + bone +
-// draw as OP_DRAW_SKIN — moving the per-joint sampler (~12 ms/frame for 24 joints
+// composes the per-joint local matrices, then walks the shared hierarchy + bone
+// + draw logic — moving the per-joint sampler (~12 ms/frame for 24 joints
 // of Float32Array math) off the interpreted QuickJS core. JS only tracks which
 // clip plays and the clip phase; the mechanical interpolation runs here.
 struct ClipEntry {
@@ -632,7 +630,7 @@ fn light_state(i: u32) -> GuState {
 /// joint hierarchy + inverse-bind matrices + bone-batch tables. Buffer layout:
 /// u32 jointCount, jointCount×i32 parents, jointCount×16 f32 inverseBind,
 /// u32 batchCount, batchCount×{ i32 meshHandle, i32 boneCount, 8×i32 jointTable }.
-/// Per frame OP_DRAW_SKIN then ships only the local joint matrices.
+/// Per frame OP_DRAW_SKIN_ANIM then ships only the clip phase.
 unsafe extern "C" fn js_g3d_upload_skin(
     ctx: *mut JSContext,
     _this: JSValue,
@@ -922,80 +920,14 @@ unsafe extern "C" fn js_g3d_submit(
                 null(),
                 mesh.bytes.as_ptr() as *const c_void,
             );
-        } else if op == OP_DRAW_SKIN {
-            // payload = u32 skinHandle, u32 tintABGR, u32 jointCount, 16 f32 model,
-            // jointCount×16 f32 LOCAL joint matrices. Native does the whole skin:
-            // walk the hierarchy -> world matrices, bone = world·inverseBind ->
-            // sceGuBoneMatrix, draw each bone-batch. (JS only sampled the clip +
-            // composed the locals — the heavy Mat4 work is here, not in QuickJS.)
-            let sh = read_u32(buf, base) as i32;
-            let tint = read_u32(buf, base + 4);
-            let jc = read_u32(buf, base + 8) as usize;
-            let model = read_matrix(buf, base + 12);
-            let local_base = base + 12 + 64;
-            if sh < 0 || (sh as usize) >= skin_table.len() {
-                continue;
-            }
-            let skin = &skin_table[sh as usize];
-            if jc != skin.joint_count || jc > MAX_JOINTS {
-                continue;
-            }
-            // World matrices, parent-first (joints are stored parent-before-child).
-            let world = &mut SKIN_WORLD;
-            for i in 0..jc {
-                let mut local = [0f32; 16];
-                for k in 0..16 {
-                    local[k] = read_f32(buf, local_base + (i * 16 + k) * 4);
-                }
-                let parent = skin.parents[i];
-                if parent < 0 {
-                    world[i * 16..i * 16 + 16].copy_from_slice(&local);
-                } else {
-                    let mut pw = [0f32; 16];
-                    pw.copy_from_slice(&world[(parent as usize) * 16..(parent as usize) * 16 + 16]);
-                    let w = mat_mul4(&pw, &local);
-                    world[i * 16..i * 16 + 16].copy_from_slice(&w);
-                }
-            }
-            sys::sceGumMatrixMode(MatrixMode::Model);
-            sys::sceGumLoadMatrix(&model.0);
-            sys::sceGuColor(if tint == NO_TINT { 0xffff_ffff } else { tint });
-            for b in skin.batches.iter() {
-                if b.mesh < 0 || (b.mesh as usize) >= table.len() {
-                    continue;
-                }
-                let mesh = &table[b.mesh as usize];
-                if mesh.count == 0 {
-                    continue;
-                }
-                let mut slot = 0i32;
-                while slot < b.bone_count && slot < 8 {
-                    let g = b.joints[slot as usize] as usize;
-                    let mut wm = [0f32; 16];
-                    wm.copy_from_slice(&world[g * 16..g * 16 + 16]);
-                    let mut ib = [0f32; 16];
-                    ib.copy_from_slice(&skin.inverse_bind[g * 16..g * 16 + 16]);
-                    // bone = jointWorld · inverseBind; align_mat packs it and
-                    // sceGuBoneMatrix reads each column's xyz (w-row ignored).
-                    let bm = align_mat(&mat_mul4(&wm, &ib));
-                    sys::sceGuBoneMatrix(slot as u32, &bm.0);
-                    slot += 1;
-                }
-                sys::sceGumDrawArray(
-                    GuPrimitive::Triangles,
-                    mesh.vtype,
-                    mesh.count,
-                    null(),
-                    mesh.bytes.as_ptr() as *const c_void,
-                );
-            }
         } else if op == OP_DRAW_SKIN_ANIM {
             // payload = u32 skinHandle, u32 clipHandle, u32 tintABGR, f32 phase,
             // 16 f32 model. Native SAMPLES the clip (lerp T/S, nlerp R) into the
-            // per-joint local matrices, then runs the SAME hierarchy + bone-batch
-            // + draw as OP_DRAW_SKIN. JS ships only the phase (1 float) instead of
-            // 24×16 sampled matrices — and, crucially, never runs the per-joint
-            // sampler in QuickJS (the ~12 ms/frame bottleneck).
+            // per-joint local matrices, then walks the hierarchy -> world matrices,
+            // bone = jointWorld·inverseBind -> sceGuBoneMatrix, and draws each
+            // bone-batch. JS ships only the phase (1 float) instead of 24×16
+            // sampled matrices — and, crucially, never runs the per-joint sampler
+            // in QuickJS (the ~12 ms/frame bottleneck).
             let sh = read_u32(buf, base) as i32;
             let ch = read_u32(buf, base + 4) as i32;
             let tint = read_u32(buf, base + 8);
@@ -1014,9 +946,9 @@ unsafe extern "C" fn js_g3d_submit(
                 continue;
             }
 
-            // --- sample the clip into SKIN_LOCAL (mirrors anim.ts sample() +
-            // skin.ts composeLocals(), inclusive-endpoint frames, nlerp shorter
-            // arc). phase ∈ [0,1) maps to a fractional frame in [0, frameCount-1).
+            // --- sample the clip into SKIN_LOCAL (mirrors anim.ts sample() + the
+            // JS-fallback local-matrix compose, inclusive-endpoint frames, nlerp
+            // shorter arc). phase ∈ [0,1) maps to a fractional frame in [0, frameCount-1).
             let fc = clip.frame_count;
             let fidx = if fc > 1 { phase * (fc as f32 - 1.0) } else { 0.0 };
             let mut f0 = fidx as i32; // phase ≥ 0 -> truncation == floor
@@ -1068,7 +1000,7 @@ unsafe extern "C" fn js_g3d_submit(
                 qy *= inv;
                 qz *= inv;
                 qw *= inv;
-                // quaternion -> column-major matrix, scaled (mirror composeLocals).
+                // quaternion -> column-major matrix, scaled (mirror the JS compose).
                 let xx = qx * qx;
                 let yy = qy * qy;
                 let zz = qz * qz;
