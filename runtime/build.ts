@@ -8,11 +8,20 @@ const root = new URL("..", import.meta.url).pathname; // repo root
 const sdk = root + "mipsel-sony-psp";
 const llvm = existsSync("/opt/homebrew/opt/llvm/bin") ? "/opt/homebrew/opt/llvm/bin" : "/usr/local/opt/llvm/bin";
 const home = process.env.HOME ?? "";
+const pspTarget = runtimeDir + "targets/mipsel-sony-psp.json";
 
-const TOOLCHAIN = "nightly-2021-11-01-x86_64-apple-darwin";
+const TOOLCHAIN = "nightly-2026-05-28";
+const rustup = Bun.which("rustup") ?? (existsSync(`${home}/.cargo/bin/rustup`) ? `${home}/.cargo/bin/rustup` : null);
+const rustflags = [
+  process.env.RUSTFLAGS,
+  process.env.PSPJS_SUPPRESS_LINKER_MESSAGES === "1" ? "-A linker-messages" : undefined,
+  "-A unexpected-cfgs",
+  "-A unstable-name-collisions",
+].filter(Boolean).join(" ");
 const env = {
   ...process.env,
   PATH: `${llvm}:${home}/.cargo/bin:${process.env.PATH}`,
+  RUSTFLAGS: rustflags,
   CRATE_CC_NO_DEFAULTS: "1",
   TARGET_CC: "clang",
   TARGET_AR: `${llvm}/llvm-ar`,
@@ -22,14 +31,17 @@ const env = {
   // CRITICAL: archive MIPS objects with llvm-ar (Apple ar drops them -> undefined JS_*).
   AR_mipsel_sony_psp: `${llvm}/llvm-ar`,
   RANLIB_mipsel_sony_psp: `${llvm}/llvm-ranlib`,
+  RUST_PSP_TARGET: pspTarget,
+  // Keep PSP dev builds fast without reviving the old RUSTFLAGS workaround that
+  // mixed opt-level with link-dead-code and triggered noisy MIPS relocations.
+  CARGO_PROFILE_DEV_OPT_LEVEL: process.env.CARGO_PROFILE_DEV_OPT_LEVEL ?? "3",
 };
 
 const game = process.env.PSPJS_GAME ?? "raw-snake.js";
 console.log("PSP build: " + game);
-// Invoke the pinned toolchain's cargo by ABSOLUTE path: Bun's $ resolves command
-// names against the original process PATH (not .env), so a bare `cargo` would hit
-// the wrong (newer) cargo and desync from the 1.58 rustc. The spawned cargo still
-// gets our env PATH, so it finds cargo-psp + llvm clang/ar.
-const cargo = `${home}/.rustup/toolchains/${TOOLCHAIN}/bin/cargo`;
-await $`${cargo} psp ${Bun.argv.slice(2)}`.cwd(runtimeDir).env(env);
+if (!rustup) {
+  console.error("rustup not found; run `bun run bootstrap` first");
+  process.exit(1);
+}
+await $`${rustup} run ${TOOLCHAIN} cargo psp ${Bun.argv.slice(2)}`.cwd(runtimeDir).env(env);
 console.log("output: runtime/target/mipsel-sony-psp/debug/EBOOT.PBP");

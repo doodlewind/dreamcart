@@ -148,12 +148,11 @@ bun run bootstrap
 
 `bun run bootstrap` ([scripts/bootstrap.ts](scripts/bootstrap.ts)) is idempotent
 and installs/configures:
-- submodules + their patches (`bun run setup`)
+- submodules + the local `rust-psp` patch (`bun run setup`)
 - **LLVM** (`brew install llvm` — Apple clang can't target MIPS)
 - **PPSSPP** (`brew install --cask ppsspp`) — PSP emulator
 - **Azahar** (downloaded from GitHub releases) — 3DS emulator
-- **Rust** `nightly-2021-11-01-x86_64-apple-darwin` + `rust-src` (Rosetta on Apple
-  Silicon — host arch is irrelevant to the MIPS output), and pins the repo override
+- **Rust** `nightly-2026-05-28` + `rust-src`, and pins the repo override
 - **cargo-psp / prxgen / pack-pbp / mksfo** (built from the `rust-psp` submodule)
 - the **PSPSDK** (prebuilt newlib) into `mipsel-sony-psp/`
 - the **`devkitpro/devkitarm`** Docker image (3DS toolchain)
@@ -162,10 +161,12 @@ It reports anything it can't auto-install (Homebrew/Docker not present, Docker
 daemon stopped); fix those and re-run. Then everything runs on Bun — there's no
 Python/Make glue.
 
-> The `rust-psp` / `quickjs-rs` submodule patches ([patches/](patches)) let them
-> compile on a 1.58-era nightly and fix the 32-bit `size_t` ABI for QuickJS; LLVM
-> `llvm-ar` is used for the static archive (Apple `ar` silently drops MIPS objects
-> → `undefined symbol: JS_*`).
+> The `quickjs-rs` submodule points at `doodlewind/quickjs-rs` with QuickJS
+> 2026-06-04 vendored plus DreamCart's PSP C/stdio shims and 32-bit `size_t`
+> ABI/API exports. The remaining local submodule patch is the small `rust-psp`
+> nightly/tooling compatibility layer in [patches/](patches). LLVM `llvm-ar` is
+> used for the static archive (Apple `ar` silently drops MIPS objects →
+> `undefined symbol: JS_*`).
 
 ## Run on PSP
 Open the EBOOT in [PPSSPP](https://www.ppsspp.org/):
