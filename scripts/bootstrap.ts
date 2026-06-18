@@ -1,7 +1,7 @@
 // One-shot environment bootstrap for a fresh clone (macOS). Idempotent — each
 // step checks first and skips if already done. Run: bun run bootstrap
 //
-// Sets up: bun deps, submodules + patches, LLVM, PPSSPP, Azahar (3DS emulator),
+// Sets up: bun deps, submodules + rust-psp patch, LLVM, PPSSPP, Azahar (3DS emulator),
 // Rust nightly + rust-src, cargo-psp/prxgen/pack-pbp/mksfo, the PSPSDK, and the
 // devkitARM docker image. Prereqs it can't auto-install (Bun, Homebrew, Docker
 // daemon) are detected and reported.
@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 
 const root = new URL("..", import.meta.url).pathname;
 const home = process.env.HOME!;
-const TOOLCHAIN = "nightly-2021-11-01-x86_64-apple-darwin";
+const TOOLCHAIN = "nightly-2026-05-28";
 const arch = process.arch === "arm64" ? "arm64" : "x86_64";
 
 const brew = Bun.which("brew");
@@ -38,10 +38,10 @@ console.log("deps:");
 if (await run($`bun install`.cwd(root))) rec("bun install", "ok");
 else rec("bun install", "fail");
 
-// 2) submodules + patches
+// 2) submodules + rust-psp patch
 console.log("submodules:");
-if (await run($`bun ${root}scripts/setup.ts`)) rec("submodules + patches (bun run setup)", "ok");
-else rec("submodules + patches", "fail");
+if (await run($`bun ${root}scripts/setup.ts`)) rec("submodules + rust-psp patch (bun run setup)", "ok");
+else rec("submodules + rust-psp patch", "fail");
 
 // 3) Homebrew (prereq)
 console.log("homebrew packages:");
@@ -69,26 +69,27 @@ if (!rustup) {
   const tcList = (await $`${rustup} toolchain list`.nothrow().quiet().text().catch(() => "")) || "";
   if (haveTc && tcList.includes(TOOLCHAIN)) rec("nightly toolchain", "skip", TOOLCHAIN);
   else {
-    const okTc = await run($`${rustup} toolchain install ${TOOLCHAIN} --component rust-src --profile minimal --force-non-host`);
+    const okTc = await run($`${rustup} toolchain install ${TOOLCHAIN} --component rust-src --profile minimal`);
     rec("nightly toolchain", okTc ? "ok" : "fail", TOOLCHAIN);
   }
   // rust-src component (in case toolchain existed without it)
   await run($`${rustup} component add rust-src --toolchain ${TOOLCHAIN}`);
-  // pin the override for this repo
+  // pin the override for this repo and runtime subdir
   if (await run($`${rustup} override set ${TOOLCHAIN}`.cwd(root))) rec("rustup override (repo)", "ok");
+  await run($`${rustup} override set ${TOOLCHAIN}`.cwd(root + "runtime"));
 }
 
 // 6) cargo-psp + prxgen/pack-pbp/mksfo on PATH
 console.log("cargo-psp tools:");
 const tools = ["cargo-psp", "prxgen", "pack-pbp", "mksfo"];
-if (tools.every((t) => existsSync(`${home}/.cargo/bin/${t}`))) {
-  rec("cargo-psp tools", "skip");
-} else if (!cargo) {
+if (!cargo && !rustup) {
   rec("cargo-psp tools", "warn", "cargo not found");
 } else if (!existsSync(root + "rust-psp/cargo-psp/Cargo.toml")) {
   rec("cargo-psp tools", "warn", "rust-psp submodule missing (run setup)");
 } else {
-  const built = await run($`${cargo} +stable build --release --bins`.cwd(root + "rust-psp/cargo-psp"));
+  const built = rustup
+    ? await run($`${rustup} run stable cargo build --release --bins`.cwd(root + "rust-psp/cargo-psp"))
+    : await run($`${cargo} build --release --bins`.cwd(root + "rust-psp/cargo-psp"));
   if (built) {
     for (const t of tools) await run($`cp ${root}rust-psp/target/release/${t} ${home}/.cargo/bin/${t}`);
     rec("cargo-psp tools", "ok");

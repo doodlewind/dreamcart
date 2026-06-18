@@ -1,31 +1,109 @@
+diff --git a/cargo-psp/src/main.rs b/cargo-psp/src/main.rs
+index 6613504..570e1f1 100644
+--- a/cargo-psp/src/main.rs
++++ b/cargo-psp/src/main.rs
+@@ -218,13 +218,18 @@ fn main() {
+         Err(_) => "build-std=core,compiler_builtins,alloc,panic_unwind,panic_abort",
+     };
+ 
++    let target = env::var("RUST_PSP_TARGET").unwrap_or_else(|_| "mipsel-sony-psp".to_string());
++    let json_target = target.ends_with(".json");
++
+     let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+-    let mut build_process = Command::new(&cargo)
+-        .arg("build")
+-        .arg("-Z")
+-        .arg(build_std_flag)
++    let mut build_command = Command::new(&cargo);
++    build_command.arg("build").arg("-Z").arg(build_std_flag);
++    if json_target {
++        build_command.arg("-Z").arg("json-target-spec");
++    }
++    let mut build_process = build_command
+         .arg("--target")
+-        .arg("mipsel-sony-psp")
++        .arg(&target)
+         .arg("--message-format=json-render-diagnostics")
+         .args(args)
+         .stdout(Stdio::piped())
+@@ -260,7 +265,7 @@ fn main() {
+             .iter()
+             .filter(|p| workspace_members.contains(&p.id))
+             .flat_map(|p| &p.targets)
+-            .filter(|t| t.crate_types.iter().any(|ct| *ct == "bin".into()))
++            .filter(|t| t.is_bin())
+             .count();
+ 
+         total_executables == 1
+diff --git a/psp/Cargo.toml b/psp/Cargo.toml
+index a0b8471..7a5e847 100644
+--- a/psp/Cargo.toml
++++ b/psp/Cargo.toml
+@@ -21,6 +21,7 @@ std = []
+ # Compile this library as a stub provider. Useful to compile this as a static
+ # library for other projects.
+ stub-only = []
++external-c-heap = []
+ embedded-graphics = [ "dep:embedded-graphics-core" ]
+ 
+ [dependencies]
 diff --git a/psp/src/lib.rs b/psp/src/lib.rs
-index 0d9fd40..b36bb12 100644
+index eba3c13..ca19426 100644
 --- a/psp/src/lib.rs
 +++ b/psp/src/lib.rs
-@@ -7,13 +7,12 @@
-     core_intrinsics,
-     const_loop,
-     const_if_match,
--    const_generics,
-     c_variadic,
-     lang_items,
+@@ -2,7 +2,13 @@
+     stable_features,
+     internal_features,
+     clippy::bad_bit_mask,
+-    clippy::missing_safety_doc
++    clippy::missing_safety_doc,
++    non_snake_case,
++    static_mut_refs,
++    unexpected_cfgs,
++    unnecessary_transmutes,
++    unused_features,
++    unused_unsafe
  )]
- 
- // For unwinding support
--#![feature(std_internals, panic_info_message, panic_internals, unwind_attributes)]
-+#![feature(std_internals, panic_info_message, panic_internals)]
- #![cfg_attr(not(feature = "stub-only"), feature(panic_unwind))]
- 
- // For the `const_generics` feature.
+ #![feature(
+     asm_experimental_arch,
 diff --git a/psp/src/panic.rs b/psp/src/panic.rs
-index 711763b..66349f5 100644
+index 5abcfe5..9ef9e2f 100644
 --- a/psp/src/panic.rs
 +++ b/psp/src/panic.rs
-@@ -124,7 +124,6 @@ fn update_panic_count(amt: isize) -> usize {
- #[allow(improper_ctypes)]
- extern "C" {
-     fn __rust_panic_cleanup(payload: *mut u8) -> *mut (dyn Any + Send + 'static);
--    #[unwind(allowed)]
-     fn __rust_start_panic(payload: usize) -> u32;
- }
+@@ -232,7 +232,7 @@ unsafe extern "C" fn rust_eh_personality() {}
+ #[cfg(all(target_os = "psp", not(feature = "stub-only")))]
+ mod libunwind_shims {
+     #[no_mangle]
+-    unsafe extern "C" fn fprintf(_stream: *const u8, _format: *const u8, ...) -> isize {
++    unsafe extern "C" fn fprintf(_stream: *const u8, _format: *const u8, _: ...) -> isize {
+         -1
+     }
  
+@@ -249,6 +249,7 @@ mod libunwind_shims {
+         }
+     }
+ 
++    #[cfg(not(feature = "external-c-heap"))]
+     #[no_mangle]
+     unsafe extern "C" fn malloc(size: usize) -> *mut u8 {
+         use alloc::alloc::{alloc, Layout};
+@@ -261,6 +262,7 @@ mod libunwind_shims {
+         data.offset(4)
+     }
+ 
++    #[cfg(not(feature = "external-c-heap"))]
+     #[no_mangle]
+     unsafe extern "C" fn free(data: *mut u8) {
+         use alloc::alloc::{dealloc, Layout};
+diff --git a/psp/src/sys/gu.rs b/psp/src/sys/gu.rs
+index d201d03..e39f227 100644
+--- a/psp/src/sys/gu.rs
++++ b/psp/src/sys/gu.rs
+@@ -85,6 +85,7 @@ bitflags::bitflags! {
+     /// The vertex type decides how the vertices align and what kind of
+     /// information they contain.
+     #[repr(transparent)]
++    #[derive(Clone, Copy)]
+     pub struct VertexType: i32 {
+         /// 8-bit texture coordinates
+         const TEXTURE_8BIT = 1;
