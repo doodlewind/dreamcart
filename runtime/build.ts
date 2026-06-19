@@ -34,6 +34,9 @@ const env = {
   AR_mipsel_sony_psp: `${llvm}/llvm-ar`,
   RANLIB_mipsel_sony_psp: `${llvm}/llvm-ranlib`,
   RUST_PSP_TARGET: pspTarget,
+  // Dreamcart runs panic-abort on PSP; this avoids building/linking
+  // panic_unwind + libunwind into no_std EBOOTs.
+  RUST_PSP_ABORT_ONLY: "1",
   // Keep PSP dev builds fast without reviving the old RUSTFLAGS workaround that
   // mixed opt-level with link-dead-code and triggered noisy MIPS relocations.
   CARGO_PROFILE_DEV_OPT_LEVEL: process.env.CARGO_PROFILE_DEV_OPT_LEVEL ?? "3",
