@@ -50,6 +50,18 @@ Select which one to embed at build time with `PSPJS_GAME`:
 PSPJS_GAME=raw-tetris.js bun run psp     # builds EBOOT.PBP for Tetris
 ```
 
+Build every raw and framework game into a PSP memory-stick layout:
+
+``` sh
+bun run psp:all
+# -> dist/psp/PSP/GAME/<game>/EBOOT.PBP
+```
+
+Copy `dist/psp/PSP` to the root of the PSP memory stick; each game appears as a
+separate homebrew entry under `PSP/GAME/<game>/`. The script also packs each
+EBOOT with a generated PSP menu title, `ICON0.PNG`, and `PIC1.PNG` placeholder
+preview based on the game's `// @title`.
+
 ## Play (one command)
 `bun run play <web|psp|3ds> [game]` builds the chosen game and launches the
 matching emulator:

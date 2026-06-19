@@ -39,11 +39,21 @@ const env = {
   CARGO_PROFILE_DEV_OPT_LEVEL: process.env.CARGO_PROFILE_DEV_OPT_LEVEL ?? "3",
 };
 
+function outputProfile(args: string[]): string {
+  const inlineProfile = args.find((arg) => arg.startsWith("--profile="));
+  if (inlineProfile) return inlineProfile.slice("--profile=".length);
+  const profileFlag = args.indexOf("--profile");
+  if (profileFlag !== -1 && args[profileFlag + 1]) return args[profileFlag + 1];
+  return args.includes("--release") || args.includes("-r") ? "release" : "debug";
+}
+
+const cargoArgs = Bun.argv.slice(2);
+const profile = outputProfile(cargoArgs);
 const game = process.env.PSPJS_GAME ?? "raw-snake.js";
 console.log("PSP build: " + game);
 if (!rustup) {
   console.error("rustup not found; run `bun run bootstrap` first");
   process.exit(1);
 }
-await $`${rustup} run ${TOOLCHAIN} cargo psp ${Bun.argv.slice(2)}`.cwd(runtimeDir).env(env);
-console.log("output: runtime/target/mipsel-sony-psp/debug/EBOOT.PBP");
+await $`${rustup} run ${TOOLCHAIN} cargo psp ${cargoArgs}`.cwd(runtimeDir).env(env);
+console.log(`output: runtime/target/mipsel-sony-psp/${profile}/EBOOT.PBP`);
