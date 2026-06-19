@@ -51,7 +51,8 @@ unsafe fn boot() {
         worker_main,
         32,                // priority
         2 * 1024 * 1024,   // 2 MB stack
-        ThreadAttributes::USER,
+        // sceGum* emits VFPU instructions; real PSP/Vita needs the thread flag.
+        ThreadAttributes::USER | ThreadAttributes::VFPU,
         core::ptr::null_mut(),
     );
     if id.0 >= 0 {
@@ -204,13 +205,20 @@ unsafe fn run() {
 
 /// Initialize the GU for double-buffered 480x272 PSM8888 rendering.
 unsafe fn init_graphics() {
-    let allocator = get_vram_allocator().unwrap();
+    trace("init_graphics: get_vram_allocator");
+    let allocator = match get_vram_allocator() {
+        Ok(allocator) => allocator,
+        Err(_) => trace_halt("get_vram_allocator failed"),
+    };
+    trace("init_graphics: alloc fbp0");
     let fbp0 = allocator
         .alloc_texture_pixels(BUF_WIDTH, SCREEN_HEIGHT, TexturePixelFormat::Psm8888)
         .as_mut_ptr_from_zero();
+    trace("init_graphics: alloc fbp1");
     let fbp1 = allocator
         .alloc_texture_pixels(BUF_WIDTH, SCREEN_HEIGHT, TexturePixelFormat::Psm8888)
         .as_mut_ptr_from_zero();
+    trace("init_graphics: alloc zbp");
     let zbp = allocator
         .alloc_texture_pixels(BUF_WIDTH, SCREEN_HEIGHT, TexturePixelFormat::Psm4444)
         .as_mut_ptr_from_zero();
@@ -218,9 +226,12 @@ unsafe fn init_graphics() {
     // Prime the VFPU matrix context (used by sceGum*) BEFORE sceGuInit, so the
     // 3D pass's sceGumLoadMatrix/sceGumMatrixMode calls (in gfx3d.rs) operate on
     // an initialized stack. Harmless for 2D-only games, which never touch gum.
+    trace("init_graphics: sceGumLoadIdentity");
     sys::sceGumLoadIdentity();
 
+    trace("init_graphics: sceGuInit");
     sys::sceGuInit();
+    trace("init_graphics: sceGuStart");
     sys::sceGuStart(GuContextType::Direct, &mut LIST as *mut _ as *mut c_void);
     sys::sceGuDrawBuffer(DisplayPixelFormat::Psm8888, fbp0 as _, BUF_WIDTH as i32);
     sys::sceGuDispBuffer(
@@ -265,4 +276,5 @@ unsafe fn init_graphics() {
     sys::sceGuSync(GuSyncMode::Finish, GuSyncBehavior::Wait);
     sys::sceDisplayWaitVblankStart();
     sys::sceGuDisplay(true);
+    trace("init_graphics: display on");
 }
