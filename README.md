@@ -177,7 +177,9 @@ and installs/configures:
 - **Azahar** (downloaded from GitHub releases) — 3DS emulator
 - **Rust** `nightly-2026-05-28` + `rust-src`, and pins the repo override
 - **cargo-psp / prxgen / pack-pbp / mksfo** (built from the `rust-psp` submodule)
-- the **PSPSDK** (prebuilt newlib) into `mipsel-sony-psp/`
+- the **PSPSDK** from `doodlewind/pspdev`
+  (`sdk-noabicalls-normalized-2026-06-19`, clang-built no-abicalls newlib/glue
+  with normalized archive metadata) into `mipsel-sony-psp/`
 - the **`devkitpro/devkitarm`** Docker image (3DS toolchain)
 
 It reports anything it can't auto-install (Homebrew/Docker not present, Docker

@@ -2,9 +2,9 @@
 // step checks first and skips if already done. Run: bun run bootstrap
 //
 // Sets up: bun deps, submodules, LLVM, PPSSPP, Azahar (3DS emulator),
-// Rust nightly + rust-src, cargo-psp/prxgen/pack-pbp/mksfo, the PSPSDK, and the
-// devkitARM docker image. Prereqs it can't auto-install (Bun, Homebrew, Docker
-// daemon) are detected and reported.
+// Rust nightly + rust-src, cargo-psp/prxgen/pack-pbp/mksfo, the normalized
+// no-abicalls PSPSDK, and the devkitARM docker image. Prereqs it can't
+// auto-install (Bun, Homebrew, Docker daemon) are detected and reported.
 import { $ } from "bun";
 import { existsSync } from "node:fs";
 
@@ -91,17 +91,17 @@ if (!cargo && !rustup) {
     ? await run($`${rustup} run stable cargo build --release --bins`.cwd(root + "rust-psp/cargo-psp"))
     : await run($`${cargo} build --release --bins`.cwd(root + "rust-psp/cargo-psp"));
   if (built) {
-    for (const t of tools) await run($`cp ${root}rust-psp/target/release/${t} ${home}/.cargo/bin/${t}`);
+    for (const t of tools) await run($`cp ${root}rust-psp/cargo-psp/target/release/${t} ${home}/.cargo/bin/${t}`);
     rec("cargo-psp tools", "ok");
   } else rec("cargo-psp tools", "fail", "build failed");
 }
 
-// 7) PSPSDK (prebuilt newlib)
+// 7) PSPSDK (clang-built no-abicalls newlib/glue + normalized archive metadata)
 console.log("pspsdk:");
 if (existsSync(root + "mipsel-sony-psp/psp/lib/libc.a")) {
   rec("PSPSDK", "skip");
 } else {
-  const url = "https://github.com/doodlewind/psp-test-app/releases/download/sdk/mipsel-sony-psp.zip";
+  const url = "https://github.com/doodlewind/pspdev/releases/download/sdk-noabicalls-normalized-2026-06-19/mipsel-sony-psp.zip";
   const okDl = await run($`curl -fsSL -o /tmp/psp-sdk.zip ${url}`);
   const okUz = okDl && (await run($`unzip -q -o /tmp/psp-sdk.zip -d ${root}`));
   rec("PSPSDK", okUz ? "ok" : "fail");
