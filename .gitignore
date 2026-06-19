@@ -20,3 +20,10 @@ runtime/src/game/*.js
 node_modules
 
 .DS_Store
+
+# GoldSrc/CS BSP maps: Valve/CS-copyright maps + WADs fetched at build time, and their
+# derivative baked modules, are NOT committed (only the CC0 box.bsp fixture + its module).
+assets/vendor/bsp/*.bsp
+assets/vendor/bsp/*.wad
+framework/src/assets-bsp-*.ts
+!framework/src/assets-bsp-box.ts
