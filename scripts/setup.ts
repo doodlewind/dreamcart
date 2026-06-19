@@ -1,6 +1,5 @@
-// One-time setup after cloning: init the rust-psp / quickjs-rs submodules and
-// apply the local rust-psp patch (kept as a patch file since it lives in a
-// submodule). Idempotent. Run: bun run setup
+// One-time setup after cloning: init the rust-psp / quickjs-rs submodules.
+// Idempotent. Run: bun run setup
 import { $ } from "bun";
 import { existsSync } from "node:fs";
 
@@ -19,25 +18,6 @@ for (const sub of submodules) {
   const res = await $`git submodule update --init --depth 1 -- ${sub}`.cwd(root).nothrow();
   if (res.exitCode !== 0) {
     console.error(sub + ": failed to init/update submodule");
-    process.exit(1);
-  }
-}
-
-const patches: [string, string][] = [
-  ["rust-psp", root + "patches/rust-psp.patch"],
-];
-
-for (const [sub, patch] of patches) {
-  // Already applied? `git apply --reverse --check` succeeds -> skip.
-  const applied = await $`git -C ${sub} apply --whitespace=nowarn --reverse --check ${patch}`.cwd(root).nothrow().quiet();
-  if (applied.exitCode === 0) {
-    console.log(sub + ": patch already applied");
-    continue;
-  }
-  const res = await $`git -C ${sub} apply --whitespace=nowarn ${patch}`.cwd(root).nothrow();
-  if (res.exitCode === 0) console.log(sub + ": patch applied");
-  else {
-    console.error(sub + ": failed to apply patch");
     process.exit(1);
   }
 }

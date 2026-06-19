@@ -1,7 +1,7 @@
 // One-shot environment bootstrap for a fresh clone (macOS). Idempotent — each
 // step checks first and skips if already done. Run: bun run bootstrap
 //
-// Sets up: bun deps, submodules + rust-psp patch, LLVM, PPSSPP, Azahar (3DS emulator),
+// Sets up: bun deps, submodules, LLVM, PPSSPP, Azahar (3DS emulator),
 // Rust nightly + rust-src, cargo-psp/prxgen/pack-pbp/mksfo, the PSPSDK, and the
 // devkitARM docker image. Prereqs it can't auto-install (Bun, Homebrew, Docker
 // daemon) are detected and reported.
@@ -38,10 +38,10 @@ console.log("deps:");
 if (await run($`bun install`.cwd(root))) rec("bun install", "ok");
 else rec("bun install", "fail");
 
-// 2) submodules + rust-psp patch
+// 2) submodules
 console.log("submodules:");
-if (await run($`bun ${root}scripts/setup.ts`)) rec("submodules + rust-psp patch (bun run setup)", "ok");
-else rec("submodules + rust-psp patch", "fail");
+if (await run($`bun ${root}scripts/setup.ts`)) rec("submodules (bun run setup)", "ok");
+else rec("submodules", "fail");
 
 // 3) Homebrew (prereq)
 console.log("homebrew packages:");
