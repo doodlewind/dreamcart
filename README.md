@@ -71,8 +71,18 @@ bun run psp:diag
 
 It first prints boot, memory, EDRAM, and controller state through the PSP debug
 screen, then switches to a GU color-cycle loop. If a device hangs, the last
-visible line identifies the failing phase. For the normal game path with
-on-screen startup stages, build with `PSPJS_DIAG_MODE=trace bun run psp`.
+visible line identifies the failing phase.
+
+To test the normal Snake game path with on-screen startup stages, build the
+trace EBOOT:
+
+``` sh
+bun run psp:trace
+# -> dist/psp-trace/PSP/GAME/dreamcart-raw-snake-trace/EBOOT.PBP
+```
+
+Copy either generated `PSP` directory to the root of the PSP memory stick. On
+PS Vita Adrenaline, the final paths are under `ux0:pspemu/PSP/GAME/`.
 
 ## Play (one command)
 `bun run play <web|psp|3ds> [game]` builds the chosen game and launches the
