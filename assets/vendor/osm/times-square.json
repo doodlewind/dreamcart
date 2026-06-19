@@ -1,0 +1,8195 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-06-19T11:33:30Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "way",
+  "id": 5671182,
+  "bounds": {
+    "minlat": 40.7578359,
+    "minlon": -73.9871891,
+    "maxlat": 40.7584619,
+    "maxlon": -73.9867284
+  },
+  "nodes": [
+    42443559,
+    6598535219,
+    6598535218,
+    42432697
+  ],
+  "geometry": [
+    { "lat": 40.7578359, "lon": -73.9871891 },
+    { "lat": 40.7578898, "lon": -73.9871494 },
+    { "lat": 40.7584018, "lon": -73.9867726 },
+    { "lat": 40.7584619, "lon": -73.9867284 }
+  ],
+  "tags": {
+    "highway": "pedestrian",
+    "name": "Shubert Alley",
+    "wikidata": "Q7504539",
+    "wikipedia": "en:Shubert Alley"
+  }
+},
+{
+  "type": "way",
+  "id": 5672036,
+  "bounds": {
+    "minlat": 40.7566594,
+    "minlon": -73.9846194,
+    "maxlat": 40.7592229,
+    "maxlon": -73.9785571
+  },
+  "nodes": [
+    42452353,
+    10166333044,
+    3944708050,
+    10166333085,
+    42430350,
+    8375496966,
+    1762438249,
+    10228962338,
+    42439994
+  ],
+  "geometry": [
+    { "lat": 40.7566594, "lon": -73.9785571 },
+    { "lat": 40.7567131, "lon": -73.9786807 },
+    { "lat": 40.7567187, "lon": -73.9786939 },
+    { "lat": 40.7579598, "lon": -73.9816625 },
+    { "lat": 40.7580163, "lon": -73.9817975 },
+    { "lat": 40.7580748, "lon": -73.9819359 },
+    { "lat": 40.7583143, "lon": -73.9825027 },
+    { "lat": 40.7591754, "lon": -73.9845091 },
+    { "lat": 40.7592229, "lon": -73.9846194 }
+  ],
+  "tags": {
+    "cycleway:both": "no",
+    "highway": "residential",
+    "lanes": "1",
+    "lit": "yes",
+    "maxspeed": "25 mph",
+    "name": "West 47th Street",
+    "name:ru": "Западная 47-я стрит",
+    "name_1": "West 47 Street",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt",
+    "wikidata": "Q4638574",
+    "wikipedia": "en:47th Street (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 35027232,
+  "bounds": {
+    "minlat": 40.7581001,
+    "minlon": -73.9856475,
+    "maxlat": 40.7586294,
+    "maxlon": -73.9853696
+  },
+  "nodes": [
+    6632233656,
+    10224032643,
+    6598535203
+  ],
+  "geometry": [
+    { "lat": 40.7586294, "lon": -73.9853696 },
+    { "lat": 40.7581552, "lon": -73.9856188 },
+    { "lat": 40.7581001, "lon": -73.9856475 }
+  ],
+  "tags": {
+    "access": "yes",
+    "bicycle": "dismount",
+    "cycleway": "no",
+    "highway": "pedestrian",
+    "lit": "yes",
+    "motor_vehicle": "no",
+    "name": "Broadway",
+    "name:en": "Broadway",
+    "name:ja": "ブロードウェイ",
+    "name:ru": "Бродвей",
+    "name:zh": "百老匯",
+    "name:zh-Hans": "百老汇",
+    "name:zh-Hant": "百老匯",
+    "note": "closed to motor vehicles May 24, 2009",
+    "oneway": "no",
+    "surface": "paving_stones",
+    "wikidata": "Q11260",
+    "wikipedia": "en:Broadway (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 46522008,
+  "bounds": {
+    "minlat": 40.7580455,
+    "minlon": -73.9883858,
+    "maxlat": 40.7591595,
+    "maxlon": -73.9857320
+  },
+  "nodes": [
+    6597464445,
+    5522182777,
+    42432697,
+    6598535204,
+    42432700
+  ],
+  "geometry": [
+    { "lat": 40.7580455, "lon": -73.9857320 },
+    { "lat": 40.7582527, "lon": -73.9862271 },
+    { "lat": 40.7584619, "lon": -73.9867284 },
+    { "lat": 40.7591062, "lon": -73.9882592 },
+    { "lat": 40.7591595, "lon": -73.9883858 }
+  ],
+  "tags": {
+    "cycleway:right": "no",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "1",
+    "lit": "yes",
+    "name": "West 45th Street",
+    "name:ru": "Западная 45-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 137716320,
+  "bounds": {
+    "minlat": 40.7577223,
+    "minlon": -73.9853350,
+    "maxlat": 40.7583957,
+    "maxlon": -73.9842911
+  },
+  "nodes": [
+    1510230178,
+    1510230175,
+    1510230181,
+    2643931553,
+    2717545436,
+    2717545465,
+    1752822412,
+    1752822404,
+    2643931583,
+    1510230180,
+    8250908768,
+    2717545799,
+    2717545780,
+    1510230178
+  ],
+  "geometry": [
+    { "lat": 40.7583957, "lon": -73.9850287 },
+    { "lat": 40.7579629, "lon": -73.9853350 },
+    { "lat": 40.7577223, "lon": -73.9847443 },
+    { "lat": 40.7577883, "lon": -73.9847000 },
+    { "lat": 40.7577966, "lon": -73.9846941 },
+    { "lat": 40.7578360, "lon": -73.9846658 },
+    { "lat": 40.7579586, "lon": -73.9845778 },
+    { "lat": 40.7579118, "lon": -73.9844632 },
+    { "lat": 40.7581010, "lon": -73.9843288 },
+    { "lat": 40.7581556, "lon": -73.9842911 },
+    { "lat": 40.7581740, "lon": -73.9843363 },
+    { "lat": 40.7583084, "lon": -73.9846653 },
+    { "lat": 40.7582612, "lon": -73.9846988 },
+    { "lat": 40.7583957, "lon": -73.9850287 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "1540",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "Broadway",
+    "alt_name": "1540 Broadway",
+    "building": "yes",
+    "ele": "15",
+    "gnis:feature_id": "2083217",
+    "name": "Bertelsmann Building",
+    "nycdoitt:bin": "1076844",
+    "start_date": "1990",
+    "wikidata": "Q827638",
+    "wikipedia": "en:1540 Broadway"
+  }
+},
+{
+  "type": "way",
+  "id": 143858914,
+  "bounds": {
+    "minlat": 40.7593779,
+    "minlon": -73.9868523,
+    "maxlat": 40.7599025,
+    "maxlon": -73.9858214
+  },
+  "nodes": [
+    1574211071,
+    2717294034,
+    2639531784,
+    2717294036,
+    1574211076,
+    2639531798,
+    1574211080,
+    1574211073,
+    1752685325,
+    2639531762,
+    2639531774,
+    2639531780,
+    2639531750,
+    1574211071
+  ],
+  "geometry": [
+    { "lat": 40.7594252, "lon": -73.9868523 },
+    { "lat": 40.7596612, "lon": -73.9866791 },
+    { "lat": 40.7596657, "lon": -73.9866758 },
+    { "lat": 40.7597319, "lon": -73.9866273 },
+    { "lat": 40.7599025, "lon": -73.9865022 },
+    { "lat": 40.7597001, "lon": -73.9860240 },
+    { "lat": 40.7596139, "lon": -73.9858214 },
+    { "lat": 40.7593779, "lon": -73.9859945 },
+    { "lat": 40.7593968, "lon": -73.9860392 },
+    { "lat": 40.7594647, "lon": -73.9861965 },
+    { "lat": 40.7595319, "lon": -73.9863576 },
+    { "lat": 40.7596328, "lon": -73.9865957 },
+    { "lat": 40.7593915, "lon": -73.9867727 },
+    { "lat": 40.7594252, "lon": -73.9868523 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:country": "US",
+    "addr:housenumber": "228",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 47th Street",
+    "building": "yes",
+    "check_date": "2025-10-28",
+    "internet_access": "wlan",
+    "internet_access:fee": "yes",
+    "name": "The Hotel Edison NYC",
+    "nycdoitt:bin": "1076192",
+    "start_date": "1931",
+    "tourism": "hotel",
+    "website": "https://www.edisonhotelnyc.com/",
+    "wikidata": "Q14706412",
+    "wikipedia": "en:Hotel Edison"
+  }
+},
+{
+  "type": "way",
+  "id": 157835453,
+  "bounds": {
+    "minlat": 40.7574919,
+    "minlon": -73.9870790,
+    "maxlat": 40.7583367,
+    "maxlon": -73.9858166
+  },
+  "nodes": [
+    1700814792,
+    2639786996,
+    2639786994,
+    2639787000,
+    2639790537,
+    2639787003,
+    2639790538,
+    2639787007,
+    2639787024,
+    2639790539,
+    2639787028,
+    2639787026,
+    1700814796,
+    2639787032,
+    2639787030,
+    2639787029,
+    2639787031,
+    2639787027,
+    2639787017,
+    2639787021,
+    2639787020,
+    12246639281,
+    1700814800,
+    10224024810,
+    10224024809,
+    2639786969,
+    2639786970,
+    2639786968,
+    13031291295,
+    2639786967,
+    1700814801,
+    12246639280,
+    2639786975,
+    1739195065,
+    2639786983,
+    2639786990,
+    2639786988,
+    2639786989,
+    1700814792
+  ],
+  "geometry": [
+    { "lat": 40.7578823, "lon": -73.9870790 },
+    { "lat": 40.7579210, "lon": -73.9870504 },
+    { "lat": 40.7579067, "lon": -73.9870169 },
+    { "lat": 40.7579710, "lon": -73.9869694 },
+    { "lat": 40.7579851, "lon": -73.9870025 },
+    { "lat": 40.7579938, "lon": -73.9870230 },
+    { "lat": 40.7580004, "lon": -73.9869911 },
+    { "lat": 40.7580111, "lon": -73.9869397 },
+    { "lat": 40.7582070, "lon": -73.9867948 },
+    { "lat": 40.7582341, "lon": -73.9868171 },
+    { "lat": 40.7582620, "lon": -73.9868402 },
+    { "lat": 40.7582471, "lon": -73.9868071 },
+    { "lat": 40.7583367, "lon": -73.9867407 },
+    { "lat": 40.7583150, "lon": -73.9866895 },
+    { "lat": 40.7582946, "lon": -73.9867046 },
+    { "lat": 40.7582669, "lon": -73.9866394 },
+    { "lat": 40.7582979, "lon": -73.9866172 },
+    { "lat": 40.7582490, "lon": -73.9865972 },
+    { "lat": 40.7581320, "lon": -73.9863216 },
+    { "lat": 40.7581628, "lon": -73.9862609 },
+    { "lat": 40.7581592, "lon": -73.9862366 },
+    { "lat": 40.7581440, "lon": -73.9862002 },
+    { "lat": 40.7579997, "lon": -73.9858551 },
+    { "lat": 40.7578984, "lon": -73.9858841 },
+    { "lat": 40.7578840, "lon": -73.9858166 },
+    { "lat": 40.7575088, "lon": -73.9860866 },
+    { "lat": 40.7575624, "lon": -73.9861710 },
+    { "lat": 40.7575205, "lon": -73.9862007 },
+    { "lat": 40.7575027, "lon": -73.9861621 },
+    { "lat": 40.7574919, "lon": -73.9861682 },
+    { "lat": 40.7575083, "lon": -73.9862096 },
+    { "lat": 40.7576406, "lon": -73.9865384 },
+    { "lat": 40.7576712, "lon": -73.9866144 },
+    { "lat": 40.7576928, "lon": -73.9866646 },
+    { "lat": 40.7577365, "lon": -73.9866383 },
+    { "lat": 40.7578468, "lon": -73.9868981 },
+    { "lat": 40.7578148, "lon": -73.9869635 },
+    { "lat": 40.7578291, "lon": -73.9869537 },
+    { "lat": 40.7578823, "lon": -73.9870790 }
+  ],
+  "tags": {
+    "addr:housenumber": "1515",
+    "addr:street": "Broadway",
+    "alt_name": "VIACOM Building",
+    "building": "yes",
+    "name": "One Astor Place",
+    "nycdoitt:bin": "1024714",
+    "start_date": "1972",
+    "wikidata": "Q659652"
+  }
+},
+{
+  "type": "way",
+  "id": 163474780,
+  "bounds": {
+    "minlat": 40.7581537,
+    "minlon": -73.9869907,
+    "maxlat": 40.7590449,
+    "maxlon": -73.9855289
+  },
+  "nodes": [
+    1700814795,
+    1751597928,
+    1751597892,
+    1751597895,
+    1751597924,
+    1751597916,
+    1751597914,
+    1751597891,
+    1751597936,
+    1751597901,
+    1751597922,
+    10228962400,
+    1751597933,
+    1751597897,
+    1700814794,
+    2673426546,
+    4550600353,
+    1700814797,
+    2653764647,
+    2653764653,
+    1751737228,
+    2653764650,
+    2717293968,
+    2653764644,
+    2653764641,
+    1700814799,
+    4550600352,
+    5522182778,
+    2673426498,
+    2717293930,
+    1700814795
+  ],
+  "geometry": [
+    { "lat": 40.7581537, "lon": -73.9857275 },
+    { "lat": 40.7582666, "lon": -73.9856840 },
+    { "lat": 40.7583394, "lon": -73.9856560 },
+    { "lat": 40.7583489, "lon": -73.9856299 },
+    { "lat": 40.7583636, "lon": -73.9856036 },
+    { "lat": 40.7583773, "lon": -73.9855874 },
+    { "lat": 40.7583918, "lon": -73.9855752 },
+    { "lat": 40.7584128, "lon": -73.9855641 },
+    { "lat": 40.7584323, "lon": -73.9855594 },
+    { "lat": 40.7584540, "lon": -73.9855597 },
+    { "lat": 40.7584738, "lon": -73.9855652 },
+    { "lat": 40.7584925, "lon": -73.9855764 },
+    { "lat": 40.7585088, "lon": -73.9855898 },
+    { "lat": 40.7585500, "lon": -73.9855749 },
+    { "lat": 40.7586695, "lon": -73.9855289 },
+    { "lat": 40.7586850, "lon": -73.9855584 },
+    { "lat": 40.7590054, "lon": -73.9863268 },
+    { "lat": 40.7590449, "lon": -73.9864228 },
+    { "lat": 40.7589337, "lon": -73.9865026 },
+    { "lat": 40.7589576, "lon": -73.9865611 },
+    { "lat": 40.7588386, "lon": -73.9866476 },
+    { "lat": 40.7589424, "lon": -73.9868945 },
+    { "lat": 40.7589152, "lon": -73.9869143 },
+    { "lat": 40.7588102, "lon": -73.9869907 },
+    { "lat": 40.7587556, "lon": -73.9868613 },
+    { "lat": 40.7586441, "lon": -73.9869427 },
+    { "lat": 40.7585327, "lon": -73.9866763 },
+    { "lat": 40.7583240, "lon": -73.9861757 },
+    { "lat": 40.7581787, "lon": -73.9858277 },
+    { "lat": 40.7581923, "lon": -73.9858175 },
+    { "lat": 40.7581537, "lon": -73.9857275 }
+  ],
+  "tags": {
+    "addr:housenumber": "1535",
+    "addr:street": "Broadway",
+    "air_conditioning": "yes",
+    "alt_name": "Marriott Marquis",
+    "brand": "Marirott",
+    "building": "yes",
+    "check_date": "2025-04-18",
+    "internet_access": "wlan",
+    "internet_access:fee": "customers",
+    "name": "New York Marriott Marquis",
+    "name:en": "New York Marriott Marquis",
+    "name:ja": "ニュヨークマリオットマーキース",
+    "nycdoitt:bin": "1024727",
+    "opening_hours": "24/7",
+    "payment:credit_cards": "yes",
+    "reservation": "required",
+    "start_date": "1985",
+    "tourism": "hotel",
+    "website": "https://www.marriott.com/hotels/travel/nycmq-new-york-marriott-marquis/",
+    "wheelchair": "yes",
+    "wikidata": "Q7013741",
+    "wikipedia": "en:New York Marriott Marquis"
+  }
+},
+{
+  "type": "way",
+  "id": 163629929,
+  "bounds": {
+    "minlat": 40.7564316,
+    "minlon": -73.9859744,
+    "maxlat": 40.7571270,
+    "maxlon": -73.9853274
+  },
+  "nodes": [
+    1752942886,
+    1752942872,
+    1752942863,
+    1752942862,
+    1752942880,
+    1752942901,
+    1752942859,
+    1752942886
+  ],
+  "geometry": [
+    { "lat": 40.7569584, "lon": -73.9853274 },
+    { "lat": 40.7571260, "lon": -73.9857305 },
+    { "lat": 40.7571270, "lon": -73.9857678 },
+    { "lat": 40.7565956, "lon": -73.9859744 },
+    { "lat": 40.7564316, "lon": -73.9855893 },
+    { "lat": 40.7566055, "lon": -73.9854597 },
+    { "lat": 40.7566464, "lon": -73.9855567 },
+    { "lat": 40.7569584, "lon": -73.9853274 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "1500",
+    "addr:state": "NY",
+    "addr:street": "Broadway",
+    "building": "office",
+    "height": "25",
+    "nycdoitt:bin": "1022610",
+    "smoking": "no",
+    "start_date": "1972",
+    "wikidata": "Q4550139",
+    "wikipedia": "en:1500 Broadway"
+  }
+},
+{
+  "type": "way",
+  "id": 167922071,
+  "bounds": {
+    "minlat": 40.7592229,
+    "minlon": -73.9846194,
+    "maxlat": 40.7598410,
+    "maxlon": -73.9841740
+  },
+  "nodes": [
+    42439996,
+    10172901890,
+    10228962335,
+    42439994
+  ],
+  "geometry": [
+    { "lat": 40.7598410, "lon": -73.9841740 },
+    { "lat": 40.7597819, "lon": -73.9842169 },
+    { "lat": 40.7592703, "lon": -73.9845851 },
+    { "lat": 40.7592229, "lon": -73.9846194 }
+  ],
+  "tags": {
+    "cycleway:left": "track",
+    "foot": "designated",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "3",
+    "lit": "yes",
+    "maxspeed": "25 mph",
+    "name": "7th Avenue",
+    "name:ru": "7-я Авеню",
+    "name_1": "7 Avenue",
+    "oneway": "yes",
+    "parking:both": "lane",
+    "parking:both:orientation": "parallel",
+    "sidewalk:both": "separate",
+    "surface": "asphalt",
+    "wikidata": "Q109926",
+    "wikipedia": "en:Seventh Avenue (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 226041026,
+  "bounds": {
+    "minlat": 40.7561421,
+    "minlon": -73.9856903,
+    "maxlat": 40.7572084,
+    "maxlon": -73.9831665
+  },
+  "nodes": [
+    9235539560,
+    13915675578,
+    8396878495,
+    3944708047,
+    42430342
+  ],
+  "geometry": [
+    { "lat": 40.7572084, "lon": -73.9856903 },
+    { "lat": 40.7568771, "lon": -73.9849062 },
+    { "lat": 40.7565117, "lon": -73.9840416 },
+    { "lat": 40.7561970, "lon": -73.9832969 },
+    { "lat": 40.7561421, "lon": -73.9831665 }
+  ],
+  "tags": {
+    "bicycle": "yes",
+    "cycleway": "shared_lane",
+    "cycleway:left": "lane",
+    "highway": "residential",
+    "lanes": "1",
+    "lit": "yes",
+    "name": "West 44th Street",
+    "name:ru": "Западная 44-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 258619240,
+  "bounds": {
+    "minlat": 40.7590503,
+    "minlon": -73.9850311,
+    "maxlat": 40.7592561,
+    "maxlon": -73.9848231
+  },
+  "nodes": [
+    2623573898,
+    7254138685,
+    2639531736,
+    2639531717,
+    11269427255,
+    2639531715,
+    2623573898
+  ],
+  "geometry": [
+    { "lat": 40.7591909, "lon": -73.9848231 },
+    { "lat": 40.7592260, "lon": -73.9849051 },
+    { "lat": 40.7592561, "lon": -73.9849754 },
+    { "lat": 40.7590961, "lon": -73.9850311 },
+    { "lat": 40.7590739, "lon": -73.9849793 },
+    { "lat": 40.7590503, "lon": -73.9849231 },
+    { "lat": 40.7591909, "lon": -73.9848231 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "201",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 47th Street",
+    "branch": "Times Square",
+    "brand": "TKTS",
+    "brand:wikidata": "Q5356353",
+    "building": "yes",
+    "building:levels": "1",
+    "building:material": "glass",
+    "building:part": "steps",
+    "check_date": "2026-06-11",
+    "height": "5",
+    "name": "TKTS",
+    "opening_hours": "Mo, We-Sa 15:00-20:00; Tu 14:00-20:00; Su 15:00-19:00",
+    "operator": "Theatre Development Fund",
+    "operator:type": "ngo",
+    "operator:wikidata": "Q17089983",
+    "operator:wikipedia": "en:Theatre Development Fund",
+    "payment:american_express": "yes",
+    "payment:cash": "yes",
+    "payment:discover_card": "yes",
+    "payment:mastercard": "yes",
+    "payment:visa": "yes",
+    "phone": "+1-212-912-9770",
+    "roof:colour": "red",
+    "roof:direction": "208",
+    "roof:height": "5",
+    "roof:shape": "skillion",
+    "shop": "ticket",
+    "website": "https://www.tdf.org/tkts"
+  }
+},
+{
+  "type": "way",
+  "id": 258646144,
+  "bounds": {
+    "minlat": 40.7567830,
+    "minlon": -73.9862495,
+    "maxlat": 40.7568930,
+    "maxlon": -73.9861566
+  },
+  "nodes": [
+    2639786966,
+    2639786964,
+    2639786963,
+    2639786965,
+    10224024754,
+    2639786966
+  ],
+  "geometry": [
+    { "lat": 40.7568930, "lon": -73.9861958 },
+    { "lat": 40.7567953, "lon": -73.9862495 },
+    { "lat": 40.7567830, "lon": -73.9862103 },
+    { "lat": 40.7568807, "lon": -73.9861566 },
+    { "lat": 40.7568865, "lon": -73.9861752 },
+    { "lat": 40.7568930, "lon": -73.9861958 }
+  ],
+  "tags": {
+    "building": "yes",
+    "building:levels": "1",
+    "building:material": "glass",
+    "height": "5.5",
+    "loc_name": "Neon Flag",
+    "military": "office",
+    "name": "U.S. Armed Forces Recruiting Station",
+    "roof:material": "concrete",
+    "roof:shape": "flat"
+  }
+},
+{
+  "type": "way",
+  "id": 260180778,
+  "bounds": {
+    "minlat": 40.7573918,
+    "minlon": -73.9842560,
+    "maxlat": 40.7577464,
+    "maxlon": -73.9837927
+  },
+  "nodes": [
+    2656646537,
+    1753048856,
+    2656646535,
+    2934243794,
+    2934243792,
+    2934243790,
+    2934243788,
+    2717545233,
+    2717545300,
+    2934243797,
+    2934243799,
+    2934244801,
+    2934244803,
+    2656646536,
+    2717545412,
+    2656646537
+  ],
+  "geometry": [
+    { "lat": 40.7577464, "lon": -73.9840888 },
+    { "lat": 40.7576242, "lon": -73.9837927 },
+    { "lat": 40.7575785, "lon": -73.9838256 },
+    { "lat": 40.7574434, "lon": -73.9839226 },
+    { "lat": 40.7574345, "lon": -73.9839291 },
+    { "lat": 40.7574260, "lon": -73.9839353 },
+    { "lat": 40.7574173, "lon": -73.9839417 },
+    { "lat": 40.7573918, "lon": -73.9839598 },
+    { "lat": 40.7575140, "lon": -73.9842560 },
+    { "lat": 40.7575395, "lon": -73.9842377 },
+    { "lat": 40.7575483, "lon": -73.9842313 },
+    { "lat": 40.7575569, "lon": -73.9842251 },
+    { "lat": 40.7575655, "lon": -73.9842190 },
+    { "lat": 40.7577007, "lon": -73.9841216 },
+    { "lat": 40.7577312, "lon": -73.9840997 },
+    { "lat": 40.7577464, "lon": -73.9840888 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "135",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 45th Street",
+    "brand": "Hyatt Centric",
+    "brand:wikidata": "Q109277705",
+    "building": "hotel",
+    "email": "timessquare@hyatt.com",
+    "fitness_centre": "yes",
+    "internet_access": "wlan",
+    "internet_access:fee": "no",
+    "name": "Hyatt Centric Times Square",
+    "nycdoitt:bin": "1000000",
+    "official_name": "Hyatt Times Square New York",
+    "operator": "Hyatt",
+    "phone": "+1 646-364-1234",
+    "rooms": "487",
+    "smoking": "no",
+    "start_date": "2013",
+    "tourism": "hotel",
+    "website": "https://www.hyatt.com/en-US/hotel/new-york/hyatt-centric-times-square-new-york/nycts"
+  }
+},
+{
+  "type": "way",
+  "id": 266034080,
+  "bounds": {
+    "minlat": 40.7562748,
+    "minlon": -73.9874087,
+    "maxlat": 40.7569014,
+    "maxlon": -73.9866851
+  },
+  "nodes": [
+    2716231355,
+    2716231356,
+    2716231343,
+    2716231341,
+    2716231339,
+    2716231336,
+    2716231332,
+    2716231328,
+    2716231324,
+    2716231320,
+    2716231309,
+    2716231305,
+    2716231301,
+    2716231297,
+    2716231292,
+    2716231289,
+    2716231288,
+    2716231293,
+    2716231296,
+    2716231300,
+    2716231303,
+    2716231307,
+    2716231311,
+    2716231313,
+    2716231322,
+    2716231326,
+    2716231329,
+    2716231333,
+    2716231337,
+    3447488959,
+    2716231347,
+    2716231359,
+    2716231366,
+    2716231387,
+    2716231382,
+    2716231386,
+    2716231368,
+    2716231364,
+    2716231355
+  ],
+  "geometry": [
+    { "lat": 40.7565620, "lon": -73.9867685 },
+    { "lat": 40.7565754, "lon": -73.9868004 },
+    { "lat": 40.7563929, "lon": -73.9869344 },
+    { "lat": 40.7563774, "lon": -73.9869395 },
+    { "lat": 40.7563624, "lon": -73.9869454 },
+    { "lat": 40.7563482, "lon": -73.9869521 },
+    { "lat": 40.7563421, "lon": -73.9869559 },
+    { "lat": 40.7563296, "lon": -73.9869649 },
+    { "lat": 40.7563177, "lon": -73.9869777 },
+    { "lat": 40.7563067, "lon": -73.9869904 },
+    { "lat": 40.7562968, "lon": -73.9870041 },
+    { "lat": 40.7562933, "lon": -73.9870104 },
+    { "lat": 40.7562866, "lon": -73.9870272 },
+    { "lat": 40.7562809, "lon": -73.9870451 },
+    { "lat": 40.7562765, "lon": -73.9870633 },
+    { "lat": 40.7562754, "lon": -73.9870715 },
+    { "lat": 40.7562748, "lon": -73.9870909 },
+    { "lat": 40.7562754, "lon": -73.9871104 },
+    { "lat": 40.7562765, "lon": -73.9871193 },
+    { "lat": 40.7562807, "lon": -73.9871381 },
+    { "lat": 40.7562834, "lon": -73.9871466 },
+    { "lat": 40.7562907, "lon": -73.9871641 },
+    { "lat": 40.7562949, "lon": -73.9871719 },
+    { "lat": 40.7562995, "lon": -73.9871790 },
+    { "lat": 40.7563106, "lon": -73.9871932 },
+    { "lat": 40.7563224, "lon": -73.9872067 },
+    { "lat": 40.7563349, "lon": -73.9872197 },
+    { "lat": 40.7563413, "lon": -73.9872260 },
+    { "lat": 40.7563456, "lon": -73.9872228 },
+    { "lat": 40.7563644, "lon": -73.9872666 },
+    { "lat": 40.7564242, "lon": -73.9874087 },
+    { "lat": 40.7566325, "lon": -73.9872553 },
+    { "lat": 40.7566782, "lon": -73.9873635 },
+    { "lat": 40.7569014, "lon": -73.9871990 },
+    { "lat": 40.7568806, "lon": -73.9871500 },
+    { "lat": 40.7568993, "lon": -73.9871362 },
+    { "lat": 40.7567156, "lon": -73.9867017 },
+    { "lat": 40.7566756, "lon": -73.9866851 },
+    { "lat": 40.7565620, "lon": -73.9867685 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "3",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "Times Square",
+    "alt_name": "Thompson Reuters Building",
+    "building": "commercial",
+    "height": "169",
+    "name": "3 Times Square",
+    "nycdoitt:bin": "1024686",
+    "start_date": "2001",
+    "wikidata": "Q4636552",
+    "wikipedia": "en:3 Times Square"
+  }
+},
+{
+  "type": "way",
+  "id": 266149299,
+  "bounds": {
+    "minlat": 40.7581902,
+    "minlon": -73.9873465,
+    "maxlat": 40.7585401,
+    "maxlon": -73.9868409
+  },
+  "nodes": [
+    2717293939,
+    2717293949,
+    2717293948,
+    2717293952,
+    2717293944,
+    2717293942,
+    2717293940,
+    1751737194,
+    2717293928,
+    2717293939
+  ],
+  "geometry": [
+    { "lat": 40.7583403, "lon": -73.9873465 },
+    { "lat": 40.7585269, "lon": -73.9872105 },
+    { "lat": 40.7585089, "lon": -73.9871679 },
+    { "lat": 40.7585401, "lon": -73.9871452 },
+    { "lat": 40.7584176, "lon": -73.9868546 },
+    { "lat": 40.7584073, "lon": -73.9868461 },
+    { "lat": 40.7583951, "lon": -73.9868409 },
+    { "lat": 40.7583509, "lon": -73.9868749 },
+    { "lat": 40.7581902, "lon": -73.9869903 },
+    { "lat": 40.7583403, "lon": -73.9873465 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "222",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 45th Street",
+    "amenity": "theatre",
+    "building": "theatre",
+    "height": "21.0",
+    "name": "Booth Theatre",
+    "nycdoitt:bin": "1080841",
+    "start_date": "1913",
+    "wheelchair": "no",
+    "wikidata": "Q3527434",
+    "wikipedia": "en:Booth Theatre"
+  }
+},
+{
+  "type": "way",
+  "id": 266149305,
+  "bounds": {
+    "minlat": 40.7589640,
+    "minlon": -73.9856955,
+    "maxlat": 40.7591395,
+    "maxlon": -73.9853942
+  },
+  "nodes": [
+    2717293971,
+    2717293990,
+    2717293997,
+    2717293982,
+    2717293971
+  ],
+  "geometry": [
+    { "lat": 40.7589640, "lon": -73.9854175 },
+    { "lat": 40.7590819, "lon": -73.9856955 },
+    { "lat": 40.7591395, "lon": -73.9856532 },
+    { "lat": 40.7590297, "lon": -73.9853942 },
+    { "lat": 40.7589640, "lon": -73.9854175 }
+  ],
+  "tags": {
+    "addr:housenumber": "1555",
+    "addr:postcode": "10036",
+    "addr:street": "Broadway",
+    "building": "yes",
+    "height": "18.6",
+    "nycdoitt:bin": "1088568"
+  }
+},
+{
+  "type": "way",
+  "id": 266149306,
+  "bounds": {
+    "minlat": 40.7590297,
+    "minlon": -73.9856532,
+    "maxlat": 40.7592939,
+    "maxlon": -73.9853320
+  },
+  "nodes": [
+    2717293982,
+    2717293997,
+    2717294008,
+    2717294015,
+    2717294006,
+    9354852632,
+    2717293982
+  ],
+  "geometry": [
+    { "lat": 40.7590297, "lon": -73.9853942 },
+    { "lat": 40.7591395, "lon": -73.9856532 },
+    { "lat": 40.7592110, "lon": -73.9856008 },
+    { "lat": 40.7592939, "lon": -73.9855400 },
+    { "lat": 40.7592057, "lon": -73.9853320 },
+    { "lat": 40.7591197, "lon": -73.9853624 },
+    { "lat": 40.7590297, "lon": -73.9853942 }
+  ],
+  "tags": {
+    "addr:housenumber": "1557",
+    "addr:postcode": "10036",
+    "addr:street": "Broadway",
+    "building": "yes",
+    "height": "13.9",
+    "nycdoitt:bin": "1024741"
+  }
+},
+{
+  "type": "way",
+  "id": 266149307,
+  "bounds": {
+    "minlat": 40.7592057,
+    "minlon": -73.9855400,
+    "maxlat": 40.7593458,
+    "maxlon": -73.9853111
+  },
+  "nodes": [
+    2717294006,
+    2717294015,
+    2717294020,
+    2717294013,
+    2717294006
+  ],
+  "geometry": [
+    { "lat": 40.7592057, "lon": -73.9853320 },
+    { "lat": 40.7592939, "lon": -73.9855400 },
+    { "lat": 40.7593458, "lon": -73.9855019 },
+    { "lat": 40.7592649, "lon": -73.9853111 },
+    { "lat": 40.7592057, "lon": -73.9853320 }
+  ],
+  "tags": {
+    "addr:housenumber": "1565",
+    "addr:postcode": "10036",
+    "addr:street": "Broadway",
+    "building": "yes",
+    "height": "14.6",
+    "nycdoitt:bin": "1024749"
+  }
+},
+{
+  "type": "way",
+  "id": 266149308,
+  "bounds": {
+    "minlat": 40.7593316,
+    "minlon": -73.9859945,
+    "maxlat": 40.7596139,
+    "maxlon": -73.9857123
+  },
+  "nodes": [
+    2717294018,
+    1574211073,
+    1574211080,
+    2717294030,
+    2717294018
+  ],
+  "geometry": [
+    { "lat": 40.7593316, "lon": -73.9858854 },
+    { "lat": 40.7593779, "lon": -73.9859945 },
+    { "lat": 40.7596139, "lon": -73.9858214 },
+    { "lat": 40.7595676, "lon": -73.9857123 },
+    { "lat": 40.7593316, "lon": -73.9858854 }
+  ],
+  "tags": {
+    "addr:housenumber": "224",
+    "addr:postcode": "10036",
+    "addr:street": "West 47th Street",
+    "brand": "Cambria Hotel",
+    "brand:wikidata": "Q113152476",
+    "building": "yes",
+    "height": "39.5",
+    "name": "Cambria Hotel",
+    "nycdoitt:bin": "1024743",
+    "tourism": "hotel"
+  }
+},
+{
+  "type": "way",
+  "id": 266149309,
+  "bounds": {
+    "minlat": 40.7592905,
+    "minlon": -73.9867727,
+    "maxlat": 40.7596328,
+    "maxlon": -73.9863576
+  },
+  "nodes": [
+    2639531738,
+    2639531750,
+    2639531780,
+    2639531774,
+    12197834835,
+    2639531738
+  ],
+  "geometry": [
+    { "lat": 40.7592905, "lon": -73.9865346 },
+    { "lat": 40.7593915, "lon": -73.9867727 },
+    { "lat": 40.7596328, "lon": -73.9865957 },
+    { "lat": 40.7595319, "lon": -73.9863576 },
+    { "lat": 40.7593504, "lon": -73.9864907 },
+    { "lat": 40.7592905, "lon": -73.9865346 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "227",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 46th Street",
+    "air_conditioning": "yes",
+    "amenity": "place_of_worship",
+    "building": "church",
+    "height": "26.6",
+    "name": "Church of Scientology of New York",
+    "nycdoitt:bin": "1024738",
+    "opening_hours": "Mo-Fr 09:00-22:00; Sa-Su 09:00-18:30",
+    "religion": "scientologist",
+    "website": "https://www.scientology-newyork.org/"
+  }
+},
+{
+  "type": "way",
+  "id": 266149327,
+  "bounds": {
+    "minlat": 40.7589696,
+    "minlon": -73.9861865,
+    "maxlat": 40.7593968,
+    "maxlon": -73.9856008
+  },
+  "nodes": [
+    2717294008,
+    2717293997,
+    2717293990,
+    2717293973,
+    2717293972,
+    1752685324,
+    2717293998,
+    2717294004,
+    2717294005,
+    1752685325,
+    1574211073,
+    2717294018,
+    2717294008
+  ],
+  "geometry": [
+    { "lat": 40.7592110, "lon": -73.9856008 },
+    { "lat": 40.7591395, "lon": -73.9856532 },
+    { "lat": 40.7590819, "lon": -73.9856955 },
+    { "lat": 40.7589726, "lon": -73.9857756 },
+    { "lat": 40.7589696, "lon": -73.9857778 },
+    { "lat": 40.7590271, "lon": -73.9859160 },
+    { "lat": 40.7591429, "lon": -73.9861865 },
+    { "lat": 40.7591895, "lon": -73.9861523 },
+    { "lat": 40.7592020, "lon": -73.9861820 },
+    { "lat": 40.7593968, "lon": -73.9860392 },
+    { "lat": 40.7593779, "lon": -73.9859945 },
+    { "lat": 40.7593316, "lon": -73.9858854 },
+    { "lat": 40.7592110, "lon": -73.9856008 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "205",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 46th Street",
+    "amenity": "theatre",
+    "building": "theatre",
+    "check_date": "2025-10-30",
+    "height": "26.2",
+    "name": "Lunt-Fontanne Theatre",
+    "nycdoitt:bin": "1024739",
+    "start_date": "1910",
+    "website": "http://luntfontannetheatre.com/",
+    "wikidata": "Q7634840",
+    "wikipedia": "en:Lunt-Fontanne Theatre"
+  }
+},
+{
+  "type": "way",
+  "id": 266149329,
+  "bounds": {
+    "minlat": 40.7586975,
+    "minlon": -73.9873874,
+    "maxlat": 40.7590476,
+    "maxlon": -73.9869143
+  },
+  "nodes": [
+    2717293960,
+    1751762438,
+    2717293963,
+    2717293984,
+    2717293968,
+    2653764644,
+    2717293960
+  ],
+  "geometry": [
+    { "lat": 40.7586975, "lon": -73.9870727 },
+    { "lat": 40.7588073, "lon": -73.9873348 },
+    { "lat": 40.7588290, "lon": -73.9873874 },
+    { "lat": 40.7590476, "lon": -73.9872281 },
+    { "lat": 40.7589152, "lon": -73.9869143 },
+    { "lat": 40.7588102, "lon": -73.9869907 },
+    { "lat": 40.7586975, "lon": -73.9870727 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "239",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 45th Street",
+    "amenity": "theatre",
+    "building": "theatre",
+    "height": "19.9",
+    "name": "Music Box Theatre",
+    "nycdoitt:bin": "1024726",
+    "start_date": "1923",
+    "website": "https://shubert.nyc/theatres/music-box",
+    "wikidata": "Q1954899",
+    "wikipedia": "en:Music Box Theatre"
+  }
+},
+{
+  "type": "way",
+  "id": 266149330,
+  "bounds": {
+    "minlat": 40.7588386,
+    "minlon": -73.9870152,
+    "maxlat": 40.7592389,
+    "maxlon": -73.9864711
+  },
+  "nodes": [
+    1751737228,
+    2653764650,
+    2717293975,
+    2717294010,
+    5140225522,
+    6933286563,
+    1751737196,
+    2717293989,
+    2717293987,
+    2653764653,
+    1751737228
+  ],
+  "geometry": [
+    { "lat": 40.7588386, "lon": -73.9866476 },
+    { "lat": 40.7589424, "lon": -73.9868945 },
+    { "lat": 40.7589933, "lon": -73.9870152 },
+    { "lat": 40.7592389, "lon": -73.9868367 },
+    { "lat": 40.7592298, "lon": -73.9868148 },
+    { "lat": 40.7592083, "lon": -73.9867634 },
+    { "lat": 40.7591159, "lon": -73.9865418 },
+    { "lat": 40.7590834, "lon": -73.9864711 },
+    { "lat": 40.7590685, "lon": -73.9864806 },
+    { "lat": 40.7589576, "lon": -73.9865611 },
+    { "lat": 40.7588386, "lon": -73.9866476 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "226",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 46th Street",
+    "alt_name": "Richard Rodgers Theater;Richard Rodgers",
+    "amenity": "theatre",
+    "building": "theatre",
+    "ele": "14",
+    "gnis:feature_id": "2083219",
+    "height": "22.3",
+    "name": "Richard Rodgers Theatre",
+    "name:etymology:wikidata": "Q269094",
+    "nycdoitt:bin": "1024728",
+    "start_date": "1925",
+    "wikidata": "Q7328714",
+    "wikipedia": "en:Richard Rodgers Theatre"
+  }
+},
+{
+  "type": "way",
+  "id": 266149334,
+  "bounds": {
+    "minlat": 40.7579373,
+    "minlon": -73.9875223,
+    "maxlat": 40.7583403,
+    "maxlon": -73.9869903
+  },
+  "nodes": [
+    2717293915,
+    2717293913,
+    2717293914,
+    1752649776,
+    2717293920,
+    2717293925,
+    2717293937,
+    2717293939,
+    2717293928,
+    1752649778,
+    2717293915
+  ],
+  "geometry": [
+    { "lat": 40.7579448, "lon": -73.9871693 },
+    { "lat": 40.7579373, "lon": -73.9871825 },
+    { "lat": 40.7579386, "lon": -73.9872070 },
+    { "lat": 40.7580601, "lon": -73.9874952 },
+    { "lat": 40.7580813, "lon": -73.9874797 },
+    { "lat": 40.7580993, "lon": -73.9875223 },
+    { "lat": 40.7583175, "lon": -73.9873631 },
+    { "lat": 40.7583403, "lon": -73.9873465 },
+    { "lat": 40.7581902, "lon": -73.9869903 },
+    { "lat": 40.7579814, "lon": -73.9871435 },
+    { "lat": 40.7579448, "lon": -73.9871693 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "225",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 44th Street",
+    "amenity": "theatre",
+    "building": "theatre",
+    "height": "21.9",
+    "name": "Shubert Theatre",
+    "nycdoitt:bin": "1080842",
+    "start_date": "1913",
+    "wikidata": "Q1797756",
+    "wikipedia": "en:Shubert Theatre (Broadway)"
+  }
+},
+{
+  "type": "way",
+  "id": 266149338,
+  "bounds": {
+    "minlat": 40.7571233,
+    "minlon": -73.9882128,
+    "maxlat": 40.7578241,
+    "maxlon": -73.9868743
+  },
+  "nodes": [
+    2717293892,
+    2717293891,
+    2717293890,
+    2717293889,
+    2717293888,
+    2717293885,
+    2717293886,
+    2717293884,
+    2717293893,
+    2717293904,
+    2717293899,
+    2717293895,
+    2717293906,
+    2717293902,
+    2717293903,
+    2717293900,
+    2717293898,
+    2717293894,
+    2717293892
+  ],
+  "geometry": [
+    { "lat": 40.7575114, "lon": -73.9869319 },
+    { "lat": 40.7574904, "lon": -73.9868820 },
+    { "lat": 40.7574537, "lon": -73.9869170 },
+    { "lat": 40.7574073, "lon": -73.9869478 },
+    { "lat": 40.7573678, "lon": -73.9869931 },
+    { "lat": 40.7571910, "lon": -73.9871216 },
+    { "lat": 40.7572049, "lon": -73.9871546 },
+    { "lat": 40.7571233, "lon": -73.9872140 },
+    { "lat": 40.7575429, "lon": -73.9882128 },
+    { "lat": 40.7577839, "lon": -73.9880377 },
+    { "lat": 40.7576850, "lon": -73.9878023 },
+    { "lat": 40.7575976, "lon": -73.9875943 },
+    { "lat": 40.7578241, "lon": -73.9874297 },
+    { "lat": 40.7577566, "lon": -73.9872693 },
+    { "lat": 40.7577712, "lon": -73.9872587 },
+    { "lat": 40.7576895, "lon": -73.9870642 },
+    { "lat": 40.7576749, "lon": -73.9870748 },
+    { "lat": 40.7575907, "lon": -73.9868743 },
+    { "lat": 40.7575114, "lon": -73.9869319 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "229",
+    "addr:state": "NY",
+    "addr:street": "West 43rd Street",
+    "building": "commercial",
+    "height": "81",
+    "name": "Times Square Building",
+    "nycdoitt:bin": "1088760",
+    "old_name": "New York Times Building",
+    "start_date": "1913",
+    "wikidata": "Q7769405",
+    "wikipedia": "en:229 West 43rd Street"
+  }
+},
+{
+  "type": "way",
+  "id": 266149345,
+  "bounds": {
+    "minlat": 40.7588290,
+    "minlon": -73.9874508,
+    "maxlat": 40.7593885,
+    "maxlon": -73.9868367
+  },
+  "nodes": [
+    2717293975,
+    2717293986,
+    2717293984,
+    2717293963,
+    1751737192,
+    2717293966,
+    11523953029,
+    2717293992,
+    2717293996,
+    2717294022,
+    2717294010,
+    2717293975
+  ],
+  "geometry": [
+    { "lat": 40.7589933, "lon": -73.9870152 },
+    { "lat": 40.7590746, "lon": -73.9872081 },
+    { "lat": 40.7590476, "lon": -73.9872281 },
+    { "lat": 40.7588290, "lon": -73.9873874 },
+    { "lat": 40.7588418, "lon": -73.9874188 },
+    { "lat": 40.7588551, "lon": -73.9874508 },
+    { "lat": 40.7588652, "lon": -73.9874434 },
+    { "lat": 40.7591010, "lon": -73.9872710 },
+    { "lat": 40.7591444, "lon": -73.9873731 },
+    { "lat": 40.7593885, "lon": -73.9871945 },
+    { "lat": 40.7592389, "lon": -73.9868367 },
+    { "lat": 40.7589933, "lon": -73.9870152 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "249",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 45th Street",
+    "alt_name": "Imperial Theater",
+    "amenity": "theatre",
+    "building": "theatre",
+    "ele": "13",
+    "gnis:feature_id": "2083218",
+    "height": "19.6",
+    "name": "Imperial Theatre",
+    "nycdoitt:bin": "1024725",
+    "operator": "The Schubert Organization",
+    "start_date": "1923-12-25",
+    "website": "https://shubert.nyc/theatres/imperial",
+    "wheelchair": "limited",
+    "wikidata": "Q6006906",
+    "wikipedia": "en:Imperial Theatre"
+  }
+},
+{
+  "type": "way",
+  "id": 266149351,
+  "bounds": {
+    "minlat": 40.7593605,
+    "minlon": -73.9848740,
+    "maxlat": 40.7599535,
+    "maxlon": -73.9843899
+  },
+  "nodes": [
+    2435108445,
+    2639531760,
+    2639531746,
+    2639531752,
+    2639531772,
+    2435108433,
+    6609644792,
+    6609644788,
+    6609644785,
+    6609644789,
+    2435108467,
+    2435108443,
+    2435108445
+  ],
+  "geometry": [
+    { "lat": 40.7594377, "lon": -73.9846440 },
+    { "lat": 40.7594492, "lon": -73.9846816 },
+    { "lat": 40.7593605, "lon": -73.9847544 },
+    { "lat": 40.7594113, "lon": -73.9848740 },
+    { "lat": 40.7594926, "lon": -73.9848246 },
+    { "lat": 40.7594991, "lon": -73.9848460 },
+    { "lat": 40.7595566, "lon": -73.9848228 },
+    { "lat": 40.7595576, "lon": -73.9848224 },
+    { "lat": 40.7597317, "lon": -73.9847597 },
+    { "lat": 40.7597332, "lon": -73.9847591 },
+    { "lat": 40.7599535, "lon": -73.9846798 },
+    { "lat": 40.7598311, "lon": -73.9843899 },
+    { "lat": 40.7594377, "lon": -73.9846440 }
+  ],
+  "tags": {
+    "building": "yes",
+    "nycdoitt:bin": "1024757",
+    "start_date": "1991"
+  }
+},
+{
+  "type": "way",
+  "id": 266149358,
+  "bounds": {
+    "minlat": 40.7591555,
+    "minlon": -73.9863727,
+    "maxlat": 40.7594647,
+    "maxlon": -73.9860392
+  },
+  "nodes": [
+    1752685325,
+    2717294005,
+    2717293999,
+    2639531732,
+    12197834836,
+    2639531762,
+    1752685325
+  ],
+  "geometry": [
+    { "lat": 40.7593968, "lon": -73.9860392 },
+    { "lat": 40.7592020, "lon": -73.9861820 },
+    { "lat": 40.7591555, "lon": -73.9862162 },
+    { "lat": 40.7592219, "lon": -73.9863727 },
+    { "lat": 40.7592833, "lon": -73.9863281 },
+    { "lat": 40.7594647, "lon": -73.9861965 },
+    { "lat": 40.7593968, "lon": -73.9860392 }
+  ],
+  "tags": {
+    "building": "yes",
+    "height": "63.2",
+    "nycdoitt:bin": "1076192"
+  }
+},
+{
+  "type": "way",
+  "id": 266149362,
+  "bounds": {
+    "minlat": 40.7588324,
+    "minlon": -73.9857756,
+    "maxlat": 40.7590819,
+    "maxlon": -73.9854175
+  },
+  "nodes": [
+    2717293964,
+    2717293973,
+    2717293990,
+    2717293971,
+    2717293964
+  ],
+  "geometry": [
+    { "lat": 40.7588324, "lon": -73.9854642 },
+    { "lat": 40.7589726, "lon": -73.9857756 },
+    { "lat": 40.7590819, "lon": -73.9856955 },
+    { "lat": 40.7589640, "lon": -73.9854175 },
+    { "lat": 40.7588324, "lon": -73.9854642 }
+  ],
+  "tags": {
+    "building": "yes",
+    "height": "19.5",
+    "nycdoitt:bin": "1083727"
+  }
+},
+{
+  "type": "way",
+  "id": 266149370,
+  "bounds": {
+    "minlat": 40.7592110,
+    "minlon": -73.9858854,
+    "maxlat": 40.7595676,
+    "maxlon": -73.9852703
+  },
+  "nodes": [
+    2717294020,
+    2717294015,
+    2717294008,
+    2717294018,
+    2717294030,
+    2717294023,
+    2717294013,
+    2717294020
+  ],
+  "geometry": [
+    { "lat": 40.7593458, "lon": -73.9855019 },
+    { "lat": 40.7592939, "lon": -73.9855400 },
+    { "lat": 40.7592110, "lon": -73.9856008 },
+    { "lat": 40.7593316, "lon": -73.9858854 },
+    { "lat": 40.7595676, "lon": -73.9857123 },
+    { "lat": 40.7593802, "lon": -73.9852703 },
+    { "lat": 40.7592649, "lon": -73.9853111 },
+    { "lat": 40.7593458, "lon": -73.9855019 }
+  ],
+  "tags": {
+    "building": "yes",
+    "height": "160.6",
+    "nycdoitt:bin": "1024742"
+  }
+},
+{
+  "type": "way",
+  "id": 266149373,
+  "bounds": {
+    "minlat": 40.7568499,
+    "minlon": -73.9872140,
+    "maxlat": 40.7576052,
+    "maxlon": -73.9862132
+  },
+  "nodes": [
+    2717293886,
+    2717293885,
+    2717293888,
+    2717293889,
+    2717293890,
+    2717293891,
+    2717293892,
+    2717293894,
+    2717293896,
+    2918599627,
+    2717293887,
+    10224024782,
+    10224024785,
+    2717293883,
+    2918592581,
+    2717293884,
+    2717293886
+  ],
+  "geometry": [
+    { "lat": 40.7572049, "lon": -73.9871546 },
+    { "lat": 40.7571910, "lon": -73.9871216 },
+    { "lat": 40.7573678, "lon": -73.9869931 },
+    { "lat": 40.7574073, "lon": -73.9869478 },
+    { "lat": 40.7574537, "lon": -73.9869170 },
+    { "lat": 40.7574904, "lon": -73.9868820 },
+    { "lat": 40.7575114, "lon": -73.9869319 },
+    { "lat": 40.7575907, "lon": -73.9868743 },
+    { "lat": 40.7576052, "lon": -73.9868638 },
+    { "lat": 40.7574587, "lon": -73.9865169 },
+    { "lat": 40.7573319, "lon": -73.9862132 },
+    { "lat": 40.7569989, "lon": -73.9864552 },
+    { "lat": 40.7569017, "lon": -73.9865255 },
+    { "lat": 40.7568499, "lon": -73.9865634 },
+    { "lat": 40.7569435, "lon": -73.9867861 },
+    { "lat": 40.7571233, "lon": -73.9872140 },
+    { "lat": 40.7572049, "lon": -73.9871546 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "1501",
+    "addr:postcode": "10036",
+    "addr:street": "Broadway",
+    "alt_name": "Paramount Building",
+    "building": "commercial",
+    "name": "1501 Broadway",
+    "nycdoitt:bin": "1024706",
+    "start_date": "1927",
+    "website": "https://www.paramountbuilding.com",
+    "wikidata": "Q3363532",
+    "wikipedia": "en:1501 Broadway"
+  }
+},
+{
+  "type": "way",
+  "id": 266170536,
+  "bounds": {
+    "minlat": 40.7563483,
+    "minlon": -73.9855704,
+    "maxlat": 40.7566462,
+    "maxlon": -73.9852224
+  },
+  "nodes": [
+    2717544476,
+    2717544414,
+    2717544426,
+    2717544372,
+    2717544357,
+    2717544317,
+    1753205380,
+    2717544363,
+    2717544421,
+    2717544406,
+    2717544455,
+    2717544466,
+    2717544478,
+    2717544536,
+    2717544597,
+    2717544590,
+    2717544532,
+    2717544476
+  ],
+  "geometry": [
+    { "lat": 40.7565668, "lon": -73.9852224 },
+    { "lat": 40.7564901, "lon": -73.9852777 },
+    { "lat": 40.7565107, "lon": -73.9853274 },
+    { "lat": 40.7564461, "lon": -73.9853739 },
+    { "lat": 40.7564254, "lon": -73.9853243 },
+    { "lat": 40.7563483, "lon": -73.9853799 },
+    { "lat": 40.7564099, "lon": -73.9855278 },
+    { "lat": 40.7564276, "lon": -73.9855704 },
+    { "lat": 40.7565059, "lon": -73.9855140 },
+    { "lat": 40.7564860, "lon": -73.9854661 },
+    { "lat": 40.7565445, "lon": -73.9854240 },
+    { "lat": 40.7565555, "lon": -73.9854328 },
+    { "lat": 40.7565701, "lon": -73.9854678 },
+    { "lat": 40.7566209, "lon": -73.9854312 },
+    { "lat": 40.7566462, "lon": -73.9854130 },
+    { "lat": 40.7566418, "lon": -73.9854025 },
+    { "lat": 40.7566205, "lon": -73.9853513 },
+    { "lat": 40.7565668, "lon": -73.9852224 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "147",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 43rd Street",
+    "breakfast": "yes",
+    "building": "hotel",
+    "contact:facebook": "https://www.facebook.com/CasablancaHotel/",
+    "contact:instagram": "https://www.instagram.com/casablancahotelnyc/",
+    "contact:pinterest": "https://www.pinterest.com/libraryhotellhc/casablanca-hotels-lifestyle/",
+    "contact:twitter": "https://twitter.com/CasablancaHotel/",
+    "email": "rooms@casablancahotel.com",
+    "fitness_centre": "no",
+    "height": "24.4",
+    "internet_access": "wlan",
+    "internet_access:fee": "no",
+    "name": "Casablanca Hotel",
+    "name:zh": "纽约卡萨布兰卡酒店",
+    "nycdoitt:bin": "1022611",
+    "operator": "Library Hotel Collection",
+    "payment:cash": "no",
+    "payment:debit_cards": "no",
+    "phone": "+1 212-869-1212",
+    "smoking": "no",
+    "swimming_pool": "no",
+    "tourism": "hotel",
+    "website": "https://casablancahotel.com",
+    "wikidata": "Q5911733",
+    "wikipedia": "en:Hotel Metropole (New York City)"
+  }
+},
+{
+  "type": "way",
+  "id": 266170537,
+  "bounds": {
+    "minlat": 40.7580461,
+    "minlon": -73.9839676,
+    "maxlat": 40.7586696,
+    "maxlon": -73.9832641
+  },
+  "nodes": [
+    2717545786,
+    2717545779,
+    2717545759,
+    2717545707,
+    2717545686,
+    13915675557,
+    1595140557,
+    13915675558,
+    2717545763,
+    2717545835,
+    2717545825,
+    2717545914,
+    2717545897,
+    2717545882,
+    13915675556,
+    2717545881,
+    2717545886,
+    2717545875,
+    2717545858,
+    2717545823,
+    2717545806,
+    2717545786
+  ],
+  "geometry": [
+    { "lat": 40.7582740, "lon": -73.9834582 },
+    { "lat": 40.7582572, "lon": -73.9834183 },
+    { "lat": 40.7582064, "lon": -73.9834553 },
+    { "lat": 40.7580925, "lon": -73.9835383 },
+    { "lat": 40.7580461, "lon": -73.9835721 },
+    { "lat": 40.7580762, "lon": -73.9836421 },
+    { "lat": 40.7581231, "lon": -73.9837510 },
+    { "lat": 40.7581679, "lon": -73.9838593 },
+    { "lat": 40.7582128, "lon": -73.9839676 },
+    { "lat": 40.7584540, "lon": -73.9837918 },
+    { "lat": 40.7584293, "lon": -73.9837328 },
+    { "lat": 40.7586696, "lon": -73.9835575 },
+    { "lat": 40.7585926, "lon": -73.9833745 },
+    { "lat": 40.7585696, "lon": -73.9833679 },
+    { "lat": 40.7585662, "lon": -73.9833599 },
+    { "lat": 40.7585620, "lon": -73.9833499 },
+    { "lat": 40.7585730, "lon": -73.9833419 },
+    { "lat": 40.7585403, "lon": -73.9832641 },
+    { "lat": 40.7584942, "lon": -73.9832977 },
+    { "lat": 40.7583801, "lon": -73.9833809 },
+    { "lat": 40.7583265, "lon": -73.9834199 },
+    { "lat": 40.7582740, "lon": -73.9834582 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "145",
+    "addr:street": "West 46th Street",
+    "amenity": "place_of_worship",
+    "architect": "Napoleon LeBrun",
+    "architect:wikidata": "Q3335958",
+    "building": "church",
+    "denomination": "episcopal",
+    "diocese": "Episcopal Diocese of New York",
+    "height": "34.3",
+    "heritage": "2",
+    "heritage:operator": "nrhp",
+    "heritage:website": "https://npgallery.nps.gov/AssetDetail/NRIS/90000606",
+    "name": "Church of Saint Mary the Virgin",
+    "nycdoitt:bin": "1022665",
+    "religion": "christian",
+    "start_date": "1894",
+    "website": "https://www.stmvirgin.org/",
+    "wikidata": "Q3936290",
+    "wikipedia": "en:Church of St. Mary the Virgin (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 266170544,
+  "bounds": {
+    "minlat": 40.7573159,
+    "minlon": -73.9839598,
+    "maxlat": 40.7575785,
+    "maxlon": -73.9836417
+  },
+  "nodes": [
+    2717545189,
+    1753098053,
+    2717545233,
+    2934243788,
+    2934243790,
+    2934243792,
+    2934243794,
+    2656646535,
+    2717545295,
+    2717545189
+  ],
+  "geometry": [
+    { "lat": 40.7573159, "lon": -73.9837758 },
+    { "lat": 40.7573430, "lon": -73.9838426 },
+    { "lat": 40.7573918, "lon": -73.9839598 },
+    { "lat": 40.7574173, "lon": -73.9839417 },
+    { "lat": 40.7574260, "lon": -73.9839353 },
+    { "lat": 40.7574345, "lon": -73.9839291 },
+    { "lat": 40.7574434, "lon": -73.9839226 },
+    { "lat": 40.7575785, "lon": -73.9838256 },
+    { "lat": 40.7575054, "lon": -73.9836417 },
+    { "lat": 40.7573159, "lon": -73.9837758 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "building": "hotel",
+    "check_date": "2025-06-15",
+    "height": "51.5",
+    "name": "45 Times Square Hotel",
+    "tourism": "hotel"
+  }
+},
+{
+  "type": "way",
+  "id": 266170571,
+  "bounds": {
+    "minlat": 40.7567432,
+    "minlon": -73.9845576,
+    "maxlat": 40.7570607,
+    "maxlon": -73.9841948
+  },
+  "nodes": [
+    2717544828,
+    2717544819,
+    2717544801,
+    2717544738,
+    2717544667,
+    2717544701,
+    2717544746,
+    2717544757,
+    2717544728,
+    2717544748,
+    2717544890,
+    2717544873,
+    2717544840,
+    2717544828
+  ],
+  "geometry": [
+    { "lat": 40.7569808, "lon": -73.9841948 },
+    { "lat": 40.7569678, "lon": -73.9842043 },
+    { "lat": 40.7569077, "lon": -73.9842481 },
+    { "lat": 40.7568109, "lon": -73.9843188 },
+    { "lat": 40.7567432, "lon": -73.9843682 },
+    { "lat": 40.7567722, "lon": -73.9844370 },
+    { "lat": 40.7568163, "lon": -73.9844048 },
+    { "lat": 40.7568399, "lon": -73.9844608 },
+    { "lat": 40.7567958, "lon": -73.9844930 },
+    { "lat": 40.7568231, "lon": -73.9845576 },
+    { "lat": 40.7570607, "lon": -73.9843842 },
+    { "lat": 40.7570456, "lon": -73.9843484 },
+    { "lat": 40.7570036, "lon": -73.9842489 },
+    { "lat": 40.7569808, "lon": -73.9841948 }
+  ],
+  "tags": {
+    "addr:housenumber": "133",
+    "addr:postcode": "10036",
+    "addr:street": "West 44th Street",
+    "building": "yes",
+    "height": "70.2",
+    "nycdoitt:bin": "1022628"
+  }
+},
+{
+  "type": "way",
+  "id": 266170572,
+  "bounds": {
+    "minlat": 40.7563990,
+    "minlon": -73.9849026,
+    "maxlat": 40.7567057,
+    "maxlon": -73.9846159
+  },
+  "nodes": [
+    2717544510,
+    2717544523,
+    2717544462,
+    2717544452,
+    2717544402,
+    2717544410,
+    2717544342,
+    2717544370,
+    2717544430,
+    2717544437,
+    2717544494,
+    2717544483,
+    2717544584,
+    2717544593,
+    2717544645,
+    2717544615,
+    2717544510
+  ],
+  "geometry": [
+    { "lat": 40.7565983, "lon": -73.9846607 },
+    { "lat": 40.7566083, "lon": -73.9846849 },
+    { "lat": 40.7565501, "lon": -73.9847269 },
+    { "lat": 40.7565405, "lon": -73.9847038 },
+    { "lat": 40.7564804, "lon": -73.9847472 },
+    { "lat": 40.7564865, "lon": -73.9847618 },
+    { "lat": 40.7563990, "lon": -73.9848249 },
+    { "lat": 40.7564314, "lon": -73.9849026 },
+    { "lat": 40.7565198, "lon": -73.9848389 },
+    { "lat": 40.7565267, "lon": -73.9848554 },
+    { "lat": 40.7565814, "lon": -73.9848159 },
+    { "lat": 40.7565730, "lon": -73.9847956 },
+    { "lat": 40.7566355, "lon": -73.9847505 },
+    { "lat": 40.7566432, "lon": -73.9847690 },
+    { "lat": 40.7567057, "lon": -73.9847240 },
+    { "lat": 40.7566605, "lon": -73.9846159 },
+    { "lat": 40.7565983, "lon": -73.9846607 }
+  ],
+  "tags": {
+    "addr:housenumber": "136",
+    "addr:postcode": "10036",
+    "addr:street": "West 44th Street",
+    "building": "yes",
+    "height": "34.1",
+    "nycdoitt:bin": "1022618"
+  }
+},
+{
+  "type": "way",
+  "id": 266170573,
+  "bounds": {
+    "minlat": 40.7577348,
+    "minlon": -73.9840855,
+    "maxlat": 40.7579945,
+    "maxlon": -73.9838660
+  },
+  "nodes": [
+    2717545413,
+    2717545421,
+    2717545427,
+    2717545643,
+    2717545647,
+    2717545599,
+    2717545413
+  ],
+  "geometry": [
+    { "lat": 40.7577348, "lon": -73.9840348 },
+    { "lat": 40.7577555, "lon": -73.9840855 },
+    { "lat": 40.7577823, "lon": -73.9840666 },
+    { "lat": 40.7579860, "lon": -73.9839228 },
+    { "lat": 40.7579945, "lon": -73.9839168 },
+    { "lat": 40.7579738, "lon": -73.9838660 },
+    { "lat": 40.7577348, "lon": -73.9840348 }
+  ],
+  "tags": {
+    "addr:housenumber": "136",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "15.9",
+    "nycdoitt:bin": "1022647"
+  }
+},
+{
+  "type": "way",
+  "id": 266170575,
+  "bounds": {
+    "minlat": 40.7577823,
+    "minlon": -73.9841125,
+    "maxlat": 40.7580047,
+    "maxlon": -73.9839228
+  },
+  "nodes": [
+    2717545427,
+    2717545442,
+    2717545657,
+    2717545643,
+    2717545427
+  ],
+  "geometry": [
+    { "lat": 40.7577823, "lon": -73.9840666 },
+    { "lat": 40.7578011, "lon": -73.9841125 },
+    { "lat": 40.7580047, "lon": -73.9839687 },
+    { "lat": 40.7579860, "lon": -73.9839228 },
+    { "lat": 40.7577823, "lon": -73.9840666 }
+  ],
+  "tags": {
+    "addr:housenumber": "138",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "15.6",
+    "nycdoitt:bin": "1022658"
+  }
+},
+{
+  "type": "way",
+  "id": 266170578,
+  "bounds": {
+    "minlat": 40.7578011,
+    "minlon": -73.9841628,
+    "maxlat": 40.7580338,
+    "maxlon": -73.9839626
+  },
+  "nodes": [
+    2717545442,
+    2717545452,
+    2717545679,
+    2717545660,
+    2717545657,
+    2717545442
+  ],
+  "geometry": [
+    { "lat": 40.7578011, "lon": -73.9841125 },
+    { "lat": 40.7578216, "lon": -73.9841628 },
+    { "lat": 40.7580338, "lon": -73.9840129 },
+    { "lat": 40.7580132, "lon": -73.9839626 },
+    { "lat": 40.7580047, "lon": -73.9839687 },
+    { "lat": 40.7578011, "lon": -73.9841125 }
+  ],
+  "tags": {
+    "addr:housenumber": "140",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "15.1",
+    "nycdoitt:bin": "1022648"
+  }
+},
+{
+  "type": "way",
+  "id": 266170579,
+  "bounds": {
+    "minlat": 40.7564581,
+    "minlon": -73.9850485,
+    "maxlat": 40.7567668,
+    "maxlon": -73.9847735
+  },
+  "nodes": [
+    2717544580,
+    2717544588,
+    2717544507,
+    2717544500,
+    2717544380,
+    2717544408,
+    2717544425,
+    2717544432,
+    2717544559,
+    2717544529,
+    2717544609,
+    2717544633,
+    2717544696,
+    2717544656,
+    2717544580
+  ],
+  "geometry": [
+    { "lat": 40.7566346, "lon": -73.9848396 },
+    { "lat": 40.7566405, "lon": -73.9848538 },
+    { "lat": 40.7565964, "lon": -73.9848856 },
+    { "lat": 40.7565905, "lon": -73.9848714 },
+    { "lat": 40.7564581, "lon": -73.9849668 },
+    { "lat": 40.7564861, "lon": -73.9850340 },
+    { "lat": 40.7565075, "lon": -73.9850186 },
+    { "lat": 40.7565199, "lon": -73.9850485 },
+    { "lat": 40.7566318, "lon": -73.9849678 },
+    { "lat": 40.7566122, "lon": -73.9849207 },
+    { "lat": 40.7566592, "lon": -73.9848868 },
+    { "lat": 40.7566788, "lon": -73.9849339 },
+    { "lat": 40.7567668, "lon": -73.9848704 },
+    { "lat": 40.7567263, "lon": -73.9847735 },
+    { "lat": 40.7566346, "lon": -73.9848396 }
+  ],
+  "tags": {
+    "addr:housenumber": "142",
+    "addr:postcode": "10036",
+    "addr:street": "West 44th Street",
+    "building": "yes",
+    "height": "38.2",
+    "nycdoitt:bin": "1022620"
+  }
+},
+{
+  "type": "way",
+  "id": 266170580,
+  "bounds": {
+    "minlat": 40.7578216,
+    "minlon": -73.9842076,
+    "maxlat": 40.7580521,
+    "maxlon": -73.9840129
+  },
+  "nodes": [
+    2717545452,
+    2717545470,
+    2717545491,
+    2717545689,
+    2717545679,
+    2717545452
+  ],
+  "geometry": [
+    { "lat": 40.7578216, "lon": -73.9841628 },
+    { "lat": 40.7578399, "lon": -73.9842076 },
+    { "lat": 40.7578633, "lon": -73.9841911 },
+    { "lat": 40.7580521, "lon": -73.9840578 },
+    { "lat": 40.7580338, "lon": -73.9840129 },
+    { "lat": 40.7578216, "lon": -73.9841628 }
+  ],
+  "tags": {
+    "addr:housenumber": "142",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "15.7",
+    "nycdoitt:bin": "1022659"
+  }
+},
+{
+  "type": "way",
+  "id": 266170582,
+  "bounds": {
+    "minlat": 40.7578633,
+    "minlon": -73.9842404,
+    "maxlat": 40.7580722,
+    "maxlon": -73.9840578
+  },
+  "nodes": [
+    2717545491,
+    2717545509,
+    2717545700,
+    2717545689,
+    2717545491
+  ],
+  "geometry": [
+    { "lat": 40.7578633, "lon": -73.9841911 },
+    { "lat": 40.7578834, "lon": -73.9842404 },
+    { "lat": 40.7580722, "lon": -73.9841070 },
+    { "lat": 40.7580521, "lon": -73.9840578 },
+    { "lat": 40.7578633, "lon": -73.9841911 }
+  ],
+  "tags": {
+    "addr:housenumber": "144",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "16.0",
+    "nycdoitt:bin": "1022649"
+  }
+},
+{
+  "type": "way",
+  "id": 266170583,
+  "bounds": {
+    "minlat": 40.7575140,
+    "minlon": -73.9844742,
+    "maxlat": 40.7578214,
+    "maxlon": -73.9840997
+  },
+  "nodes": [
+    2717545451,
+    2717545412,
+    2656646536,
+    2934244803,
+    2934244801,
+    2934243799,
+    2934243797,
+    2717545300,
+    2717545346,
+    2717545353,
+    2717545451
+  ],
+  "geometry": [
+    { "lat": 40.7578214, "lon": -73.9843209 },
+    { "lat": 40.7577312, "lon": -73.9840997 },
+    { "lat": 40.7577007, "lon": -73.9841216 },
+    { "lat": 40.7575655, "lon": -73.9842190 },
+    { "lat": 40.7575569, "lon": -73.9842251 },
+    { "lat": 40.7575483, "lon": -73.9842313 },
+    { "lat": 40.7575395, "lon": -73.9842377 },
+    { "lat": 40.7575140, "lon": -73.9842560 },
+    { "lat": 40.7576043, "lon": -73.9844742 },
+    { "lat": 40.7576102, "lon": -73.9844700 },
+    { "lat": 40.7578214, "lon": -73.9843209 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "145",
+    "addr:postcode": "10036",
+    "addr:street": "West 45th Street",
+    "building": "yes",
+    "building:colour": "#C3CBD5",
+    "building:levels": "12",
+    "height": "51.0",
+    "nycdoitt:bin": "1022634",
+    "roof:material": "concrete",
+    "roof:shape": "flat"
+  }
+},
+{
+  "type": "way",
+  "id": 266170585,
+  "bounds": {
+    "minlat": 40.7578600,
+    "minlon": -73.9843033,
+    "maxlat": 40.7580912,
+    "maxlon": -73.9841070
+  },
+  "nodes": [
+    2717545489,
+    2717545506,
+    2717545555,
+    2717545705,
+    2717545700,
+    2717545509,
+    2717545489
+  ],
+  "geometry": [
+    { "lat": 40.7578600, "lon": -73.9842569 },
+    { "lat": 40.7578790, "lon": -73.9843033 },
+    { "lat": 40.7579180, "lon": -73.9842758 },
+    { "lat": 40.7580912, "lon": -73.9841534 },
+    { "lat": 40.7580722, "lon": -73.9841070 },
+    { "lat": 40.7578834, "lon": -73.9842404 },
+    { "lat": 40.7578600, "lon": -73.9842569 }
+  ],
+  "tags": {
+    "addr:housenumber": "146",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "15.7",
+    "nycdoitt:bin": "1022650"
+  }
+},
+{
+  "type": "way",
+  "id": 266170587,
+  "bounds": {
+    "minlat": 40.7582128,
+    "minlon": -73.9840253,
+    "maxlat": 40.7584783,
+    "maxlon": -73.9837918
+  },
+  "nodes": [
+    2717545835,
+    2717545763,
+    2717545770,
+    2717545849,
+    2717545847,
+    2717545846,
+    2717545835
+  ],
+  "geometry": [
+    { "lat": 40.7584540, "lon": -73.9837918 },
+    { "lat": 40.7582128, "lon": -73.9839676 },
+    { "lat": 40.7582371, "lon": -73.9840253 },
+    { "lat": 40.7584783, "lon": -73.9838494 },
+    { "lat": 40.7584712, "lon": -73.9838324 },
+    { "lat": 40.7584564, "lon": -73.9837974 },
+    { "lat": 40.7584540, "lon": -73.9837918 }
+  ],
+  "tags": {
+    "addr:housenumber": "147",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "13.1",
+    "nycdoitt:bin": "1022675"
+  }
+},
+{
+  "type": "way",
+  "id": 266170593,
+  "bounds": {
+    "minlat": 40.7582371,
+    "minlon": -73.9840926,
+    "maxlat": 40.7585067,
+    "maxlon": -73.9838494
+  },
+  "nodes": [
+    2717545770,
+    2717545782,
+    2717545868,
+    2717545849,
+    2717545770
+  ],
+  "geometry": [
+    { "lat": 40.7582371, "lon": -73.9840253 },
+    { "lat": 40.7582655, "lon": -73.9840926 },
+    { "lat": 40.7585067, "lon": -73.9839167 },
+    { "lat": 40.7584783, "lon": -73.9838494 },
+    { "lat": 40.7582371, "lon": -73.9840253 }
+  ],
+  "tags": {
+    "addr:housenumber": "149",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "13.1",
+    "nycdoitt:bin": "1022664"
+  }
+},
+{
+  "type": "way",
+  "id": 266170599,
+  "bounds": {
+    "minlat": 40.7571585,
+    "minlon": -73.9847819,
+    "maxlat": 40.7574700,
+    "maxlon": -73.9844397
+  },
+  "nodes": [
+    2717544972,
+    2918511137,
+    2717545057,
+    2717545275,
+    1753010841,
+    2717545243,
+    2717544972
+  ],
+  "geometry": [
+    { "lat": 40.7571585, "lon": -73.9846160 },
+    { "lat": 40.7571651, "lon": -73.9846317 },
+    { "lat": 40.7572283, "lon": -73.9847819 },
+    { "lat": 40.7574700, "lon": -73.9846055 },
+    { "lat": 40.7574191, "lon": -73.9844848 },
+    { "lat": 40.7574001, "lon": -73.9844397 },
+    { "lat": 40.7571585, "lon": -73.9846160 }
+  ],
+  "tags": {
+    "addr:housenumber": "150",
+    "addr:postcode": "10036",
+    "addr:street": "West 45th Street",
+    "building": "yes",
+    "height": "12.4",
+    "nycdoitt:bin": "1085017"
+  }
+},
+{
+  "type": "way",
+  "id": 266170600,
+  "bounds": {
+    "minlat": 40.7578757,
+    "minlon": -73.9844072,
+    "maxlat": 40.7581298,
+    "maxlon": -73.9841534
+  },
+  "nodes": [
+    2717545555,
+    2717545569,
+    2717545504,
+    2717545542,
+    2717545727,
+    2717545705,
+    2717545555
+  ],
+  "geometry": [
+    { "lat": 40.7579180, "lon": -73.9842758 },
+    { "lat": 40.7579278, "lon": -73.9842999 },
+    { "lat": 40.7578757, "lon": -73.9843367 },
+    { "lat": 40.7579045, "lon": -73.9844072 },
+    { "lat": 40.7581298, "lon": -73.9842481 },
+    { "lat": 40.7580912, "lon": -73.9841534 },
+    { "lat": 40.7579180, "lon": -73.9842758 }
+  ],
+  "tags": {
+    "addr:housenumber": "150",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "23.1",
+    "nycdoitt:bin": "1022651"
+  }
+},
+{
+  "type": "way",
+  "id": 266170601,
+  "bounds": {
+    "minlat": 40.7584712,
+    "minlon": -73.9839986,
+    "maxlat": 40.7587763,
+    "maxlon": -73.9836319
+  },
+  "nodes": [
+    2717545853,
+    2717545862,
+    2717545847,
+    2717545849,
+    2717545868,
+    2717545869,
+    2717545879,
+    2717545888,
+    2717545971,
+    2717545923,
+    2717545853
+  ],
+  "geometry": [
+    { "lat": 40.7584833, "lon": -73.9837777 },
+    { "lat": 40.7584981, "lon": -73.9838128 },
+    { "lat": 40.7584712, "lon": -73.9838324 },
+    { "lat": 40.7584783, "lon": -73.9838494 },
+    { "lat": 40.7585067, "lon": -73.9839167 },
+    { "lat": 40.7585247, "lon": -73.9839594 },
+    { "lat": 40.7585516, "lon": -73.9839397 },
+    { "lat": 40.7585765, "lon": -73.9839986 },
+    { "lat": 40.7587763, "lon": -73.9838529 },
+    { "lat": 40.7586831, "lon": -73.9836319 },
+    { "lat": 40.7584833, "lon": -73.9837777 }
+  ],
+  "tags": {
+    "addr:housenumber": "150",
+    "addr:postcode": "10036",
+    "addr:street": "West 47th Street",
+    "building": "yes",
+    "height": "46.6",
+    "nycdoitt:bin": "1022671"
+  }
+},
+{
+  "type": "way",
+  "id": 266170603,
+  "bounds": {
+    "minlat": 40.7582655,
+    "minlon": -73.9842450,
+    "maxlat": 40.7585710,
+    "maxlon": -73.9839167
+  },
+  "nodes": [
+    2717545868,
+    2717545782,
+    2717545810,
+    2717545884,
+    2717545869,
+    2717545868
+  ],
+  "geometry": [
+    { "lat": 40.7585067, "lon": -73.9839167 },
+    { "lat": 40.7582655, "lon": -73.9840926 },
+    { "lat": 40.7583297, "lon": -73.9842450 },
+    { "lat": 40.7585710, "lon": -73.9840692 },
+    { "lat": 40.7585247, "lon": -73.9839594 },
+    { "lat": 40.7585067, "lon": -73.9839167 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "151",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "54.7",
+    "nycdoitt:bin": "1022663"
+  }
+},
+{
+  "type": "way",
+  "id": 266170605,
+  "bounds": {
+    "minlat": 40.7565668,
+    "minlon": -73.9853513,
+    "maxlat": 40.7568874,
+    "maxlon": -73.9850301
+  },
+  "nodes": [
+    2717544476,
+    2717544532,
+    2717544791,
+    2717544753,
+    2717544476
+  ],
+  "geometry": [
+    { "lat": 40.7565668, "lon": -73.9852224 },
+    { "lat": 40.7566205, "lon": -73.9853513 },
+    { "lat": 40.7568874, "lon": -73.9851592 },
+    { "lat": 40.7568335, "lon": -73.9850301 },
+    { "lat": 40.7565668, "lon": -73.9852224 }
+  ],
+  "tags": {
+    "addr:housenumber": "152",
+    "addr:postcode": "10036",
+    "addr:street": "West 44th Street",
+    "building": "yes",
+    "height": "16.3",
+    "nycdoitt:bin": "1022621"
+  }
+},
+{
+  "type": "way",
+  "id": 266170608,
+  "bounds": {
+    "minlat": 40.7583297,
+    "minlon": -73.9843119,
+    "maxlat": 40.7585992,
+    "maxlon": -73.9840692
+  },
+  "nodes": [
+    2717545810,
+    2717545815,
+    2717545899,
+    2717545884,
+    2717545810
+  ],
+  "geometry": [
+    { "lat": 40.7583297, "lon": -73.9842450 },
+    { "lat": 40.7583579, "lon": -73.9843119 },
+    { "lat": 40.7585992, "lon": -73.9841361 },
+    { "lat": 40.7585710, "lon": -73.9840692 },
+    { "lat": 40.7583297, "lon": -73.9842450 }
+  ],
+  "tags": {
+    "addr:housenumber": "155",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "23.4",
+    "nycdoitt:bin": "1022662"
+  }
+},
+{
+  "type": "way",
+  "id": 266170609,
+  "bounds": {
+    "minlat": 40.7566205,
+    "minlon": -73.9854025,
+    "maxlat": 40.7569173,
+    "maxlon": -73.9851592
+  },
+  "nodes": [
+    2717544532,
+    2717544590,
+    2717544745,
+    2717544749,
+    2717544804,
+    2717544791,
+    2717544532
+  ],
+  "geometry": [
+    { "lat": 40.7566205, "lon": -73.9853513 },
+    { "lat": 40.7566418, "lon": -73.9854025 },
+    { "lat": 40.7568148, "lon": -73.9852780 },
+    { "lat": 40.7568234, "lon": -73.9852986 },
+    { "lat": 40.7569173, "lon": -73.9852310 },
+    { "lat": 40.7568874, "lon": -73.9851592 },
+    { "lat": 40.7566205, "lon": -73.9853513 }
+  ],
+  "tags": {
+    "addr:housenumber": "156",
+    "addr:postcode": "10036",
+    "addr:street": "West 44th Street",
+    "building": "yes",
+    "height": "40.9",
+    "nycdoitt:bin": "1022622"
+  }
+},
+{
+  "type": "way",
+  "id": 266170610,
+  "bounds": {
+    "minlat": 40.7566251,
+    "minlon": -73.9855178,
+    "maxlat": 40.7569492,
+    "maxlon": -73.9852310
+  },
+  "nodes": [
+    2717544548,
+    2717544607,
+    2717544813,
+    2717544804,
+    2717544749,
+    2717544548
+  ],
+  "geometry": [
+    { "lat": 40.7566251, "lon": -73.9854413 },
+    { "lat": 40.7566570, "lon": -73.9855178 },
+    { "lat": 40.7569492, "lon": -73.9853074 },
+    { "lat": 40.7569173, "lon": -73.9852310 },
+    { "lat": 40.7568234, "lon": -73.9852986 },
+    { "lat": 40.7566251, "lon": -73.9854413 }
+  ],
+  "tags": {
+    "addr:housenumber": "158",
+    "addr:postcode": "10036",
+    "addr:street": "West 44th Street",
+    "building": "yes",
+    "height": "16.7",
+    "nycdoitt:bin": "1022623"
+  }
+},
+{
+  "type": "way",
+  "id": 266170615,
+  "bounds": {
+    "minlat": 40.7585904,
+    "minlon": -73.9847010,
+    "maxlat": 40.7590788,
+    "maxlon": -73.9838760
+  },
+  "nodes": [
+    2717546021,
+    2935101412,
+    2935101194,
+    2717545982,
+    2935101188,
+    2717545896,
+    2717545937,
+    2717545915,
+    2935101185,
+    2935101191,
+    2935101192,
+    2717545991,
+    2717546013,
+    2935101414,
+    2935101413,
+    2717546021
+  ],
+  "geometry": [
+    { "lat": 40.7590207, "lon": -73.9843904 },
+    { "lat": 40.7589892, "lon": -73.9843156 },
+    { "lat": 40.7588661, "lon": -73.9840236 },
+    { "lat": 40.7588039, "lon": -73.9838760 },
+    { "lat": 40.7587897, "lon": -73.9838863 },
+    { "lat": 40.7585904, "lon": -73.9840317 },
+    { "lat": 40.7586998, "lon": -73.9842912 },
+    { "lat": 40.7586728, "lon": -73.9843108 },
+    { "lat": 40.7587337, "lon": -73.9844555 },
+    { "lat": 40.7588158, "lon": -73.9846518 },
+    { "lat": 40.7588246, "lon": -73.9846720 },
+    { "lat": 40.7588373, "lon": -73.9847010 },
+    { "lat": 40.7589921, "lon": -73.9845882 },
+    { "lat": 40.7590788, "lon": -73.9845439 },
+    { "lat": 40.7590349, "lon": -73.9843890 },
+    { "lat": 40.7590207, "lon": -73.9843904 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "160",
+    "addr:postcode": "10036",
+    "addr:street": "West 47th Street",
+    "building": "yes",
+    "nycdoitt:bin": "1085493",
+    "start_date": "1990",
+    "wikidata": "Q116167908",
+    "wikipedia": "en:TSX Broadway"
+  }
+},
+{
+  "type": "way",
+  "id": 266170624,
+  "bounds": {
+    "minlat": 40.7584886,
+    "minlon": -73.9848816,
+    "maxlat": 40.7586909,
+    "maxlon": -73.9845544
+  },
+  "nodes": [
+    2717545894,
+    2717545906,
+    2717545890,
+    2717545855,
+    2717545894
+  ],
+  "geometry": [
+    { "lat": 40.7585957, "lon": -73.9848816 },
+    { "lat": 40.7586909, "lon": -73.9848129 },
+    { "lat": 40.7585838, "lon": -73.9845544 },
+    { "lat": 40.7584886, "lon": -73.9846231 },
+    { "lat": 40.7585957, "lon": -73.9848816 }
+  ],
+  "tags": {
+    "addr:housenumber": "167",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "16.9",
+    "nycdoitt:bin": "1022660",
+    "wikidata": "Q109974674",
+    "wikipedia": "en:1552 Broadway"
+  }
+},
+{
+  "type": "way",
+  "id": 266170628,
+  "bounds": {
+    "minlat": 40.7582612,
+    "minlon": -73.9850287,
+    "maxlat": 40.7584549,
+    "maxlon": -73.9846567
+  },
+  "nodes": [
+    2717545780,
+    1510230178,
+    2717545844,
+    2717545802,
+    2717545799,
+    2717545780
+  ],
+  "geometry": [
+    { "lat": 40.7582612, "lon": -73.9846988 },
+    { "lat": 40.7583957, "lon": -73.9850287 },
+    { "lat": 40.7584549, "lon": -73.9849865 },
+    { "lat": 40.7583204, "lon": -73.9846567 },
+    { "lat": 40.7583084, "lon": -73.9846653 },
+    { "lat": 40.7582612, "lon": -73.9846988 }
+  ],
+  "tags": {
+    "addr:housenumber": "170",
+    "addr:postcode": "10036",
+    "addr:street": "West 46th Street",
+    "building": "yes",
+    "height": "15.8",
+    "nycdoitt:bin": "1022653"
+  }
+},
+{
+  "type": "way",
+  "id": 266170751,
+  "bounds": {
+    "minlat": 40.7568231,
+    "minlon": -73.9846995,
+    "maxlat": 40.7574001,
+    "maxlon": -73.9841803
+  },
+  "nodes": [
+    2717544873,
+    2717544890,
+    2717544748,
+    1753010848,
+    2717544788,
+    2918511115,
+    2918511116,
+    2918511130,
+    2717544930,
+    2717544972,
+    2717545243,
+    2717545171,
+    2717544915,
+    2717544907,
+    2717544901,
+    2717544873
+  ],
+  "geometry": [
+    { "lat": 40.7570456, "lon": -73.9843484 },
+    { "lat": 40.7570607, "lon": -73.9843842 },
+    { "lat": 40.7568231, "lon": -73.9845576 },
+    { "lat": 40.7568545, "lon": -73.9846317 },
+    { "lat": 40.7568833, "lon": -73.9846995 },
+    { "lat": 40.7569004, "lon": -73.9846870 },
+    { "lat": 40.7569226, "lon": -73.9846707 },
+    { "lat": 40.7570897, "lon": -73.9845482 },
+    { "lat": 40.7571205, "lon": -73.9845256 },
+    { "lat": 40.7571585, "lon": -73.9846160 },
+    { "lat": 40.7574001, "lon": -73.9844397 },
+    { "lat": 40.7572906, "lon": -73.9841803 },
+    { "lat": 40.7570949, "lon": -73.9843231 },
+    { "lat": 40.7570915, "lon": -73.9843149 },
+    { "lat": 40.7570702, "lon": -73.9843305 },
+    { "lat": 40.7570456, "lon": -73.9843484 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "141",
+    "addr:state": "NY",
+    "addr:street": "West 44th Street",
+    "amenity": "theatre",
+    "building": "theatre",
+    "height": "23.2",
+    "name": "Hudson Theatre",
+    "nycdoitt:bin": "1076172",
+    "start_date": "1903",
+    "wikidata": "Q10526870",
+    "wikipedia": "en:Hudson Theatre"
+  }
+},
+{
+  "type": "way",
+  "id": 266170753,
+  "bounds": {
+    "minlat": 40.7564314,
+    "minlon": -73.9849668,
+    "maxlat": 40.7567263,
+    "maxlon": -73.9847240
+  },
+  "nodes": [
+    2717544593,
+    2717544584,
+    2717544483,
+    2717544494,
+    2717544437,
+    2717544430,
+    2717544370,
+    2717544380,
+    2717544500,
+    2717544580,
+    2717544656,
+    2717544645,
+    2717544593
+  ],
+  "geometry": [
+    { "lat": 40.7566432, "lon": -73.9847690 },
+    { "lat": 40.7566355, "lon": -73.9847505 },
+    { "lat": 40.7565730, "lon": -73.9847956 },
+    { "lat": 40.7565814, "lon": -73.9848159 },
+    { "lat": 40.7565267, "lon": -73.9848554 },
+    { "lat": 40.7565198, "lon": -73.9848389 },
+    { "lat": 40.7564314, "lon": -73.9849026 },
+    { "lat": 40.7564581, "lon": -73.9849668 },
+    { "lat": 40.7565905, "lon": -73.9848714 },
+    { "lat": 40.7566346, "lon": -73.9848396 },
+    { "lat": 40.7567263, "lon": -73.9847735 },
+    { "lat": 40.7567057, "lon": -73.9847240 },
+    { "lat": 40.7566432, "lon": -73.9847690 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:country": "US",
+    "addr:housenumber": "140",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 44th Street",
+    "building": "yes",
+    "height": "11.7",
+    "nycdoitt:bin": "1022619"
+  }
+},
+{
+  "type": "way",
+  "id": 266170755,
+  "bounds": {
+    "minlat": 40.7576102,
+    "minlon": -73.9847443,
+    "maxlat": 40.7581556,
+    "maxlon": -73.9842436
+  },
+  "nodes": [
+    2717545514,
+    2717545477,
+    2717545451,
+    2717545353,
+    1752870821,
+    1510230181,
+    2643931553,
+    2717545436,
+    2717545429,
+    2717545459,
+    2717545465,
+    1752822412,
+    1752822404,
+    2643931583,
+    1510230180,
+    2717545733,
+    2717545727,
+    2717545542,
+    2717545514
+  ],
+  "geometry": [
+    { "lat": 40.7578924, "lon": -73.9844157 },
+    { "lat": 40.7578464, "lon": -73.9843032 },
+    { "lat": 40.7578214, "lon": -73.9843209 },
+    { "lat": 40.7576102, "lon": -73.9844700 },
+    { "lat": 40.7576661, "lon": -73.9846051 },
+    { "lat": 40.7577223, "lon": -73.9847443 },
+    { "lat": 40.7577883, "lon": -73.9847000 },
+    { "lat": 40.7577966, "lon": -73.9846941 },
+    { "lat": 40.7577856, "lon": -73.9846672 },
+    { "lat": 40.7578251, "lon": -73.9846393 },
+    { "lat": 40.7578360, "lon": -73.9846658 },
+    { "lat": 40.7579586, "lon": -73.9845778 },
+    { "lat": 40.7579118, "lon": -73.9844632 },
+    { "lat": 40.7581010, "lon": -73.9843288 },
+    { "lat": 40.7581556, "lon": -73.9842911 },
+    { "lat": 40.7581362, "lon": -73.9842436 },
+    { "lat": 40.7581298, "lon": -73.9842481 },
+    { "lat": 40.7579045, "lon": -73.9844072 },
+    { "lat": 40.7578924, "lon": -73.9844157 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "149",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 45th Street",
+    "amenity": "theatre",
+    "building": "theatre",
+    "height": "30.3",
+    "name": "Lyceum Theatre",
+    "nycdoitt:bin": "1022633",
+    "start_date": "1903",
+    "theatre:genre": "musical",
+    "wikidata": "Q1756846",
+    "wikipedia": "en:Lyceum Theatre (Broadway)"
+  }
+},
+{
+  "type": "way",
+  "id": 266170756,
+  "bounds": {
+    "minlat": 40.7568833,
+    "minlon": -73.9850661,
+    "maxlat": 40.7572747,
+    "maxlon": -73.9845256
+  },
+  "nodes": [
+    2717544930,
+    2918511130,
+    2918511116,
+    2918511115,
+    2717544788,
+    1753010855,
+    2918511120,
+    2717544862,
+    2918511124,
+    2918511128,
+    10958053563,
+    2918511138,
+    2717545144,
+    2918511140,
+    2717545057,
+    2918511137,
+    2717544972,
+    2717544930
+  ],
+  "geometry": [
+    { "lat": 40.7571205, "lon": -73.9845256 },
+    { "lat": 40.7570897, "lon": -73.9845482 },
+    { "lat": 40.7569226, "lon": -73.9846707 },
+    { "lat": 40.7569004, "lon": -73.9846870 },
+    { "lat": 40.7568833, "lon": -73.9846995 },
+    { "lat": 40.7569358, "lon": -73.9848228 },
+    { "lat": 40.7569917, "lon": -73.9849572 },
+    { "lat": 40.7570375, "lon": -73.9850661 },
+    { "lat": 40.7570550, "lon": -73.9850532 },
+    { "lat": 40.7570767, "lon": -73.9850365 },
+    { "lat": 40.7571408, "lon": -73.9849896 },
+    { "lat": 40.7571749, "lon": -73.9849646 },
+    { "lat": 40.7572747, "lon": -73.9848922 },
+    { "lat": 40.7572332, "lon": -73.9847935 },
+    { "lat": 40.7572283, "lon": -73.9847819 },
+    { "lat": 40.7571651, "lon": -73.9846317 },
+    { "lat": 40.7571585, "lon": -73.9846160 },
+    { "lat": 40.7571205, "lon": -73.9845256 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "145",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 44th Street",
+    "brand": "Millennium",
+    "brand:wikidata": "Q6858774",
+    "building": "hotel",
+    "email": "BroadwayInfo.US@MILLENNIUMHOTELS.COM",
+    "fitness_centre": "yes",
+    "internet_access": "wlan",
+    "name": "Millennium Hotel Broadway Times Square",
+    "nycdoitt:bin": "1085016",
+    "official_name": "Millennium Hotels & Resorts",
+    "operator": "Millennium Hotels and Resorts",
+    "phone": "+1 212-768-4400",
+    "rooms": "626",
+    "start_date": "1990",
+    "tourism": "hotel",
+    "website": "https://www.millenniumhotels.com/en/new-york/millennium-hotel-broadway-times-square/",
+    "wikidata": "Q25345177"
+  }
+},
+{
+  "type": "way",
+  "id": 266170757,
+  "bounds": {
+    "minlat": 40.7570282,
+    "minlon": -73.9843305,
+    "maxlat": 40.7572871,
+    "maxlon": -73.9840716
+  },
+  "nodes": [
+    2717544856,
+    2717544901,
+    2717544907,
+    2717544935,
+    2717544938,
+    2717545051,
+    2717545060,
+    2717545165,
+    2717545068,
+    2717545039,
+    2918479426,
+    2918479425,
+    2918479424,
+    2717544856
+  ],
+  "geometry": [
+    { "lat": 40.7570282, "lon": -73.9842308 },
+    { "lat": 40.7570702, "lon": -73.9843305 },
+    { "lat": 40.7570915, "lon": -73.9843149 },
+    { "lat": 40.7571229, "lon": -73.9842920 },
+    { "lat": 40.7571248, "lon": -73.9842755 },
+    { "lat": 40.7572211, "lon": -73.9842053 },
+    { "lat": 40.7572336, "lon": -73.9842112 },
+    { "lat": 40.7572871, "lon": -73.9841721 },
+    { "lat": 40.7572447, "lon": -73.9840716 },
+    { "lat": 40.7572146, "lon": -73.9840939 },
+    { "lat": 40.7571929, "lon": -73.9841097 },
+    { "lat": 40.7571745, "lon": -73.9841232 },
+    { "lat": 40.7570440, "lon": -73.9842191 },
+    { "lat": 40.7570282, "lon": -73.9842308 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "132",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 45th Street",
+    "building": "hotel",
+    "contact:facebook": "https://www.facebook.com/NightTheaterDistrict",
+    "contact:instagram": "https://instagram.com/night_hotels",
+    "contact:twitter": "https://twitter.com/NightHotelNYC",
+    "email": "reservations@nighthotelny.com",
+    "height": "35.1",
+    "internet_access": "wlan",
+    "internet_access:fee": "no",
+    "name": "Night Theater District",
+    "nycdoitt:bin": "1022632",
+    "operator": "Dream Hotel Group",
+    "phone": "+1 212-835-9600",
+    "tourism": "hotel",
+    "website": "https://www.nighthotels.com/theatre-district/"
+  }
+},
+{
+  "type": "way",
+  "id": 266170759,
+  "bounds": {
+    "minlat": 40.7577147,
+    "minlon": -73.9840348,
+    "maxlat": 40.7579738,
+    "maxlon": -73.9838168
+  },
+  "nodes": [
+    2717545409,
+    2717545413,
+    2717545599,
+    1753134755,
+    2717545585,
+    2717545409
+  ],
+  "geometry": [
+    { "lat": 40.7577147, "lon": -73.9839856 },
+    { "lat": 40.7577348, "lon": -73.9840348 },
+    { "lat": 40.7579738, "lon": -73.9838660 },
+    { "lat": 40.7579634, "lon": -73.9838394 },
+    { "lat": 40.7579537, "lon": -73.9838168 },
+    { "lat": 40.7577147, "lon": -73.9839856 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "134",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 46th Street",
+    "amenity": "restaurant",
+    "building": "yes",
+    "cocktails": "yes",
+    "cuisine": "mexican",
+    "height": "16.0",
+    "name": "Amor Loco",
+    "nycdoitt:bin": "1022646"
+  }
+},
+{
+  "type": "way",
+  "id": 266170764,
+  "bounds": {
+    "minlat": 40.7562903,
+    "minlon": -73.9848249,
+    "maxlat": 40.7566605,
+    "maxlon": -73.9843711
+  },
+  "nodes": [
+    2717544283,
+    2717544288,
+    2717544342,
+    2717544410,
+    2717544402,
+    2717544452,
+    2717544462,
+    2717544523,
+    2717544510,
+    2717544615,
+    1753205375,
+    2717544469,
+    2717544303,
+    2717544283
+  ],
+  "geometry": [
+    { "lat": 40.7562903, "lon": -73.9845643 },
+    { "lat": 40.7562963, "lon": -73.9845786 },
+    { "lat": 40.7563990, "lon": -73.9848249 },
+    { "lat": 40.7564865, "lon": -73.9847618 },
+    { "lat": 40.7564804, "lon": -73.9847472 },
+    { "lat": 40.7565405, "lon": -73.9847038 },
+    { "lat": 40.7565501, "lon": -73.9847269 },
+    { "lat": 40.7566083, "lon": -73.9846849 },
+    { "lat": 40.7565983, "lon": -73.9846607 },
+    { "lat": 40.7566605, "lon": -73.9846159 },
+    { "lat": 40.7565906, "lon": -73.9844460 },
+    { "lat": 40.7565583, "lon": -73.9843711 },
+    { "lat": 40.7563201, "lon": -73.9845429 },
+    { "lat": 40.7562903, "lon": -73.9845643 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "130",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 44th Street",
+    "building": "hotel",
+    "contact:facebook": "https://www.facebook.com/TheChatwalNY",
+    "contact:instagram": "https://www.instagram.com/thechatwalny",
+    "contact:twitter": "https://twitter.com/thechatwalny",
+    "dog": "yes",
+    "email": "reservations@thechatwalny.com",
+    "fitness_centre": "yes",
+    "height": "24.0",
+    "internet_access": "wlan",
+    "internet_access:fee": "no",
+    "name": "The Chatwal",
+    "nycdoitt:bin": "1022617",
+    "operator": "Marriot International",
+    "phone": "+1 212-764-6200",
+    "service:bicycle:rental": "yes",
+    "swimming_pool": "yes",
+    "tourism": "hotel",
+    "website": "https://www.thechatwalny.com"
+  }
+},
+{
+  "type": "way",
+  "id": 266170765,
+  "bounds": {
+    "minlat": 40.7576079,
+    "minlon": -73.9839890,
+    "maxlat": 40.7579537,
+    "maxlon": -73.9835673
+  },
+  "nodes": [
+    2717545407,
+    2717545409,
+    2717545585,
+    1753126613,
+    2717545483,
+    2717545350,
+    2717545366,
+    2717545407
+  ],
+  "geometry": [
+    { "lat": 40.7577098, "lon": -73.9839890 },
+    { "lat": 40.7577147, "lon": -73.9839856 },
+    { "lat": 40.7579537, "lon": -73.9838168 },
+    { "lat": 40.7578978, "lon": -73.9836787 },
+    { "lat": 40.7578518, "lon": -73.9835673 },
+    { "lat": 40.7576079, "lon": -73.9837395 },
+    { "lat": 40.7576287, "lon": -73.9837906 },
+    { "lat": 40.7577098, "lon": -73.9839890 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "130",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 46th Street",
+    "air_conditioning": "yes",
+    "brand": "Independent",
+    "building": "hotel",
+    "cat": "yes",
+    "contact:facebook": "https://www.facebook.com/themusehotel",
+    "contact:instagram": "https://www.instagram.com/musehotelnyc/",
+    "dog": "yes",
+    "email": "talktous@themusehotel.com",
+    "fax": "+1 212-485-2789",
+    "fitness_centre": "yes",
+    "height": "65.8",
+    "internet_access": "yes",
+    "name": "The Muse New York",
+    "nycdoitt:bin": "1022645",
+    "payment:american_express": "yes",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "payment:mastercard": "yes",
+    "payment:visa": "yes",
+    "phone": "+1 212-485-2400",
+    "rooms": "200",
+    "service:bicycle:rental": "yes",
+    "smoking": "no",
+    "tourism": "hotel",
+    "website": "https://www.themusehotel.com/",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 266170766,
+  "bounds": {
+    "minlat": 40.7567970,
+    "minlon": -73.9842489,
+    "maxlat": 40.7572146,
+    "maxlon": -73.9836199
+  },
+  "nodes": [
+    1279511174,
+    2918479095,
+    2918479098,
+    2717544760,
+    2918479099,
+    2717544765,
+    2717544790,
+    2717544811,
+    2717544823,
+    2717544828,
+    2717544840,
+    2717544856,
+    2918479424,
+    2918479425,
+    2918479426,
+    2717545039,
+    2717544892,
+    2717544878,
+    2918479423,
+    2918479418,
+    2918479417,
+    2918479414,
+    2918479413,
+    2918479412,
+    2918479410,
+    2918479408,
+    2918479404,
+    2918479100,
+    2918479096,
+    1279511174
+  ],
+  "geometry": [
+    { "lat": 40.7567970, "lon": -73.9837591 },
+    { "lat": 40.7568049, "lon": -73.9837779 },
+    { "lat": 40.7568448, "lon": -73.9838731 },
+    { "lat": 40.7568479, "lon": -73.9838803 },
+    { "lat": 40.7568525, "lon": -73.9838912 },
+    { "lat": 40.7568561, "lon": -73.9838997 },
+    { "lat": 40.7568872, "lon": -73.9839733 },
+    { "lat": 40.7569456, "lon": -73.9841114 },
+    { "lat": 40.7569735, "lon": -73.9841776 },
+    { "lat": 40.7569808, "lon": -73.9841948 },
+    { "lat": 40.7570036, "lon": -73.9842489 },
+    { "lat": 40.7570282, "lon": -73.9842308 },
+    { "lat": 40.7570440, "lon": -73.9842191 },
+    { "lat": 40.7571745, "lon": -73.9841232 },
+    { "lat": 40.7571929, "lon": -73.9841097 },
+    { "lat": 40.7572146, "lon": -73.9840939 },
+    { "lat": 40.7570649, "lon": -73.9837362 },
+    { "lat": 40.7570432, "lon": -73.9837525 },
+    { "lat": 40.7570354, "lon": -73.9837342 },
+    { "lat": 40.7569946, "lon": -73.9836382 },
+    { "lat": 40.7569869, "lon": -73.9836199 },
+    { "lat": 40.7569725, "lon": -73.9836304 },
+    { "lat": 40.7569683, "lon": -73.9836338 },
+    { "lat": 40.7569455, "lon": -73.9836505 },
+    { "lat": 40.7569290, "lon": -73.9836626 },
+    { "lat": 40.7569147, "lon": -73.9836730 },
+    { "lat": 40.7568707, "lon": -73.9837052 },
+    { "lat": 40.7568564, "lon": -73.9837157 },
+    { "lat": 40.7568113, "lon": -73.9837487 },
+    { "lat": 40.7567970, "lon": -73.9837591 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "120",
+    "addr:postcode": "10036",
+    "addr:street": "West 45th Street",
+    "building": "office",
+    "name": "Tower 45",
+    "nycdoitt:bin": "1069581",
+    "start_date": "1989"
+  }
+},
+{
+  "type": "way",
+  "id": 266170772,
+  "bounds": {
+    "minlat": 40.7593006,
+    "minlon": -73.9842429,
+    "maxlat": 40.7595897,
+    "maxlon": -73.9837025
+  },
+  "nodes": [
+    2717546124,
+    2717546141,
+    2717546177,
+    2717546148,
+    2717546162,
+    2717546179,
+    2717546173,
+    2717546171,
+    2717546159,
+    2717546124
+  ],
+  "geometry": [
+    { "lat": 40.7593006, "lon": -73.9838687 },
+    { "lat": 40.7594585, "lon": -73.9842429 },
+    { "lat": 40.7595753, "lon": -73.9841576 },
+    { "lat": 40.7594714, "lon": -73.9839113 },
+    { "lat": 40.7595352, "lon": -73.9838648 },
+    { "lat": 40.7595897, "lon": -73.9838250 },
+    { "lat": 40.7595625, "lon": -73.9837606 },
+    { "lat": 40.7595551, "lon": -73.9837661 },
+    { "lat": 40.7595282, "lon": -73.9837025 },
+    { "lat": 40.7593006, "lon": -73.9838687 }
+  ],
+  "tags": {
+    "building": "yes",
+    "height": "15.5",
+    "nycdoitt:bin": "1022687"
+  }
+},
+{
+  "type": "way",
+  "id": 266170782,
+  "bounds": {
+    "minlat": 40.7562693,
+    "minlon": -73.9853799,
+    "maxlat": 40.7568335,
+    "maxlon": -73.9848704
+  },
+  "nodes": [
+    2717544432,
+    2717544425,
+    2717544408,
+    2717544271,
+    8396878500,
+    1752942841,
+    2717544317,
+    2717544357,
+    2717544414,
+    2717544476,
+    2717544753,
+    1752942903,
+    2717544696,
+    2717544633,
+    2717544559,
+    2717544432
+  ],
+  "geometry": [
+    { "lat": 40.7565199, "lon": -73.9850485 },
+    { "lat": 40.7565075, "lon": -73.9850186 },
+    { "lat": 40.7564861, "lon": -73.9850340 },
+    { "lat": 40.7562693, "lon": -73.9851904 },
+    { "lat": 40.7563173, "lon": -73.9853052 },
+    { "lat": 40.7563270, "lon": -73.9853287 },
+    { "lat": 40.7563483, "lon": -73.9853799 },
+    { "lat": 40.7564254, "lon": -73.9853243 },
+    { "lat": 40.7564901, "lon": -73.9852777 },
+    { "lat": 40.7565668, "lon": -73.9852224 },
+    { "lat": 40.7568335, "lon": -73.9850301 },
+    { "lat": 40.7568036, "lon": -73.9849586 },
+    { "lat": 40.7567668, "lon": -73.9848704 },
+    { "lat": 40.7566788, "lon": -73.9849339 },
+    { "lat": 40.7566318, "lon": -73.9849678 },
+    { "lat": 40.7565199, "lon": -73.9850485 }
+  ],
+  "tags": {
+    "amenity": "parking",
+    "building": "yes",
+    "fee": "yes",
+    "height": "33.4",
+    "nycdoitt:bin": "1022612",
+    "parking": "multi-storey"
+  }
+},
+{
+  "type": "way",
+  "id": 266170795,
+  "bounds": {
+    "minlat": 40.7590063,
+    "minlon": -73.9844165,
+    "maxlat": 40.7594585,
+    "maxlon": -73.9837380
+  },
+  "nodes": [
+    2717546114,
+    2717546099,
+    2717546064,
+    2717546016,
+    2717546111,
+    2717546141,
+    2717546124,
+    2717546114
+  ],
+  "geometry": [
+    { "lat": 40.7592455, "lon": -73.9837380 },
+    { "lat": 40.7591651, "lon": -73.9837967 },
+    { "lat": 40.7590565, "lon": -73.9838759 },
+    { "lat": 40.7590063, "lon": -73.9839125 },
+    { "lat": 40.7592198, "lon": -73.9844165 },
+    { "lat": 40.7594585, "lon": -73.9842429 },
+    { "lat": 40.7593006, "lon": -73.9838687 },
+    { "lat": 40.7592455, "lon": -73.9837380 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "701",
+    "addr:postcode": "10036",
+    "addr:street": "7th Avenue",
+    "building": "yes",
+    "building:levels": "39",
+    "height": "157",
+    "name": "20 Times Square",
+    "nycdoitt:bin": "1083718",
+    "start_date": "2018",
+    "wikidata": "Q2631694",
+    "wikipedia": "en:20 Times Square"
+  }
+},
+{
+  "type": "way",
+  "id": 266170800,
+  "bounds": {
+    "minlat": 40.7566105,
+    "minlon": -73.9843682,
+    "maxlat": 40.7569735,
+    "maxlon": -73.9838921
+  },
+  "nodes": [
+    2717544808,
+    2717544805,
+    2717544800,
+    2717544784,
+    2717544793,
+    2717544766,
+    2717544759,
+    2717544770,
+    2717544752,
+    2717544747,
+    2717544744,
+    2717544783,
+    2717544779,
+    2717544790,
+    2717544765,
+    2717544758,
+    2717544751,
+    2717544706,
+    2717544708,
+    2717544635,
+    2717544631,
+    2717544527,
+    2717544667,
+    2717544738,
+    2717544742,
+    2717544797,
+    2717544801,
+    2717544819,
+    2717544815,
+    2717544823,
+    2717544811,
+    2717544808
+  ],
+  "geometry": [
+    { "lat": 40.7569312, "lon": -73.9841219 },
+    { "lat": 40.7569219, "lon": -73.9841000 },
+    { "lat": 40.7569054, "lon": -73.9840911 },
+    { "lat": 40.7568815, "lon": -73.9841085 },
+    { "lat": 40.7568884, "lon": -73.9841248 },
+    { "lat": 40.7568566, "lon": -73.9841480 },
+    { "lat": 40.7568478, "lon": -73.9841270 },
+    { "lat": 40.7568592, "lon": -73.9841187 },
+    { "lat": 40.7568323, "lon": -73.9840549 },
+    { "lat": 40.7568209, "lon": -73.9840633 },
+    { "lat": 40.7568145, "lon": -73.9840481 },
+    { "lat": 40.7568784, "lon": -73.9840014 },
+    { "lat": 40.7568714, "lon": -73.9839848 },
+    { "lat": 40.7568872, "lon": -73.9839733 },
+    { "lat": 40.7568561, "lon": -73.9838997 },
+    { "lat": 40.7568403, "lon": -73.9839112 },
+    { "lat": 40.7568323, "lon": -73.9838921 },
+    { "lat": 40.7567805, "lon": -73.9839299 },
+    { "lat": 40.7567806, "lon": -73.9839421 },
+    { "lat": 40.7566891, "lon": -73.9840090 },
+    { "lat": 40.7566775, "lon": -73.9840050 },
+    { "lat": 40.7566105, "lon": -73.9840540 },
+    { "lat": 40.7567432, "lon": -73.9843682 },
+    { "lat": 40.7568109, "lon": -73.9843188 },
+    { "lat": 40.7568129, "lon": -73.9843023 },
+    { "lat": 40.7568986, "lon": -73.9842398 },
+    { "lat": 40.7569077, "lon": -73.9842481 },
+    { "lat": 40.7569678, "lon": -73.9842043 },
+    { "lat": 40.7569605, "lon": -73.9841871 },
+    { "lat": 40.7569735, "lon": -73.9841776 },
+    { "lat": 40.7569456, "lon": -73.9841114 },
+    { "lat": 40.7569312, "lon": -73.9841219 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "123",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 44th Street",
+    "building": "hotel",
+    "fitness_centre": "yes",
+    "height": "49.3",
+    "internet_access": "wlan",
+    "internet_access:fee": "no",
+    "name": "AKA Times Square",
+    "nycdoitt:bin": "1022629",
+    "operator": "AKA",
+    "phone": "+1 212-764-5700",
+    "tourism": "hotel",
+    "website": "https://www.stayaka.com/aka-times-square"
+  }
+},
+{
+  "type": "way",
+  "id": 266170835,
+  "bounds": {
+    "minlat": 40.7564620,
+    "minlon": -73.9840540,
+    "maxlat": 40.7568479,
+    "maxlon": -73.9835297
+  },
+  "nodes": [
+    1752976204,
+    1752976200,
+    2717544398,
+    2717544527,
+    2717544631,
+    2717544706,
+    2717544751,
+    2717544760,
+    2918479098,
+    2918479095,
+    1279511174,
+    1752976204
+  ],
+  "geometry": [
+    { "lat": 40.7567024, "lon": -73.9835297 },
+    { "lat": 40.7565668, "lon": -73.9836275 },
+    { "lat": 40.7564620, "lon": -73.9837039 },
+    { "lat": 40.7566105, "lon": -73.9840540 },
+    { "lat": 40.7566775, "lon": -73.9840050 },
+    { "lat": 40.7567805, "lon": -73.9839299 },
+    { "lat": 40.7568323, "lon": -73.9838921 },
+    { "lat": 40.7568479, "lon": -73.9838803 },
+    { "lat": 40.7568448, "lon": -73.9838731 },
+    { "lat": 40.7568049, "lon": -73.9837779 },
+    { "lat": 40.7567970, "lon": -73.9837591 },
+    { "lat": 40.7567024, "lon": -73.9835297 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "111",
+    "addr:postcode": "10036",
+    "addr:street": "West 44th Street",
+    "amenity": "theatre",
+    "building": "yes",
+    "height": "19.2",
+    "name": "Belasco Theatre",
+    "nycdoitt:bin": "1022630",
+    "start_date": "1907",
+    "theatre:genre": "musical",
+    "wikidata": "Q815278",
+    "wikipedia": "en:Belasco Theatre"
+  }
+},
+{
+  "type": "way",
+  "id": 266170839,
+  "bounds": {
+    "minlat": 40.7570375,
+    "minlon": -73.9856102,
+    "maxlat": 40.7578180,
+    "maxlon": -73.9846055
+  },
+  "nodes": [
+    2717545057,
+    2918511140,
+    2717545144,
+    2918511138,
+    10958053563,
+    2918511128,
+    2918511124,
+    2717544862,
+    2717545115,
+    2717545220,
+    10958053562,
+    10958053564,
+    10958053560,
+    2717545425,
+    10958053559,
+    2717545275,
+    2717545057
+  ],
+  "geometry": [
+    { "lat": 40.7572283, "lon": -73.9847819 },
+    { "lat": 40.7572332, "lon": -73.9847935 },
+    { "lat": 40.7572747, "lon": -73.9848922 },
+    { "lat": 40.7571749, "lon": -73.9849646 },
+    { "lat": 40.7571408, "lon": -73.9849896 },
+    { "lat": 40.7570767, "lon": -73.9850365 },
+    { "lat": 40.7570550, "lon": -73.9850532 },
+    { "lat": 40.7570375, "lon": -73.9850661 },
+    { "lat": 40.7572630, "lon": -73.9855959 },
+    { "lat": 40.7573682, "lon": -73.9856102 },
+    { "lat": 40.7573924, "lon": -73.9855991 },
+    { "lat": 40.7575247, "lon": -73.9855383 },
+    { "lat": 40.7577267, "lon": -73.9854455 },
+    { "lat": 40.7578180, "lon": -73.9854035 },
+    { "lat": 40.7577327, "lon": -73.9852080 },
+    { "lat": 40.7574700, "lon": -73.9846055 },
+    { "lat": 40.7572283, "lon": -73.9847819 }
+  ],
+  "tags": {
+    "building": "yes",
+    "height": "18.7",
+    "nycdoitt:bin": "1022624"
+  }
+},
+{
+  "type": "way",
+  "id": 266170843,
+  "bounds": {
+    "minlat": 40.7583579,
+    "minlon": -73.9848129,
+    "maxlat": 40.7588398,
+    "maxlon": -73.9841361
+  },
+  "nodes": [
+    2717545899,
+    2717545815,
+    2717545855,
+    2717545890,
+    2717545906,
+    2717545993,
+    2717545991,
+    2935101192,
+    2935101191,
+    2935101185,
+    2717545915,
+    2717545899
+  ],
+  "geometry": [
+    { "lat": 40.7585992, "lon": -73.9841361 },
+    { "lat": 40.7583579, "lon": -73.9843119 },
+    { "lat": 40.7584886, "lon": -73.9846231 },
+    { "lat": 40.7585838, "lon": -73.9845544 },
+    { "lat": 40.7586909, "lon": -73.9848129 },
+    { "lat": 40.7588398, "lon": -73.9847069 },
+    { "lat": 40.7588373, "lon": -73.9847010 },
+    { "lat": 40.7588246, "lon": -73.9846720 },
+    { "lat": 40.7588158, "lon": -73.9846518 },
+    { "lat": 40.7587337, "lon": -73.9844555 },
+    { "lat": 40.7586728, "lon": -73.9843108 },
+    { "lat": 40.7585992, "lon": -73.9841361 }
+  ],
+  "tags": {
+    "building": "yes",
+    "height": "57.3",
+    "nycdoitt:bin": "1022661"
+  }
+},
+{
+  "type": "way",
+  "id": 351540642,
+  "bounds": {
+    "minlat": 40.7585327,
+    "minlon": -73.9866763,
+    "maxlat": 40.7590054,
+    "maxlon": -73.9863268
+  },
+  "nodes": [
+    4550600353,
+    4550600352
+  ],
+  "geometry": [
+    { "lat": 40.7590054, "lon": -73.9863268 },
+    { "lat": 40.7585327, "lon": -73.9866763 }
+  ],
+  "tags": {
+    "covered": "yes",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete",
+    "tunnel": "building_passage"
+  }
+},
+{
+  "type": "way",
+  "id": 397795463,
+  "bounds": {
+    "minlat": 40.7583669,
+    "minlon": -73.9852442,
+    "maxlat": 40.7585968,
+    "maxlon": -73.9850795
+  },
+  "nodes": [
+    42439990,
+    6598535188,
+    5475605303
+  ],
+  "geometry": [
+    { "lat": 40.7585968, "lon": -73.9850795 },
+    { "lat": 40.7585239, "lon": -73.9851316 },
+    { "lat": 40.7583669, "lon": -73.9852442 }
+  ],
+  "tags": {
+    "cycleway:left": "track",
+    "foot": "designated",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "5",
+    "lit": "yes",
+    "maxspeed": "25 mph",
+    "name": "7th Avenue",
+    "name:ru": "7-я Авеню",
+    "name_1": "7 Avenue",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt",
+    "turn:lanes": "through|through|through|through|right",
+    "wikidata": "Q109926",
+    "wikipedia": "en:Seventh Avenue (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 397795464,
+  "bounds": {
+    "minlat": 40.7567100,
+    "minlon": -73.9864580,
+    "maxlat": 40.7573424,
+    "maxlon": -73.9860116
+  },
+  "nodes": [
+    42439984,
+    3974095826,
+    12055680089,
+    3974095825,
+    42439981
+  ],
+  "geometry": [
+    { "lat": 40.7573424, "lon": -73.9860116 },
+    { "lat": 40.7572793, "lon": -73.9860561 },
+    { "lat": 40.7568450, "lon": -73.9863628 },
+    { "lat": 40.7567954, "lon": -73.9863978 },
+    { "lat": 40.7567100, "lon": -73.9864580 }
+  ],
+  "tags": {
+    "cycleway:left": "track",
+    "cycleway:left:oneway": "yes",
+    "foot": "designated",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "4",
+    "lit": "yes",
+    "maxspeed": "25 mph",
+    "name": "7th Avenue",
+    "name:ru": "7-я Авеню",
+    "name_1": "7 Avenue",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt",
+    "turn:lanes": "through|through|through|right",
+    "wikidata": "Q109926",
+    "wikipedia": "en:Seventh Avenue (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 420494981,
+  "bounds": {
+    "minlat": 40.7575793,
+    "minlon": -73.9850795,
+    "maxlat": 40.7585968,
+    "maxlon": -73.9827028
+  },
+  "nodes": [
+    42439990,
+    2435108452,
+    8250908767,
+    8318633104
+  ],
+  "geometry": [
+    { "lat": 40.7585968, "lon": -73.9850795 },
+    { "lat": 40.7585496, "lon": -73.9849674 },
+    { "lat": 40.7582569, "lon": -73.9842778 },
+    { "lat": 40.7575793, "lon": -73.9827028 }
+  ],
+  "tags": {
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "1",
+    "lit": "yes",
+    "name": "West 46th Street",
+    "name:ru": "Западная 46-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 452322757,
+  "bounds": {
+    "minlat": 40.7592229,
+    "minlon": -73.9851371,
+    "maxlat": 40.7594380,
+    "maxlon": -73.9846194
+  },
+  "nodes": [
+    42439994,
+    10228962331,
+    2435108448,
+    12989986305,
+    42428303
+  ],
+  "geometry": [
+    { "lat": 40.7592229, "lon": -73.9846194 },
+    { "lat": 40.7592729, "lon": -73.9847402 },
+    { "lat": 40.7593682, "lon": -73.9849694 },
+    { "lat": 40.7593906, "lon": -73.9850231 },
+    { "lat": 40.7594380, "lon": -73.9851371 }
+  ],
+  "tags": {
+    "cycleway:left": "track",
+    "cycleway:left:oneway": "-1",
+    "highway": "residential",
+    "lanes": "2",
+    "lit": "yes",
+    "maxspeed": "25 mph",
+    "name": "West 47th Street",
+    "name:ru": "Западная 47-я стрит",
+    "name_1": "West 47 Street",
+    "oneway": "yes",
+    "oneway:bicycle": "no",
+    "sidewalk:both": "separate",
+    "surface": "asphalt",
+    "turn:lanes": "through|through",
+    "wikidata": "Q4638574",
+    "wikipedia": "en:47th Street (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 459148465,
+  "bounds": {
+    "minlat": 40.7585223,
+    "minlon": -73.9866837,
+    "maxlat": 40.7585327,
+    "maxlon": -73.9866763
+  },
+  "nodes": [
+    4550600352,
+    6598535205
+  ],
+  "geometry": [
+    { "lat": 40.7585327, "lon": -73.9866763 },
+    { "lat": 40.7585223, "lon": -73.9866837 }
+  ],
+  "tags": {
+    "covered": "yes",
+    "highway": "footway",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 477374247,
+  "bounds": {
+    "minlat": 40.7573266,
+    "minlon": -73.9857916,
+    "maxlat": 40.7578467,
+    "maxlon": -73.9854508
+  },
+  "nodes": [
+    3974095830,
+    10224032642,
+    9004888711,
+    9004888713
+  ],
+  "geometry": [
+    { "lat": 40.7578467, "lon": -73.9854508 },
+    { "lat": 40.7577358, "lon": -73.9855265 },
+    { "lat": 40.7574840, "lon": -73.9856929 },
+    { "lat": 40.7573266, "lon": -73.9857916 }
+  ],
+  "tags": {
+    "access": "yes",
+    "bicycle": "dismount",
+    "cycleway": "no",
+    "highway": "pedestrian",
+    "lit": "yes",
+    "motor_vehicle": "no",
+    "name": "Broadway",
+    "name:en": "Broadway",
+    "name:ja": "ブロードウェイ",
+    "name:ru": "Бродвей",
+    "name:zh": "百老匯",
+    "name:zh-Hans": "百老汇",
+    "name:zh-Hant": "百老匯",
+    "note": "closed to motor vehicles May 24, 2009",
+    "oneway": "no",
+    "surface": "paving_stones",
+    "wikidata": "Q11260",
+    "wikipedia": "en:Broadway (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 483360105,
+  "bounds": {
+    "minlat": 40.7585968,
+    "minlon": -73.9850795,
+    "maxlat": 40.7592229,
+    "maxlon": -73.9846194
+  },
+  "nodes": [
+    42439994,
+    6598535157,
+    6598535159,
+    42439990
+  ],
+  "geometry": [
+    { "lat": 40.7592229, "lon": -73.9846194 },
+    { "lat": 40.7591475, "lon": -73.9846758 },
+    { "lat": 40.7586679, "lon": -73.9850272 },
+    { "lat": 40.7585968, "lon": -73.9850795 }
+  ],
+  "tags": {
+    "cycleway:left": "lane",
+    "foot": "designated",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "3",
+    "lit": "yes",
+    "maxspeed": "25 mph",
+    "name": "7th Avenue",
+    "name:ru": "7-я Авеню",
+    "name_1": "7 Avenue",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt",
+    "wikidata": "Q109926",
+    "wikipedia": "en:Seventh Avenue (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 569345542,
+  "bounds": {
+    "minlat": 40.7579634,
+    "minlon": -73.9855335,
+    "maxlat": 40.7583669,
+    "maxlon": -73.9852442
+  },
+  "nodes": [
+    5475605303,
+    4707407261,
+    42428297
+  ],
+  "geometry": [
+    { "lat": 40.7583669, "lon": -73.9852442 },
+    { "lat": 40.7580355, "lon": -73.9854818 },
+    { "lat": 40.7579634, "lon": -73.9855335 }
+  ],
+  "tags": {
+    "cycleway:left": "track",
+    "cycleway:left:oneway": "yes",
+    "cycleway:right": "no",
+    "foot": "designated",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "5",
+    "lit": "yes",
+    "maxspeed": "25 mph",
+    "name": "7th Avenue",
+    "name:ru": "7-я Авеню",
+    "name_1": "7 Avenue",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt",
+    "turn:lanes": "through|through|through|through|right",
+    "wikidata": "Q109926",
+    "wikipedia": "en:Seventh Avenue (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 569345543,
+  "bounds": {
+    "minlat": 40.7567100,
+    "minlon": -73.9883815,
+    "maxlat": 40.7575242,
+    "maxlon": -73.9864580
+  },
+  "nodes": [
+    42439981,
+    3974095824,
+    8669764313
+  ],
+  "geometry": [
+    { "lat": 40.7567100, "lon": -73.9864580 },
+    { "lat": 40.7567549, "lon": -73.9865657 },
+    { "lat": 40.7575242, "lon": -73.9883815 }
+  ],
+  "tags": {
+    "bicycle": "yes",
+    "cycleway:left": "shared_lane",
+    "cycleway:left:lane": "pictogram",
+    "cycleway:left:oneway": "yes",
+    "cycleway:right": "no",
+    "highway": "residential",
+    "lanes": "2",
+    "name": "West 43rd Street",
+    "name:ru": "Западная 43-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 569345544,
+  "bounds": {
+    "minlat": 40.7560361,
+    "minlon": -73.9869489,
+    "maxlat": 40.7567100,
+    "maxlon": -73.9864580
+  },
+  "nodes": [
+    42439981,
+    3974095823,
+    3974095821,
+    42437363
+  ],
+  "geometry": [
+    { "lat": 40.7567100, "lon": -73.9864580 },
+    { "lat": 40.7566441, "lon": -73.9865075 },
+    { "lat": 40.7561306, "lon": -73.9868801 },
+    { "lat": 40.7560361, "lon": -73.9869489 }
+  ],
+  "tags": {
+    "cycleway:left": "track",
+    "cycleway:left:oneway": "yes",
+    "foot": "designated",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "4",
+    "lit": "yes",
+    "maxspeed": "25 mph",
+    "name": "7th Avenue",
+    "name:ru": "7-я Авеню",
+    "name_1": "7 Avenue",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt",
+    "wikidata": "Q109926",
+    "wikipedia": "en:Seventh Avenue (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 575505274,
+  "bounds": {
+    "minlat": 40.7588019,
+    "minlon": -73.9858314,
+    "maxlat": 40.7588860,
+    "maxlon": -73.9857703
+  },
+  "nodes": [
+    5522182776,
+    6598535207,
+    5522182779
+  ],
+  "geometry": [
+    { "lat": 40.7588860, "lon": -73.9857703 },
+    { "lat": 40.7588261, "lon": -73.9858140 },
+    { "lat": 40.7588019, "lon": -73.9858314 }
+  ],
+  "tags": {
+    "highway": "service",
+    "lit": "yes",
+    "oneway": "yes",
+    "service": "driveway"
+  }
+},
+{
+  "type": "way",
+  "id": 575505275,
+  "bounds": {
+    "minlat": 40.7582527,
+    "minlon": -73.9862271,
+    "maxlat": 40.7583240,
+    "maxlon": -73.9861757
+  },
+  "nodes": [
+    5522182778,
+    9354852637,
+    5522182777
+  ],
+  "geometry": [
+    { "lat": 40.7583240, "lon": -73.9861757 },
+    { "lat": 40.7583137, "lon": -73.9861831 },
+    { "lat": 40.7582527, "lon": -73.9862271 }
+  ],
+  "tags": {
+    "highway": "service",
+    "oneway": "yes",
+    "service": "driveway",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 575505276,
+  "bounds": {
+    "minlat": 40.7583240,
+    "minlon": -73.9861757,
+    "maxlat": 40.7588019,
+    "maxlon": -73.9858314
+  },
+  "nodes": [
+    5522182779,
+    5522182778
+  ],
+  "geometry": [
+    { "lat": 40.7588019, "lon": -73.9858314 },
+    { "lat": 40.7583240, "lon": -73.9861757 }
+  ],
+  "tags": {
+    "highway": "service",
+    "layer": "-1",
+    "lit": "yes",
+    "maxheight": "below_default",
+    "maxheight:signed": "no",
+    "oneway": "yes",
+    "service": "driveway",
+    "tunnel": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 682360554,
+  "bounds": {
+    "minlat": 40.7573424,
+    "minlon": -73.9860116,
+    "maxlat": 40.7579634,
+    "maxlon": -73.9855335
+  },
+  "nodes": [
+    42428297,
+    6597464486,
+    3974095829,
+    42439984
+  ],
+  "geometry": [
+    { "lat": 40.7579634, "lon": -73.9855335 },
+    { "lat": 40.7578917, "lon": -73.9855888 },
+    { "lat": 40.7574192, "lon": -73.9859523 },
+    { "lat": 40.7573424, "lon": -73.9860116 }
+  ],
+  "tags": {
+    "cycleway:left": "track",
+    "cycleway:left:oneway": "yes",
+    "foot": "designated",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "4",
+    "lit": "yes",
+    "maxspeed": "25 mph",
+    "name": "7th Avenue",
+    "name:ru": "7-я Авеню",
+    "name_1": "7 Avenue",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt",
+    "turn:lanes": "through|through|through|through",
+    "wikidata": "Q109926",
+    "wikipedia": "en:Seventh Avenue (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 702465447,
+  "bounds": {
+    "minlat": 40.7580022,
+    "minlon": -73.9855784,
+    "maxlat": 40.7580788,
+    "maxlon": -73.9854077
+  },
+  "nodes": [
+    4707407257,
+    4707407261,
+    10224032640
+  ],
+  "geometry": [
+    { "lat": 40.7580788, "lon": -73.9855784 },
+    { "lat": 40.7580355, "lon": -73.9854818 },
+    { "lat": 40.7580022, "lon": -73.9854077 }
+  ],
+  "tags": {
+    "access": "yes",
+    "bicycle": "dismount",
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "cycleway": "no",
+    "footway": "crossing",
+    "highway": "footway",
+    "motor_vehicle": "no",
+    "note": "closed to motor vehicles May 24, 2009",
+    "oneway": "no",
+    "surface": "paved",
+    "tiger:cfcc": "A41",
+    "tiger:county": "New York, NY",
+    "tiger:name_base": "Broadway",
+    "tiger:zip_left": "10019",
+    "tiger:zip_right": "10019"
+  }
+},
+{
+  "type": "way",
+  "id": 702543819,
+  "bounds": {
+    "minlat": 40.7571815,
+    "minlon": -73.9857474,
+    "maxlat": 40.7572686,
+    "maxlon": -73.9857057
+  },
+  "nodes": [
+    10224024798,
+    6598535230,
+    6597464455
+  ],
+  "geometry": [
+    { "lat": 40.7572686, "lon": -73.9857057 },
+    { "lat": 40.7572239, "lon": -73.9857273 },
+    { "lat": 40.7571815, "lon": -73.9857474 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 702543820,
+  "bounds": {
+    "minlat": 40.7565982,
+    "minlon": -73.9863104,
+    "maxlat": 40.7567600,
+    "maxlon": -73.9860083
+  },
+  "nodes": [
+    9235539564,
+    10224024746,
+    10224024739,
+    6597498385,
+    6597473583
+  ],
+  "geometry": [
+    { "lat": 40.7567600, "lon": -73.9863104 },
+    { "lat": 40.7567563, "lon": -73.9863034 },
+    { "lat": 40.7567177, "lon": -73.9862323 },
+    { "lat": 40.7566665, "lon": -73.9861358 },
+    { "lat": 40.7565982, "lon": -73.9860083 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 702543822,
+  "bounds": {
+    "minlat": 40.7567600,
+    "minlon": -73.9864581,
+    "maxlat": 40.7568199,
+    "maxlon": -73.9863104
+  },
+  "nodes": [
+    10224024764,
+    3974095825,
+    9235539564
+  ],
+  "geometry": [
+    { "lat": 40.7568199, "lon": -73.9864581 },
+    { "lat": 40.7567954, "lon": -73.9863978 },
+    { "lat": 40.7567600, "lon": -73.9863104 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 702543823,
+  "bounds": {
+    "minlat": 40.7556298,
+    "minlon": -73.9859784,
+    "maxlat": 40.7571439,
+    "maxlon": -73.9833391
+  },
+  "nodes": [
+    9235539562,
+    8396878499,
+    6597498394,
+    6597498393,
+    6597498392,
+    6597498391,
+    8396878496,
+    13915675577,
+    9235539559
+  ],
+  "geometry": [
+    { "lat": 40.7565822, "lon": -73.9859784 },
+    { "lat": 40.7563017, "lon": -73.9853163 },
+    { "lat": 40.7556298, "lon": -73.9837167 },
+    { "lat": 40.7556340, "lon": -73.9837065 },
+    { "lat": 40.7556386, "lon": -73.9836998 },
+    { "lat": 40.7561384, "lon": -73.9833391 },
+    { "lat": 40.7564530, "lon": -73.9840827 },
+    { "lat": 40.7568179, "lon": -73.9849484 },
+    { "lat": 40.7571439, "lon": -73.9857221 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "smoothness": "good",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 702543824,
+  "bounds": {
+    "minlat": 40.7572395,
+    "minlon": -73.9861061,
+    "maxlat": 40.7573015,
+    "maxlon": -73.9859662
+  },
+  "nodes": [
+    10224024790,
+    3974095826,
+    6597498397
+  ],
+  "geometry": [
+    { "lat": 40.7573015, "lon": -73.9861061 },
+    { "lat": 40.7572793, "lon": -73.9860561 },
+    { "lat": 40.7572395, "lon": -73.9859662 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway",
+    "tactile_paving": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 702543826,
+  "bounds": {
+    "minlat": 40.7567225,
+    "minlon": -73.9865899,
+    "maxlat": 40.7568010,
+    "maxlon": -73.9865311
+  },
+  "nodes": [
+    10224024768,
+    3974095824,
+    10224024765
+  ],
+  "geometry": [
+    { "lat": 40.7567225, "lon": -73.9865899 },
+    { "lat": 40.7567549, "lon": -73.9865657 },
+    { "lat": 40.7568010, "lon": -73.9865311 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 702543827,
+  "bounds": {
+    "minlat": 40.7568356,
+    "minlon": -73.9891266,
+    "maxlat": 40.7584302,
+    "maxlon": -73.9865739
+  },
+  "nodes": [
+    7581386278,
+    6597498399,
+    10168088470,
+    6597498408,
+    8669764315,
+    10224024766
+  ],
+  "geometry": [
+    { "lat": 40.7583815, "lon": -73.9886430 },
+    { "lat": 40.7584302, "lon": -73.9887591 },
+    { "lat": 40.7579245, "lon": -73.9891208 },
+    { "lat": 40.7579164, "lon": -73.9891266 },
+    { "lat": 40.7575828, "lon": -73.9883419 },
+    { "lat": 40.7568356, "lon": -73.9865739 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 702543828,
+  "bounds": {
+    "minlat": 40.7566081,
+    "minlon": -73.9865682,
+    "maxlat": 40.7566700,
+    "maxlon": -73.9864234
+  },
+  "nodes": [
+    10222417540,
+    3974095823,
+    10222417539
+  ],
+  "geometry": [
+    { "lat": 40.7566081, "lon": -73.9864234 },
+    { "lat": 40.7566441, "lon": -73.9865075 },
+    { "lat": 40.7566700, "lon": -73.9865682 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 702543830,
+  "bounds": {
+    "minlat": 40.7567193,
+    "minlon": -73.9896034,
+    "maxlat": 40.7577968,
+    "maxlon": -73.9866543
+  },
+  "nodes": [
+    9235539544,
+    6597498417,
+    6597498416,
+    6597498415,
+    6597498414,
+    6597498413,
+    10224024778
+  ],
+  "geometry": [
+    { "lat": 40.7567360, "lon": -73.9883616 },
+    { "lat": 40.7572533, "lon": -73.9895933 },
+    { "lat": 40.7572645, "lon": -73.9896014 },
+    { "lat": 40.7572787, "lon": -73.9896034 },
+    { "lat": 40.7572944, "lon": -73.9895973 },
+    { "lat": 40.7577968, "lon": -73.9892145 },
+    { "lat": 40.7567193, "lon": -73.9866543 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 702647987,
+  "bounds": {
+    "minlat": 40.7591130,
+    "minlon": -73.9847336,
+    "maxlat": 40.7591716,
+    "maxlon": -73.9845929
+  },
+  "nodes": [
+    10228962339,
+    6598535157,
+    9354852633
+  ],
+  "geometry": [
+    { "lat": 40.7591130, "lon": -73.9845929 },
+    { "lat": 40.7591475, "lon": -73.9846758 },
+    { "lat": 40.7591716, "lon": -73.9847336 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 702647988,
+  "bounds": {
+    "minlat": 40.7586283,
+    "minlon": -73.9850834,
+    "maxlat": 40.7586936,
+    "maxlon": -73.9849407
+  },
+  "nodes": [
+    6597464478,
+    6598535159,
+    10228962373
+  ],
+  "geometry": [
+    { "lat": 40.7586936, "lon": -73.9850834 },
+    { "lat": 40.7586679, "lon": -73.9850272 },
+    { "lat": 40.7586283, "lon": -73.9849407 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 702647989,
+  "bounds": {
+    "minlat": 40.7584937,
+    "minlon": -73.9850067,
+    "maxlat": 40.7585861,
+    "maxlon": -73.9849417
+  },
+  "nodes": [
+    6597464391,
+    2435108452,
+    6596799514
+  ],
+  "geometry": [
+    { "lat": 40.7585861, "lon": -73.9849417 },
+    { "lat": 40.7585496, "lon": -73.9849674 },
+    { "lat": 40.7584937, "lon": -73.9850067 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "footway": "crossing",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 702647992,
+  "bounds": {
+    "minlat": 40.7575118,
+    "minlon": -73.9845334,
+    "maxlat": 40.7590932,
+    "maxlon": -73.9819725
+  },
+  "nodes": [
+    6598535160,
+    6598535167,
+    6598535166,
+    7579205552,
+    6598535161,
+    13915675569,
+    13915675565,
+    6598535165,
+    10228962341
+  ],
+  "geometry": [
+    { "lat": 40.7577514, "lon": -73.9829190 },
+    { "lat": 40.7575118, "lon": -73.9823453 },
+    { "lat": 40.7580218, "lon": -73.9819725 },
+    { "lat": 40.7580694, "lon": -73.9820848 },
+    { "lat": 40.7582628, "lon": -73.9825408 },
+    { "lat": 40.7584479, "lon": -73.9829732 },
+    { "lat": 40.7586036, "lon": -73.9833367 },
+    { "lat": 40.7590509, "lon": -73.9843813 },
+    { "lat": 40.7590932, "lon": -73.9845334 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 702647993,
+  "bounds": {
+    "minlat": 40.7585920,
+    "minlon": -73.9852176,
+    "maxlat": 40.7586876,
+    "maxlon": -73.9851525
+  },
+  "nodes": [
+    10228962346,
+    10228962353,
+    6597464471
+  ],
+  "geometry": [
+    { "lat": 40.7586876, "lon": -73.9851525 },
+    { "lat": 40.7586401, "lon": -73.9851848 },
+    { "lat": 40.7585920, "lon": -73.9852176 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "footway": "crossing",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 702647994,
+  "bounds": {
+    "minlat": 40.7588043,
+    "minlon": -73.9854128,
+    "maxlat": 40.7593996,
+    "maxlon": -73.9852285
+  },
+  "nodes": [
+    6598535174,
+    6598535173
+  ],
+  "geometry": [
+    { "lat": 40.7588043, "lon": -73.9854128 },
+    { "lat": 40.7593996, "lon": -73.9852285 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 702647995,
+  "bounds": {
+    "minlat": 40.7586923,
+    "minlon": -73.9854538,
+    "maxlat": 40.7587907,
+    "maxlon": -73.9854168
+  },
+  "nodes": [
+    10228962351,
+    10228962352,
+    10228962350
+  ],
+  "geometry": [
+    { "lat": 40.7586923, "lon": -73.9854538 },
+    { "lat": 40.7587432, "lon": -73.9854346 },
+    { "lat": 40.7587907, "lon": -73.9854168 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "footway": "crossing",
+    "highway": "footway",
+    "lit": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 702647998,
+  "bounds": {
+    "minlat": 40.7585511,
+    "minlon": -73.9855194,
+    "maxlat": 40.7586960,
+    "maxlon": -73.9851933
+  },
+  "nodes": [
+    9354852635,
+    6598535187,
+    6632233656,
+    6598535171,
+    10228962375
+  ],
+  "geometry": [
+    { "lat": 40.7586960, "lon": -73.9855194 },
+    { "lat": 40.7586705, "lon": -73.9854622 },
+    { "lat": 40.7586294, "lon": -73.9853696 },
+    { "lat": 40.7585700, "lon": -73.9852358 },
+    { "lat": 40.7585511, "lon": -73.9851933 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 702647999,
+  "bounds": {
+    "minlat": 40.7568800,
+    "minlon": -73.9853440,
+    "maxlat": 40.7581960,
+    "maxlon": -73.9824238
+  },
+  "nodes": [
+    10224032641,
+    13915675574,
+    6598535196,
+    6598535195,
+    6598535194,
+    10166333056,
+    6598535193,
+    6598535192,
+    8318633106,
+    8250912518
+  ],
+  "geometry": [
+    { "lat": 40.7579506, "lon": -73.9853440 },
+    { "lat": 40.7577799, "lon": -73.9849395 },
+    { "lat": 40.7568800, "lon": -73.9828073 },
+    { "lat": 40.7568815, "lon": -73.9827939 },
+    { "lat": 40.7568866, "lon": -73.9827852 },
+    { "lat": 40.7573767, "lon": -73.9824308 },
+    { "lat": 40.7573864, "lon": -73.9824238 },
+    { "lat": 40.7573996, "lon": -73.9824251 },
+    { "lat": 40.7575310, "lon": -73.9827380 },
+    { "lat": 40.7581960, "lon": -73.9843212 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "smoothness": "good",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 702648000,
+  "bounds": {
+    "minlat": 40.7579826,
+    "minlon": -73.9857038,
+    "maxlat": 40.7580688,
+    "maxlon": -73.9856633
+  },
+  "nodes": [
+    10224032622,
+    3974095832,
+    9004888709
+  ],
+  "geometry": [
+    { "lat": 40.7579826, "lon": -73.9857038 },
+    { "lat": 40.7580252, "lon": -73.9856837 },
+    { "lat": 40.7580688, "lon": -73.9856633 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "footway": "crossing",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 702648001,
+  "bounds": {
+    "minlat": 40.7580788,
+    "minlon": -73.9857361,
+    "maxlat": 40.7581274,
+    "maxlon": -73.9855784
+  },
+  "nodes": [
+    9354852636,
+    6598535214,
+    6598535203,
+    10228962377,
+    4707407257
+  ],
+  "geometry": [
+    { "lat": 40.7581274, "lon": -73.9857361 },
+    { "lat": 40.7581095, "lon": -73.9856781 },
+    { "lat": 40.7581001, "lon": -73.9856475 },
+    { "lat": 40.7580917, "lon": -73.9856201 },
+    { "lat": 40.7580788, "lon": -73.9855784 }
+  ],
+  "tags": {
+    "access": "yes",
+    "bicycle": "dismount",
+    "cycleway": "no",
+    "footway": "sidewalk",
+    "highway": "footway",
+    "motor_vehicle": "no",
+    "note": "closed to motor vehicles May 24, 2009",
+    "oneway": "no",
+    "surface": "paving_stones",
+    "tiger:cfcc": "A41",
+    "tiger:county": "New York, NY",
+    "tiger:name_base": "Broadway",
+    "tiger:zip_left": "10019",
+    "tiger:zip_right": "10019"
+  }
+},
+{
+  "type": "way",
+  "id": 702648003,
+  "bounds": {
+    "minlat": 40.7590054,
+    "minlon": -73.9863268,
+    "maxlat": 40.7590351,
+    "maxlon": -73.9863048
+  },
+  "nodes": [
+    6598535206,
+    4550600353
+  ],
+  "geometry": [
+    { "lat": 40.7590351, "lon": -73.9863048 },
+    { "lat": 40.7590054, "lon": -73.9863268 }
+  ],
+  "tags": {
+    "covered": "yes",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 702648004,
+  "bounds": {
+    "minlat": 40.7581274,
+    "minlon": -73.9882204,
+    "maxlat": 40.7591753,
+    "maxlon": -73.9857361
+  },
+  "nodes": [
+    9354852636,
+    9354852637,
+    6598535205,
+    6598535213,
+    6598535212,
+    6598535211
+  ],
+  "geometry": [
+    { "lat": 40.7581274, "lon": -73.9857361 },
+    { "lat": 40.7583137, "lon": -73.9861831 },
+    { "lat": 40.7585223, "lon": -73.9866837 },
+    { "lat": 40.7591562, "lon": -73.9882093 },
+    { "lat": 40.7591644, "lon": -73.9882170 },
+    { "lat": 40.7591753, "lon": -73.9882204 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 702648005,
+  "bounds": {
+    "minlat": 40.7578589,
+    "minlon": -73.9856742,
+    "maxlat": 40.7579287,
+    "maxlon": -73.9855132
+  },
+  "nodes": [
+    4578017556,
+    6597464486,
+    10224032623
+  ],
+  "geometry": [
+    { "lat": 40.7578589, "lon": -73.9855132 },
+    { "lat": 40.7578917, "lon": -73.9855888 },
+    { "lat": 40.7579287, "lon": -73.9856742 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 702648006,
+  "bounds": {
+    "minlat": 40.7573844,
+    "minlon": -73.9860199,
+    "maxlat": 40.7574443,
+    "maxlon": -73.9858587
+  },
+  "nodes": [
+    6597464497,
+    3974095829,
+    6596799555
+  ],
+  "geometry": [
+    { "lat": 40.7574443, "lon": -73.9860199 },
+    { "lat": 40.7574192, "lon": -73.9859523 },
+    { "lat": 40.7573844, "lon": -73.9858587 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 702648007,
+  "bounds": {
+    "minlat": 40.7573492,
+    "minlon": -73.9861301,
+    "maxlat": 40.7574298,
+    "maxlon": -73.9860986
+  },
+  "nodes": [
+    10224024792,
+    3974095828,
+    10224024808
+  ],
+  "geometry": [
+    { "lat": 40.7573492, "lon": -73.9861301 },
+    { "lat": 40.7573856, "lon": -73.9861159 },
+    { "lat": 40.7574298, "lon": -73.9860986 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "footway": "crossing",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 702648008,
+  "bounds": {
+    "minlat": 40.7574562,
+    "minlon": -73.9886780,
+    "maxlat": 40.7585419,
+    "maxlon": -73.9861234
+  },
+  "nodes": [
+    6598535223,
+    6598535219,
+    12246639279,
+    10224024811
+  ],
+  "geometry": [
+    { "lat": 40.7585419, "lon": -73.9886780 },
+    { "lat": 40.7578898, "lon": -73.9871494 },
+    { "lat": 40.7576326, "lon": -73.9865444 },
+    { "lat": 40.7574562, "lon": -73.9861234 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 702648011,
+  "bounds": {
+    "minlat": 40.7572859,
+    "minlon": -73.9856974,
+    "maxlat": 40.7578467,
+    "maxlon": -73.9854508
+  },
+  "nodes": [
+    3974095830,
+    6598535231
+  ],
+  "geometry": [
+    { "lat": 40.7578467, "lon": -73.9854508 },
+    { "lat": 40.7572859, "lon": -73.9856974 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "lit": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 702648012,
+  "bounds": {
+    "minlat": 40.7565982,
+    "minlon": -73.9860083,
+    "maxlat": 40.7571582,
+    "maxlon": -73.9857588
+  },
+  "nodes": [
+    6597473584,
+    6597473583
+  ],
+  "geometry": [
+    { "lat": 40.7571582, "lon": -73.9857588 },
+    { "lat": 40.7565982, "lon": -73.9860083 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 702648013,
+  "bounds": {
+    "minlat": 40.7562567,
+    "minlon": -73.9856599,
+    "maxlat": 40.7572700,
+    "maxlon": -73.9828831
+  },
+  "nodes": [
+    9235539558,
+    13915675576,
+    6598535226,
+    6598535238,
+    6598535236,
+    8318633107
+  ],
+  "geometry": [
+    { "lat": 40.7572700, "lon": -73.9856599 },
+    { "lat": 40.7569216, "lon": -73.9848327 },
+    { "lat": 40.7562567, "lon": -73.9832539 },
+    { "lat": 40.7562623, "lon": -73.9832405 },
+    { "lat": 40.7567647, "lon": -73.9828831 },
+    { "lat": 40.7570353, "lon": -73.9835181 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 796338420,
+  "bounds": {
+    "minlat": 40.7589303,
+    "minlon": -73.9854044,
+    "maxlat": 40.7589672,
+    "maxlon": -73.9853663
+  },
+  "nodes": [
+    7447580943,
+    7447580933,
+    7447580927,
+    7447580922,
+    7447580943
+  ],
+  "geometry": [
+    { "lat": 40.7589672, "lon": -73.9853937 },
+    { "lat": 40.7589357, "lon": -73.9854044 },
+    { "lat": 40.7589303, "lon": -73.9853771 },
+    { "lat": 40.7589618, "lon": -73.9853663 },
+    { "lat": 40.7589672, "lon": -73.9853937 }
+  ],
+  "tags": {
+    "building": "yes",
+    "shop": "newsagent"
+  }
+},
+{
+  "type": "way",
+  "id": 846142553,
+  "bounds": {
+    "minlat": 40.7585968,
+    "minlon": -73.9879285,
+    "maxlat": 40.7597869,
+    "maxlon": -73.9850795
+  },
+  "nodes": [
+    42435675,
+    6598535175,
+    8250892565,
+    2639531766,
+    5481885793,
+    5522182776,
+    6597429952,
+    10228962352,
+    10228962353,
+    42439990
+  ],
+  "geometry": [
+    { "lat": 40.7597869, "lon": -73.9879285 },
+    { "lat": 40.7597315, "lon": -73.9877973 },
+    { "lat": 40.7595723, "lon": -73.9874205 },
+    { "lat": 40.7595011, "lon": -73.9872519 },
+    { "lat": 40.7591968, "lon": -73.9865156 },
+    { "lat": 40.7588860, "lon": -73.9857703 },
+    { "lat": 40.7587665, "lon": -73.9854918 },
+    { "lat": 40.7587432, "lon": -73.9854346 },
+    { "lat": 40.7586401, "lon": -73.9851848 },
+    { "lat": 40.7585968, "lon": -73.9850795 }
+  ],
+  "tags": {
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "1",
+    "lit": "yes",
+    "name": "West 46th Street",
+    "name:ru": "Западная 46-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 887435959,
+  "bounds": {
+    "minlat": 40.7581740,
+    "minlon": -73.9843363,
+    "maxlat": 40.7582569,
+    "maxlon": -73.9842778
+  },
+  "nodes": [
+    8250908767,
+    8250912518,
+    8250908768
+  ],
+  "geometry": [
+    { "lat": 40.7582569, "lon": -73.9842778 },
+    { "lat": 40.7581960, "lon": -73.9843212 },
+    { "lat": 40.7581740, "lon": -73.9843363 }
+  ],
+  "tags": {
+    "highway": "service",
+    "service": "driveway"
+  }
+},
+{
+  "type": "way",
+  "id": 904036752,
+  "bounds": {
+    "minlat": 40.7581681,
+    "minlon": -73.9862843,
+    "maxlat": 40.7582527,
+    "maxlon": -73.9862271
+  },
+  "nodes": [
+    5522182777,
+    8396064851,
+    8396064852
+  ],
+  "geometry": [
+    { "lat": 40.7582527, "lon": -73.9862271 },
+    { "lat": 40.7581885, "lon": -73.9862703 },
+    { "lat": 40.7581681, "lon": -73.9862843 }
+  ],
+  "tags": {
+    "highway": "service",
+    "service": "driveway",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 904126542,
+  "bounds": {
+    "minlat": 40.7562462,
+    "minlon": -73.9853559,
+    "maxlat": 40.7568771,
+    "maxlon": -73.9849062
+  },
+  "nodes": [
+    8396878498,
+    8396878499,
+    8396878500,
+    1752942903,
+    13915675577,
+    13915675578
+  ],
+  "geometry": [
+    { "lat": 40.7562462, "lon": -73.9853559 },
+    { "lat": 40.7563017, "lon": -73.9853163 },
+    { "lat": 40.7563173, "lon": -73.9853052 },
+    { "lat": 40.7568036, "lon": -73.9849586 },
+    { "lat": 40.7568179, "lon": -73.9849484 },
+    { "lat": 40.7568771, "lon": -73.9849062 }
+  ],
+  "tags": {
+    "highway": "service"
+  }
+},
+{
+  "type": "way",
+  "id": 997143658,
+  "bounds": {
+    "minlat": 40.7566665,
+    "minlon": -73.9861358,
+    "maxlat": 40.7573266,
+    "maxlon": -73.9857916
+  },
+  "nodes": [
+    9004888713,
+    12055677930,
+    12055677931,
+    12055677932,
+    6597498396,
+    6597498385
+  ],
+  "geometry": [
+    { "lat": 40.7573266, "lon": -73.9857916 },
+    { "lat": 40.7573098, "lon": -73.9858019 },
+    { "lat": 40.7572664, "lon": -73.9858286 },
+    { "lat": 40.7572266, "lon": -73.9858531 },
+    { "lat": 40.7572013, "lon": -73.9858687 },
+    { "lat": 40.7566665, "lon": -73.9861358 }
+  ],
+  "tags": {
+    "access": "yes",
+    "bicycle": "dismount",
+    "cycleway": "no",
+    "highway": "pedestrian",
+    "lit": "yes",
+    "motor_vehicle": "no",
+    "name": "Broadway",
+    "name:en": "Broadway",
+    "name:ja": "ブロードウェイ",
+    "name:ru": "Бродвей",
+    "name:zh": "百老匯",
+    "name:zh-Hans": "百老汇",
+    "name:zh-Hant": "百老匯",
+    "note": "closed to motor vehicles May 24, 2009",
+    "oneway": "no",
+    "surface": "paving_stones",
+    "wikidata": "Q11260",
+    "wikipedia": "en:Broadway (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 1049844343,
+  "bounds": {
+    "minlat": 40.7565163,
+    "minlon": -73.9863565,
+    "maxlat": 40.7566673,
+    "maxlon": -73.9859959
+  },
+  "nodes": [
+    4578017557,
+    10222417558,
+    12055677929,
+    10222417542,
+    4578017558
+  ],
+  "geometry": [
+    { "lat": 40.7565163, "lon": -73.9859959 },
+    { "lat": 40.7565320, "lon": -73.9860335 },
+    { "lat": 40.7565845, "lon": -73.9861590 },
+    { "lat": 40.7566385, "lon": -73.9862881 },
+    { "lat": 40.7566673, "lon": -73.9863565 }
+  ],
+  "tags": {
+    "bicycle": "yes",
+    "cycleway:both": "no",
+    "highway": "residential",
+    "lanes": "3",
+    "name": "West 43rd Street",
+    "name:ru": "Западная 43-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "paving_stones",
+    "turn:lanes": "left|through|through"
+  }
+},
+{
+  "type": "way",
+  "id": 1117680750,
+  "bounds": {
+    "minlat": 40.7566018,
+    "minlon": -73.9863144,
+    "maxlat": 40.7566853,
+    "maxlon": -73.9862545
+  },
+  "nodes": [
+    10222417537,
+    10222417542,
+    10222417538
+  ],
+  "geometry": [
+    { "lat": 40.7566853, "lon": -73.9862545 },
+    { "lat": 40.7566385, "lon": -73.9862881 },
+    { "lat": 40.7566018, "lon": -73.9863144 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "footway": "crossing",
+    "highway": "footway",
+    "surface": "paving_stones",
+    "tactile_paving": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 1117680751,
+  "bounds": {
+    "minlat": 40.7566700,
+    "minlon": -73.9866102,
+    "maxlat": 40.7566952,
+    "maxlon": -73.9865682
+  },
+  "nodes": [
+    10222417539,
+    6597498410
+  ],
+  "geometry": [
+    { "lat": 40.7566700, "lon": -73.9865682 },
+    { "lat": 40.7566952, "lon": -73.9866102 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117680753,
+  "bounds": {
+    "minlat": 40.7566011,
+    "minlon": -73.9864234,
+    "maxlat": 40.7566081,
+    "maxlon": -73.9864066
+  },
+  "nodes": [
+    6597464533,
+    10222417540
+  ],
+  "geometry": [
+    { "lat": 40.7566011, "lon": -73.9864066 },
+    { "lat": 40.7566081, "lon": -73.9864234 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117680758,
+  "bounds": {
+    "minlat": 40.7559184,
+    "minlon": -73.9863795,
+    "maxlat": 40.7566665,
+    "maxlon": -73.9861358
+  },
+  "nodes": [
+    6597498385,
+    12055677927,
+    12055677929,
+    12055677928,
+    6597498409,
+    10222417529,
+    10222417532,
+    7618605781
+  ],
+  "geometry": [
+    { "lat": 40.7566665, "lon": -73.9861358 },
+    { "lat": 40.7566379, "lon": -73.9861439 },
+    { "lat": 40.7565845, "lon": -73.9861590 },
+    { "lat": 40.7565422, "lon": -73.9861709 },
+    { "lat": 40.7565238, "lon": -73.9861761 },
+    { "lat": 40.7563095, "lon": -73.9862496 },
+    { "lat": 40.7561713, "lon": -73.9862955 },
+    { "lat": 40.7559184, "lon": -73.9863795 }
+  ],
+  "tags": {
+    "access": "yes",
+    "bicycle": "dismount",
+    "cycleway": "no",
+    "highway": "pedestrian",
+    "lit": "yes",
+    "motor_vehicle": "no",
+    "name": "Broadway",
+    "name:en": "Broadway",
+    "name:ja": "ブロードウェイ",
+    "name:ru": "Бродвей",
+    "name:zh": "百老匯",
+    "name:zh-Hans": "百老汇",
+    "name:zh-Hant": "百老匯",
+    "note": "closed to motor vehicles May 24, 2009",
+    "oneway": "no",
+    "surface": "paving_stones",
+    "wikidata": "Q11260",
+    "wikipedia": "en:Broadway (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 1117680759,
+  "bounds": {
+    "minlat": 40.7560779,
+    "minlon": -73.9867558,
+    "maxlat": 40.7566096,
+    "maxlon": -73.9860153
+  },
+  "nodes": [
+    9235539561,
+    10222417534,
+    6597498409,
+    10222417536,
+    10222417547,
+    6597464534,
+    10222417541,
+    6597464537,
+    6597464533,
+    6597464532
+  ],
+  "geometry": [
+    { "lat": 40.7564562, "lon": -73.9860153 },
+    { "lat": 40.7564733, "lon": -73.9860547 },
+    { "lat": 40.7565238, "lon": -73.9861761 },
+    { "lat": 40.7565663, "lon": -73.9862751 },
+    { "lat": 40.7565869, "lon": -73.9863250 },
+    { "lat": 40.7566077, "lon": -73.9863753 },
+    { "lat": 40.7566096, "lon": -73.9863870 },
+    { "lat": 40.7566078, "lon": -73.9863978 },
+    { "lat": 40.7566011, "lon": -73.9864066 },
+    { "lat": 40.7560779, "lon": -73.9867558 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117680760,
+  "bounds": {
+    "minlat": 40.7565869,
+    "minlon": -73.9863250,
+    "maxlat": 40.7566018,
+    "maxlon": -73.9863144
+  },
+  "nodes": [
+    10222417538,
+    10222417547
+  ],
+  "geometry": [
+    { "lat": 40.7566018, "lon": -73.9863144 },
+    { "lat": 40.7565869, "lon": -73.9863250 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866973,
+  "bounds": {
+    "minlat": 40.7566853,
+    "minlon": -73.9862545,
+    "maxlat": 40.7567177,
+    "maxlon": -73.9862323
+  },
+  "nodes": [
+    10222417537,
+    10224024739
+  ],
+  "geometry": [
+    { "lat": 40.7566853, "lon": -73.9862545 },
+    { "lat": 40.7567177, "lon": -73.9862323 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866975,
+  "bounds": {
+    "minlat": 40.7567414,
+    "minlon": -73.9859760,
+    "maxlat": 40.7567825,
+    "maxlon": -73.9859392
+  },
+  "nodes": [
+    10224024742,
+    10224024743,
+    10224024744,
+    10224024745,
+    10224024742
+  ],
+  "geometry": [
+    { "lat": 40.7567825, "lon": -73.9859620 },
+    { "lat": 40.7567465, "lon": -73.9859760 },
+    { "lat": 40.7567414, "lon": -73.9859532 },
+    { "lat": 40.7567774, "lon": -73.9859392 },
+    { "lat": 40.7567825, "lon": -73.9859620 }
+  ],
+  "tags": {
+    "building": "yes",
+    "shop": "newsagent"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866976,
+  "bounds": {
+    "minlat": 40.7571582,
+    "minlon": -73.9857588,
+    "maxlat": 40.7571815,
+    "maxlon": -73.9857474
+  },
+  "nodes": [
+    6597464455,
+    6597473584
+  ],
+  "geometry": [
+    { "lat": 40.7571815, "lon": -73.9857474 },
+    { "lat": 40.7571582, "lon": -73.9857588 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866978,
+  "bounds": {
+    "minlat": 40.7567563,
+    "minlon": -73.9863034,
+    "maxlat": 40.7572361,
+    "maxlon": -73.9859576
+  },
+  "nodes": [
+    10224024746,
+    6597498387,
+    10224024749,
+    6597498390
+  ],
+  "geometry": [
+    { "lat": 40.7567563, "lon": -73.9863034 },
+    { "lat": 40.7568951, "lon": -73.9862050 },
+    { "lat": 40.7571166, "lon": -73.9860443 },
+    { "lat": 40.7572361, "lon": -73.9859576 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866979,
+  "bounds": {
+    "minlat": 40.7571439,
+    "minlon": -73.9859662,
+    "maxlat": 40.7572395,
+    "maxlon": -73.9857221
+  },
+  "nodes": [
+    9235539559,
+    6597473584,
+    6597498396,
+    10224024795,
+    6597498390,
+    6597498397
+  ],
+  "geometry": [
+    { "lat": 40.7571439, "lon": -73.9857221 },
+    { "lat": 40.7571582, "lon": -73.9857588 },
+    { "lat": 40.7572013, "lon": -73.9858687 },
+    { "lat": 40.7572170, "lon": -73.9859088 },
+    { "lat": 40.7572361, "lon": -73.9859576 },
+    { "lat": 40.7572395, "lon": -73.9859662 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866981,
+  "bounds": {
+    "minlat": 40.7567177,
+    "minlon": -73.9862323,
+    "maxlat": 40.7571166,
+    "maxlon": -73.9860443
+  },
+  "nodes": [
+    10224024739,
+    10224024753,
+    10224024748,
+    10224024763,
+    10224024759,
+    10224024749
+  ],
+  "geometry": [
+    { "lat": 40.7567177, "lon": -73.9862323 },
+    { "lat": 40.7567706, "lon": -73.9861955 },
+    { "lat": 40.7567834, "lon": -73.9861877 },
+    { "lat": 40.7568841, "lon": -73.9861444 },
+    { "lat": 40.7569412, "lon": -73.9861198 },
+    { "lat": 40.7571166, "lon": -73.9860443 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866982,
+  "bounds": {
+    "minlat": 40.7568865,
+    "minlon": -73.9861752,
+    "maxlat": 40.7569426,
+    "maxlon": -73.9861198
+  },
+  "nodes": [
+    10224024754,
+    10224024760,
+    10224024755,
+    10224024756,
+    10224024757,
+    10224024758,
+    10224024759
+  ],
+  "geometry": [
+    { "lat": 40.7568865, "lon": -73.9861752 },
+    { "lat": 40.7568926, "lon": -73.9861715 },
+    { "lat": 40.7569217, "lon": -73.9861564 },
+    { "lat": 40.7569356, "lon": -73.9861477 },
+    { "lat": 40.7569419, "lon": -73.9861374 },
+    { "lat": 40.7569426, "lon": -73.9861259 },
+    { "lat": 40.7569412, "lon": -73.9861198 }
+  ],
+  "tags": {
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866983,
+  "bounds": {
+    "minlat": 40.7568877,
+    "minlon": -73.9861715,
+    "maxlat": 40.7568926,
+    "maxlon": -73.9861558
+  },
+  "nodes": [
+    10224024760,
+    10224024761
+  ],
+  "geometry": [
+    { "lat": 40.7568926, "lon": -73.9861715 },
+    { "lat": 40.7568877, "lon": -73.9861558 }
+  ],
+  "tags": {
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866984,
+  "bounds": {
+    "minlat": 40.7568863,
+    "minlon": -73.9861558,
+    "maxlat": 40.7568877,
+    "maxlon": -73.9861515
+  },
+  "nodes": [
+    10224024761,
+    10224024762
+  ],
+  "geometry": [
+    { "lat": 40.7568877, "lon": -73.9861558 },
+    { "lat": 40.7568863, "lon": -73.9861515 }
+  ],
+  "tags": {
+    "handrail": "yes",
+    "highway": "steps"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866985,
+  "bounds": {
+    "minlat": 40.7568841,
+    "minlon": -73.9861515,
+    "maxlat": 40.7568863,
+    "maxlon": -73.9861444
+  },
+  "nodes": [
+    10224024762,
+    10224024763
+  ],
+  "geometry": [
+    { "lat": 40.7568863, "lon": -73.9861515 },
+    { "lat": 40.7568841, "lon": -73.9861444 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866986,
+  "bounds": {
+    "minlat": 40.7568199,
+    "minlon": -73.9864842,
+    "maxlat": 40.7568311,
+    "maxlon": -73.9864581
+  },
+  "nodes": [
+    6597498386,
+    10224024764
+  ],
+  "geometry": [
+    { "lat": 40.7568311, "lon": -73.9864842 },
+    { "lat": 40.7568199, "lon": -73.9864581 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866988,
+  "bounds": {
+    "minlat": 40.7568010,
+    "minlon": -73.9865311,
+    "maxlat": 40.7568136,
+    "maxlon": -73.9865221
+  },
+  "nodes": [
+    10224024765,
+    6597498407
+  ],
+  "geometry": [
+    { "lat": 40.7568010, "lon": -73.9865311 },
+    { "lat": 40.7568136, "lon": -73.9865221 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866990,
+  "bounds": {
+    "minlat": 40.7573531,
+    "minlon": -73.9886430,
+    "maxlat": 40.7583815,
+    "maxlon": -73.9861985
+  },
+  "nodes": [
+    10224024767,
+    7581386278
+  ],
+  "geometry": [
+    { "lat": 40.7573531, "lon": -73.9861985 },
+    { "lat": 40.7583815, "lon": -73.9886430 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866991,
+  "bounds": {
+    "minlat": 40.7568087,
+    "minlon": -73.9865739,
+    "maxlat": 40.7573531,
+    "maxlon": -73.9861463
+  },
+  "nodes": [
+    10224024766,
+    6597498407,
+    6597498406,
+    10224024777,
+    6597498405,
+    6597498404,
+    6597498386,
+    6597498400,
+    10224024767
+  ],
+  "geometry": [
+    { "lat": 40.7568356, "lon": -73.9865739 },
+    { "lat": 40.7568136, "lon": -73.9865221 },
+    { "lat": 40.7568096, "lon": -73.9865131 },
+    { "lat": 40.7568087, "lon": -73.9865049 },
+    { "lat": 40.7568108, "lon": -73.9864992 },
+    { "lat": 40.7568155, "lon": -73.9864955 },
+    { "lat": 40.7568311, "lon": -73.9864842 },
+    { "lat": 40.7573240, "lon": -73.9861463 },
+    { "lat": 40.7573531, "lon": -73.9861985 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866992,
+  "bounds": {
+    "minlat": 40.7566952,
+    "minlon": -73.9866102,
+    "maxlat": 40.7567225,
+    "maxlon": -73.9865899
+  },
+  "nodes": [
+    6597498410,
+    10224024768
+  ],
+  "geometry": [
+    { "lat": 40.7566952, "lon": -73.9866102 },
+    { "lat": 40.7567225, "lon": -73.9865899 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866995,
+  "bounds": {
+    "minlat": 40.7561775,
+    "minlon": -73.9870483,
+    "maxlat": 40.7567193,
+    "maxlon": -73.9866102
+  },
+  "nodes": [
+    10224024778,
+    6597498410,
+    6597498411,
+    10224024779
+  ],
+  "geometry": [
+    { "lat": 40.7567193, "lon": -73.9866543 },
+    { "lat": 40.7566952, "lon": -73.9866102 },
+    { "lat": 40.7561775, "lon": -73.9869911 },
+    { "lat": 40.7562015, "lon": -73.9870483 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866997,
+  "bounds": {
+    "minlat": 40.7568808,
+    "minlon": -73.9865255,
+    "maxlat": 40.7569989,
+    "maxlon": -73.9864049
+  },
+  "nodes": [
+    10224024782,
+    10224024783,
+    10224024784,
+    10224024785,
+    10224024782
+  ],
+  "geometry": [
+    { "lat": 40.7569989, "lon": -73.9864552 },
+    { "lat": 40.7569780, "lon": -73.9864049 },
+    { "lat": 40.7568808, "lon": -73.9864752 },
+    { "lat": 40.7569017, "lon": -73.9865255 },
+    { "lat": 40.7569989, "lon": -73.9864552 }
+  ],
+  "tags": {
+    "building": "roof",
+    "height": "3",
+    "layer": "1"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866998,
+  "bounds": {
+    "minlat": 40.7571996,
+    "minlon": -73.9862133,
+    "maxlat": 40.7572401,
+    "maxlon": -73.9861683
+  },
+  "nodes": [
+    10224024786,
+    10224024787,
+    10224024788,
+    10224024789,
+    10224024786
+  ],
+  "geometry": [
+    { "lat": 40.7572401, "lon": -73.9861908 },
+    { "lat": 40.7572089, "lon": -73.9862133 },
+    { "lat": 40.7571996, "lon": -73.9861909 },
+    { "lat": 40.7572308, "lon": -73.9861683 },
+    { "lat": 40.7572401, "lon": -73.9861908 }
+  ],
+  "tags": {
+    "building": "yes",
+    "shop": "newsagent"
+  }
+},
+{
+  "type": "way",
+  "id": 1117866999,
+  "bounds": {
+    "minlat": 40.7573015,
+    "minlon": -73.9861463,
+    "maxlat": 40.7573240,
+    "maxlon": -73.9861061
+  },
+  "nodes": [
+    6597498400,
+    10224024790
+  ],
+  "geometry": [
+    { "lat": 40.7573240, "lon": -73.9861463 },
+    { "lat": 40.7573015, "lon": -73.9861061 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867001,
+  "bounds": {
+    "minlat": 40.7573240,
+    "minlon": -73.9861463,
+    "maxlat": 40.7573492,
+    "maxlon": -73.9861301
+  },
+  "nodes": [
+    6597498400,
+    10224024792
+  ],
+  "geometry": [
+    { "lat": 40.7573240, "lon": -73.9861463 },
+    { "lat": 40.7573492, "lon": -73.9861301 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867003,
+  "bounds": {
+    "minlat": 40.7570353,
+    "minlon": -73.9854011,
+    "maxlat": 40.7578274,
+    "maxlon": -73.9835181
+  },
+  "nodes": [
+    8318633107,
+    13915675575,
+    10224032626
+  ],
+  "geometry": [
+    { "lat": 40.7570353, "lon": -73.9835181 },
+    { "lat": 40.7574368, "lon": -73.9844726 },
+    { "lat": 40.7578274, "lon": -73.9854011 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867005,
+  "bounds": {
+    "minlat": 40.7572170,
+    "minlon": -73.9859088,
+    "maxlat": 40.7572426,
+    "maxlon": -73.9858905
+  },
+  "nodes": [
+    10224024794,
+    10224024795
+  ],
+  "geometry": [
+    { "lat": 40.7572426, "lon": -73.9858905 },
+    { "lat": 40.7572170, "lon": -73.9859088 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867008,
+  "bounds": {
+    "minlat": 40.7572686,
+    "minlon": -73.9857057,
+    "maxlat": 40.7572859,
+    "maxlon": -73.9856974
+  },
+  "nodes": [
+    6598535231,
+    10224024798
+  ],
+  "geometry": [
+    { "lat": 40.7572859, "lon": -73.9856974 },
+    { "lat": 40.7572686, "lon": -73.9857057 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867010,
+  "bounds": {
+    "minlat": 40.7572426,
+    "minlon": -73.9858905,
+    "maxlat": 40.7573230,
+    "maxlon": -73.9858326
+  },
+  "nodes": [
+    10224024794,
+    10224024800,
+    10224024799
+  ],
+  "geometry": [
+    { "lat": 40.7572426, "lon": -73.9858905 },
+    { "lat": 40.7572809, "lon": -73.9858632 },
+    { "lat": 40.7573230, "lon": -73.9858326 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "footway": "crossing",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867011,
+  "bounds": {
+    "minlat": 40.7573230,
+    "minlon": -73.9858326,
+    "maxlat": 40.7573396,
+    "maxlon": -73.9858208
+  },
+  "nodes": [
+    10224024799,
+    10224024801
+  ],
+  "geometry": [
+    { "lat": 40.7573230, "lon": -73.9858326 },
+    { "lat": 40.7573396, "lon": -73.9858208 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867012,
+  "bounds": {
+    "minlat": 40.7573778,
+    "minlon": -73.9858587,
+    "maxlat": 40.7573844,
+    "maxlon": -73.9858419
+  },
+  "nodes": [
+    6596799555,
+    6598535233
+  ],
+  "geometry": [
+    { "lat": 40.7573844, "lon": -73.9858587 },
+    { "lat": 40.7573778, "lon": -73.9858419 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867014,
+  "bounds": {
+    "minlat": 40.7572700,
+    "minlon": -73.9858502,
+    "maxlat": 40.7578586,
+    "maxlon": -73.9854508
+  },
+  "nodes": [
+    3974095830,
+    6598535235,
+    10224032633,
+    10224032632,
+    10224032631,
+    6598535234,
+    6598535233,
+    6598535232,
+    10224024803,
+    10224024804,
+    6598535241,
+    10224024801,
+    9004888713,
+    6598535231,
+    9235539558
+  ],
+  "geometry": [
+    { "lat": 40.7578467, "lon": -73.9854508 },
+    { "lat": 40.7578559, "lon": -73.9854740 },
+    { "lat": 40.7578581, "lon": -73.9854799 },
+    { "lat": 40.7578586, "lon": -73.9854868 },
+    { "lat": 40.7578568, "lon": -73.9854943 },
+    { "lat": 40.7578523, "lon": -73.9854979 },
+    { "lat": 40.7573778, "lon": -73.9858419 },
+    { "lat": 40.7573666, "lon": -73.9858492 },
+    { "lat": 40.7573579, "lon": -73.9858502 },
+    { "lat": 40.7573519, "lon": -73.9858461 },
+    { "lat": 40.7573468, "lon": -73.9858362 },
+    { "lat": 40.7573396, "lon": -73.9858208 },
+    { "lat": 40.7573266, "lon": -73.9857916 },
+    { "lat": 40.7572859, "lon": -73.9856974 },
+    { "lat": 40.7572700, "lon": -73.9856599 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867018,
+  "bounds": {
+    "minlat": 40.7574298,
+    "minlon": -73.9860986,
+    "maxlat": 40.7574420,
+    "maxlon": -73.9860898
+  },
+  "nodes": [
+    10224024808,
+    6598535222
+  ],
+  "geometry": [
+    { "lat": 40.7574298, "lon": -73.9860986 },
+    { "lat": 40.7574420, "lon": -73.9860898 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867021,
+  "bounds": {
+    "minlat": 40.7574443,
+    "minlon": -73.9860733,
+    "maxlat": 40.7574641,
+    "maxlon": -73.9860199
+  },
+  "nodes": [
+    6598535217,
+    6597464497
+  ],
+  "geometry": [
+    { "lat": 40.7574641, "lon": -73.9860733 },
+    { "lat": 40.7574443, "lon": -73.9860199 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867022,
+  "bounds": {
+    "minlat": 40.7574420,
+    "minlon": -73.9861234,
+    "maxlat": 40.7579659,
+    "maxlon": -73.9857247
+  },
+  "nodes": [
+    10224024811,
+    6598535222,
+    6598535217,
+    6598535221,
+    10224024812
+  ],
+  "geometry": [
+    { "lat": 40.7574562, "lon": -73.9861234 },
+    { "lat": 40.7574420, "lon": -73.9860898 },
+    { "lat": 40.7574641, "lon": -73.9860733 },
+    { "lat": 40.7579512, "lon": -73.9857247 },
+    { "lat": 40.7579659, "lon": -73.9857586 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867023,
+  "bounds": {
+    "minlat": 40.7579659,
+    "minlon": -73.9862703,
+    "maxlat": 40.7581885,
+    "maxlon": -73.9857586
+  },
+  "nodes": [
+    10224024812,
+    12246639278,
+    8396064851
+  ],
+  "geometry": [
+    { "lat": 40.7579659, "lon": -73.9857586 },
+    { "lat": 40.7581546, "lon": -73.9861925 },
+    { "lat": 40.7581885, "lon": -73.9862703 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867025,
+  "bounds": {
+    "minlat": 40.7566673,
+    "minlon": -73.9864580,
+    "maxlat": 40.7567100,
+    "maxlon": -73.9863565
+  },
+  "nodes": [
+    4578017558,
+    42439981
+  ],
+  "geometry": [
+    { "lat": 40.7566673, "lon": -73.9863565 },
+    { "lat": 40.7567100, "lon": -73.9864580 }
+  ],
+  "tags": {
+    "bicycle": "yes",
+    "cycleway:left": "shared_lane",
+    "cycleway:left:lane": "pictogram",
+    "cycleway:left:oneway": "yes",
+    "cycleway:right": "no",
+    "highway": "residential",
+    "lanes": "3",
+    "name": "West 43rd Street",
+    "name:ru": "Западная 43-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt",
+    "turn:lanes": "left|through|through"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867026,
+  "bounds": {
+    "minlat": 40.7573424,
+    "minlon": -73.9860883,
+    "maxlat": 40.7573741,
+    "maxlon": -73.9860116
+  },
+  "nodes": [
+    10224024813,
+    42439984
+  ],
+  "geometry": [
+    { "lat": 40.7573741, "lon": -73.9860883 },
+    { "lat": 40.7573424, "lon": -73.9860116 }
+  ],
+  "tags": {
+    "bicycle": "yes",
+    "cycleway": "shared_lane",
+    "highway": "residential",
+    "lanes": "1",
+    "name": "West 44th Street",
+    "name:ru": "Западная 44-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867027,
+  "bounds": {
+    "minlat": 40.7573741,
+    "minlon": -73.9861699,
+    "maxlat": 40.7574076,
+    "maxlon": -73.9860883
+  },
+  "nodes": [
+    10224024814,
+    10224024815,
+    3974095828,
+    10224024813
+  ],
+  "geometry": [
+    { "lat": 40.7574076, "lon": -73.9861699 },
+    { "lat": 40.7574052, "lon": -73.9861640 },
+    { "lat": 40.7573856, "lon": -73.9861159 },
+    { "lat": 40.7573741, "lon": -73.9860883 }
+  ],
+  "tags": {
+    "bicycle": "yes",
+    "cycleway": "shared_lane",
+    "highway": "residential",
+    "lanes": "1",
+    "name": "West 44th Street",
+    "name:ru": "Западная 44-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867028,
+  "bounds": {
+    "minlat": 40.7572961,
+    "minlon": -73.9860116,
+    "maxlat": 40.7573424,
+    "maxlon": -73.9858994
+  },
+  "nodes": [
+    42439984,
+    10224024816
+  ],
+  "geometry": [
+    { "lat": 40.7573424, "lon": -73.9860116 },
+    { "lat": 40.7572961, "lon": -73.9858994 }
+  ],
+  "tags": {
+    "bicycle": "yes",
+    "cycleway": "shared_lane",
+    "cycleway:left": "lane",
+    "highway": "residential",
+    "lanes": "1",
+    "name": "West 44th Street",
+    "name:ru": "Западная 44-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867029,
+  "bounds": {
+    "minlat": 40.7572084,
+    "minlon": -73.9858994,
+    "maxlat": 40.7572961,
+    "maxlon": -73.9856903
+  },
+  "nodes": [
+    10224024816,
+    10224024800,
+    12055677931,
+    6598535230,
+    9235539560
+  ],
+  "geometry": [
+    { "lat": 40.7572961, "lon": -73.9858994 },
+    { "lat": 40.7572809, "lon": -73.9858632 },
+    { "lat": 40.7572664, "lon": -73.9858286 },
+    { "lat": 40.7572239, "lon": -73.9857273 },
+    { "lat": 40.7572084, "lon": -73.9856903 }
+  ],
+  "tags": {
+    "bicycle": "yes",
+    "cycleway": "shared_lane",
+    "cycleway:left": "lane",
+    "highway": "residential",
+    "lanes": "1",
+    "name": "West 44th Street",
+    "name:ru": "Западная 44-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867030,
+  "bounds": {
+    "minlat": 40.7579512,
+    "minlon": -73.9857247,
+    "maxlat": 40.7579826,
+    "maxlon": -73.9857038
+  },
+  "nodes": [
+    6598535221,
+    10224032622
+  ],
+  "geometry": [
+    { "lat": 40.7579512, "lon": -73.9857247 },
+    { "lat": 40.7579826, "lon": -73.9857038 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867032,
+  "bounds": {
+    "minlat": 40.7579287,
+    "minlon": -73.9857247,
+    "maxlat": 40.7579512,
+    "maxlon": -73.9856742
+  },
+  "nodes": [
+    10224032623,
+    6598535221
+  ],
+  "geometry": [
+    { "lat": 40.7579287, "lon": -73.9856742 },
+    { "lat": 40.7579512, "lon": -73.9857247 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867035,
+  "bounds": {
+    "minlat": 40.7578274,
+    "minlon": -73.9854508,
+    "maxlat": 40.7578467,
+    "maxlon": -73.9854011
+  },
+  "nodes": [
+    10224032626,
+    3974095830
+  ],
+  "geometry": [
+    { "lat": 40.7578274, "lon": -73.9854011 },
+    { "lat": 40.7578467, "lon": -73.9854508 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867038,
+  "bounds": {
+    "minlat": 40.7567712,
+    "minlon": -73.9853729,
+    "maxlat": 40.7578953,
+    "maxlon": -73.9827118
+  },
+  "nodes": [
+    42430344,
+    8373393481,
+    8318633103,
+    9665064784,
+    6597464446
+  ],
+  "geometry": [
+    { "lat": 40.7567712, "lon": -73.9827118 },
+    { "lat": 40.7568243, "lon": -73.9828376 },
+    { "lat": 40.7570948, "lon": -73.9834777 },
+    { "lat": 40.7576657, "lon": -73.9848288 },
+    { "lat": 40.7578953, "lon": -73.9853729 }
+  ],
+  "tags": {
+    "cycleway:right": "no",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "1",
+    "lit": "yes",
+    "name": "West 45th Street",
+    "name:ru": "Западная 45-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867039,
+  "bounds": {
+    "minlat": 40.7580108,
+    "minlon": -73.9857320,
+    "maxlat": 40.7580455,
+    "maxlon": -73.9856493
+  },
+  "nodes": [
+    10224032629,
+    3974095832,
+    6597464445
+  ],
+  "geometry": [
+    { "lat": 40.7580108, "lon": -73.9856493 },
+    { "lat": 40.7580252, "lon": -73.9856837 },
+    { "lat": 40.7580455, "lon": -73.9857320 }
+  ],
+  "tags": {
+    "cycleway:right": "no",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "1",
+    "name": "West 45th Street",
+    "name:ru": "Западная 45-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867040,
+  "bounds": {
+    "minlat": 40.7579238,
+    "minlon": -73.9856493,
+    "maxlat": 40.7580108,
+    "maxlon": -73.9854396
+  },
+  "nodes": [
+    10224032630,
+    42428297,
+    10224032629
+  ],
+  "geometry": [
+    { "lat": 40.7579238, "lon": -73.9854396 },
+    { "lat": 40.7579634, "lon": -73.9855335 },
+    { "lat": 40.7580108, "lon": -73.9856493 }
+  ],
+  "tags": {
+    "cycleway:right": "no",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "1",
+    "name": "West 45th Street",
+    "name:ru": "Западная 45-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867041,
+  "bounds": {
+    "minlat": 40.7578953,
+    "minlon": -73.9854396,
+    "maxlat": 40.7579238,
+    "maxlon": -73.9853729
+  },
+  "nodes": [
+    6597464446,
+    10224032638,
+    10224032630
+  ],
+  "geometry": [
+    { "lat": 40.7578953, "lon": -73.9853729 },
+    { "lat": 40.7579142, "lon": -73.9854172 },
+    { "lat": 40.7579238, "lon": -73.9854396 }
+  ],
+  "tags": {
+    "cycleway:right": "no",
+    "hgv": "destination",
+    "highway": "secondary",
+    "lanes": "1",
+    "name": "West 45th Street",
+    "name:ru": "Западная 45-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867043,
+  "bounds": {
+    "minlat": 40.7578523,
+    "minlon": -73.9855132,
+    "maxlat": 40.7578589,
+    "maxlon": -73.9854979
+  },
+  "nodes": [
+    6598535234,
+    4578017556
+  ],
+  "geometry": [
+    { "lat": 40.7578523, "lon": -73.9854979 },
+    { "lat": 40.7578589, "lon": -73.9855132 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867044,
+  "bounds": {
+    "minlat": 40.7578467,
+    "minlon": -73.9854508,
+    "maxlat": 40.7578673,
+    "maxlon": -73.9854354
+  },
+  "nodes": [
+    3974095830,
+    4707407260
+  ],
+  "geometry": [
+    { "lat": 40.7578467, "lon": -73.9854508 },
+    { "lat": 40.7578673, "lon": -73.9854354 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867046,
+  "bounds": {
+    "minlat": 40.7578673,
+    "minlon": -73.9854354,
+    "maxlat": 40.7579601,
+    "maxlon": -73.9853993
+  },
+  "nodes": [
+    4707407260,
+    10224032638,
+    6596799508
+  ],
+  "geometry": [
+    { "lat": 40.7578673, "lon": -73.9854354 },
+    { "lat": 40.7579142, "lon": -73.9854172 },
+    { "lat": 40.7579601, "lon": -73.9853993 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "footway": "crossing",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867047,
+  "bounds": {
+    "minlat": 40.7579892,
+    "minlon": -73.9854077,
+    "maxlat": 40.7580022,
+    "maxlon": -73.9853784
+  },
+  "nodes": [
+    10224032640,
+    6598535200
+  ],
+  "geometry": [
+    { "lat": 40.7580022, "lon": -73.9854077 },
+    { "lat": 40.7579892, "lon": -73.9853784 }
+  ],
+  "tags": {
+    "access": "yes",
+    "bicycle": "dismount",
+    "cycleway": "no",
+    "footway": "sidewalk",
+    "highway": "footway",
+    "motor_vehicle": "no",
+    "note": "closed to motor vehicles May 24, 2009",
+    "oneway": "no",
+    "surface": "paving_stones",
+    "tiger:cfcc": "A41",
+    "tiger:county": "New York, NY",
+    "tiger:name_base": "Broadway",
+    "tiger:zip_left": "10019",
+    "tiger:zip_right": "10019"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867049,
+  "bounds": {
+    "minlat": 40.7579601,
+    "minlon": -73.9853993,
+    "maxlat": 40.7579709,
+    "maxlon": -73.9853912
+  },
+  "nodes": [
+    6598535197,
+    6596799508
+  ],
+  "geometry": [
+    { "lat": 40.7579709, "lon": -73.9853912 },
+    { "lat": 40.7579601, "lon": -73.9853993 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867050,
+  "bounds": {
+    "minlat": 40.7579506,
+    "minlon": -73.9853912,
+    "maxlat": 40.7584759,
+    "maxlon": -73.9849748
+  },
+  "nodes": [
+    6598535191,
+    6598535189,
+    6598535200,
+    6598535197,
+    10224032641
+  ],
+  "geometry": [
+    { "lat": 40.7584712, "lon": -73.9849748 },
+    { "lat": 40.7584759, "lon": -73.9850200 },
+    { "lat": 40.7579892, "lon": -73.9853784 },
+    { "lat": 40.7579709, "lon": -73.9853912 },
+    { "lat": 40.7579506, "lon": -73.9853440 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867051,
+  "bounds": {
+    "minlat": 40.7581960,
+    "minlon": -73.9849748,
+    "maxlat": 40.7584712,
+    "maxlon": -73.9843212
+  },
+  "nodes": [
+    8250912518,
+    13915675573,
+    6598535191
+  ],
+  "geometry": [
+    { "lat": 40.7581960, "lon": -73.9843212 },
+    { "lat": 40.7583022, "lon": -73.9845734 },
+    { "lat": 40.7584712, "lon": -73.9849748 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867054,
+  "bounds": {
+    "minlat": 40.7580688,
+    "minlon": -73.9856633,
+    "maxlat": 40.7581001,
+    "maxlon": -73.9856475
+  },
+  "nodes": [
+    9004888709,
+    6598535203
+  ],
+  "geometry": [
+    { "lat": 40.7580688, "lon": -73.9856633 },
+    { "lat": 40.7581001, "lon": -73.9856475 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867055,
+  "bounds": {
+    "minlat": 40.7586960,
+    "minlon": -73.9863048,
+    "maxlat": 40.7590351,
+    "maxlon": -73.9855194
+  },
+  "nodes": [
+    6598535206,
+    6598535207,
+    9354852635
+  ],
+  "geometry": [
+    { "lat": 40.7590351, "lon": -73.9863048 },
+    { "lat": 40.7588261, "lon": -73.9858140 },
+    { "lat": 40.7586960, "lon": -73.9855194 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867059,
+  "bounds": {
+    "minlat": 40.7585861,
+    "minlon": -73.9849417,
+    "maxlat": 40.7585990,
+    "maxlon": -73.9849328
+  },
+  "nodes": [
+    6598535169,
+    6597464391
+  ],
+  "geometry": [
+    { "lat": 40.7585990, "lon": -73.9849328 },
+    { "lat": 40.7585861, "lon": -73.9849417 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867061,
+  "bounds": {
+    "minlat": 40.7584759,
+    "minlon": -73.9850200,
+    "maxlat": 40.7584937,
+    "maxlon": -73.9850067
+  },
+  "nodes": [
+    6596799514,
+    6598535189
+  ],
+  "geometry": [
+    { "lat": 40.7584937, "lon": -73.9850067 },
+    { "lat": 40.7584759, "lon": -73.9850200 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1117867062,
+  "bounds": {
+    "minlat": 40.7584759,
+    "minlon": -73.9850432,
+    "maxlat": 40.7584850,
+    "maxlon": -73.9850200
+  },
+  "nodes": [
+    6596799513,
+    6598535189
+  ],
+  "geometry": [
+    { "lat": 40.7584850, "lon": -73.9850432 },
+    { "lat": 40.7584759, "lon": -73.9850200 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420710,
+  "bounds": {
+    "minlat": 40.7587105,
+    "minlon": -73.9852607,
+    "maxlat": 40.7594121,
+    "maxlon": -73.9847453
+  },
+  "nodes": [
+    6598535172,
+    6598535158,
+    6598535181,
+    10228962340,
+    6598535180,
+    6598535179,
+    10228962358,
+    4578044149,
+    6598535173,
+    8250885533
+  ],
+  "geometry": [
+    { "lat": 40.7587105, "lon": -73.9851336 },
+    { "lat": 40.7591783, "lon": -73.9847499 },
+    { "lat": 40.7591869, "lon": -73.9847453 },
+    { "lat": 40.7591963, "lon": -73.9847455 },
+    { "lat": 40.7592033, "lon": -73.9847510 },
+    { "lat": 40.7592081, "lon": -73.9847609 },
+    { "lat": 40.7593107, "lon": -73.9850107 },
+    { "lat": 40.7593562, "lon": -73.9851217 },
+    { "lat": 40.7593996, "lon": -73.9852285 },
+    { "lat": 40.7594121, "lon": -73.9852607 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420711,
+  "bounds": {
+    "minlat": 40.7592081,
+    "minlon": -73.9847609,
+    "maxlat": 40.7592193,
+    "maxlon": -73.9847525
+  },
+  "nodes": [
+    10228962332,
+    6598535179
+  ],
+  "geometry": [
+    { "lat": 40.7592193, "lon": -73.9847525 },
+    { "lat": 40.7592081, "lon": -73.9847609 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420712,
+  "bounds": {
+    "minlat": 40.7592193,
+    "minlon": -73.9847525,
+    "maxlat": 40.7593089,
+    "maxlon": -73.9847318
+  },
+  "nodes": [
+    10228962332,
+    10228962331,
+    6597464412
+  ],
+  "geometry": [
+    { "lat": 40.7592193, "lon": -73.9847525 },
+    { "lat": 40.7592729, "lon": -73.9847402 },
+    { "lat": 40.7593089, "lon": -73.9847318 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420713,
+  "bounds": {
+    "minlat": 40.7592367,
+    "minlon": -73.9846936,
+    "maxlat": 40.7593175,
+    "maxlon": -73.9845078
+  },
+  "nodes": [
+    6597464410,
+    10228962335,
+    6597429978
+  ],
+  "geometry": [
+    { "lat": 40.7593175, "lon": -73.9846936 },
+    { "lat": 40.7592703, "lon": -73.9845851 },
+    { "lat": 40.7592367, "lon": -73.9845078 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420714,
+  "bounds": {
+    "minlat": 40.7591350,
+    "minlon": -73.9845403,
+    "maxlat": 40.7592026,
+    "maxlon": -73.9844881
+  },
+  "nodes": [
+    10228962336,
+    10228962338,
+    10228962337
+  ],
+  "geometry": [
+    { "lat": 40.7592026, "lon": -73.9844881 },
+    { "lat": 40.7591754, "lon": -73.9845091 },
+    { "lat": 40.7591350, "lon": -73.9845403 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420716,
+  "bounds": {
+    "minlat": 40.7591716,
+    "minlon": -73.9847499,
+    "maxlat": 40.7591783,
+    "maxlon": -73.9847336
+  },
+  "nodes": [
+    9354852633,
+    6598535158
+  ],
+  "geometry": [
+    { "lat": 40.7591716, "lon": -73.9847336 },
+    { "lat": 40.7591783, "lon": -73.9847499 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420717,
+  "bounds": {
+    "minlat": 40.7591011,
+    "minlon": -73.9845929,
+    "maxlat": 40.7591130,
+    "maxlon": -73.9845648
+  },
+  "nodes": [
+    6598535162,
+    10228962339
+  ],
+  "geometry": [
+    { "lat": 40.7591011, "lon": -73.9845648 },
+    { "lat": 40.7591130, "lon": -73.9845929 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420719,
+  "bounds": {
+    "minlat": 40.7591011,
+    "minlon": -73.9845648,
+    "maxlat": 40.7591350,
+    "maxlon": -73.9845403
+  },
+  "nodes": [
+    10228962337,
+    6598535162
+  ],
+  "geometry": [
+    { "lat": 40.7591350, "lon": -73.9845403 },
+    { "lat": 40.7591011, "lon": -73.9845648 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420720,
+  "bounds": {
+    "minlat": 40.7577514,
+    "minlon": -73.9848917,
+    "maxlat": 40.7585813,
+    "maxlon": -73.9829190
+  },
+  "nodes": [
+    6598535168,
+    13915675566,
+    13915675568,
+    13915675567,
+    13915675572,
+    6598535160
+  ],
+  "geometry": [
+    { "lat": 40.7585813, "lon": -73.9848917 },
+    { "lat": 40.7581523, "lon": -73.9838685 },
+    { "lat": 40.7581073, "lon": -73.9837618 },
+    { "lat": 40.7580602, "lon": -73.9836503 },
+    { "lat": 40.7579316, "lon": -73.9833458 },
+    { "lat": 40.7577514, "lon": -73.9829190 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420721,
+  "bounds": {
+    "minlat": 40.7585813,
+    "minlon": -73.9849328,
+    "maxlat": 40.7591011,
+    "maxlon": -73.9845334
+  },
+  "nodes": [
+    10228962341,
+    6598535162,
+    6598535170,
+    6598535169,
+    6598535168
+  ],
+  "geometry": [
+    { "lat": 40.7590932, "lon": -73.9845334 },
+    { "lat": 40.7591011, "lon": -73.9845648 },
+    { "lat": 40.7586185, "lon": -73.9849185 },
+    { "lat": 40.7585990, "lon": -73.9849328 },
+    { "lat": 40.7585813, "lon": -73.9848917 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420722,
+  "bounds": {
+    "minlat": 40.7581394,
+    "minlon": -73.9845078,
+    "maxlat": 40.7592367,
+    "maxlon": -73.9815268
+  },
+  "nodes": [
+    6597429978,
+    10228962342,
+    10552769770,
+    8375496965,
+    10228962577,
+    10172901895
+  ],
+  "geometry": [
+    { "lat": 40.7592367, "lon": -73.9845078 },
+    { "lat": 40.7592223, "lon": -73.9844736 },
+    { "lat": 40.7585938, "lon": -73.9829746 },
+    { "lat": 40.7581394, "lon": -73.9818909 },
+    { "lat": 40.7582739, "lon": -73.9817943 },
+    { "lat": 40.7586465, "lon": -73.9815268 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420723,
+  "bounds": {
+    "minlat": 40.7593089,
+    "minlon": -73.9847318,
+    "maxlat": 40.7598591,
+    "maxlon": -73.9843358
+  },
+  "nodes": [
+    10228962552,
+    10172901883,
+    10228962343,
+    6597464412
+  ],
+  "geometry": [
+    { "lat": 40.7598591, "lon": -73.9843358 },
+    { "lat": 40.7598400, "lon": -73.9843496 },
+    { "lat": 40.7593284, "lon": -73.9847178 },
+    { "lat": 40.7593089, "lon": -73.9847318 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420724,
+  "bounds": {
+    "minlat": 40.7588235,
+    "minlon": -73.9864805,
+    "maxlat": 40.7592484,
+    "maxlon": -73.9854681
+  },
+  "nodes": [
+    8250885535,
+    6598535185,
+    8250885534
+  ],
+  "geometry": [
+    { "lat": 40.7592484, "lon": -73.9864805 },
+    { "lat": 40.7588274, "lon": -73.9854781 },
+    { "lat": 40.7588235, "lon": -73.9854681 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420725,
+  "bounds": {
+    "minlat": 40.7587749,
+    "minlon": -73.9853242,
+    "maxlat": 40.7593562,
+    "maxlon": -73.9851217
+  },
+  "nodes": [
+    4578044149,
+    6598535184
+  ],
+  "geometry": [
+    { "lat": 40.7593562, "lon": -73.9851217 },
+    { "lat": 40.7587749, "lon": -73.9853242 }
+  ],
+  "tags": {
+    "access": "yes",
+    "bicycle": "dismount",
+    "cycleway": "no",
+    "highway": "pedestrian",
+    "lit": "yes",
+    "motor_vehicle": "no",
+    "name": "Broadway",
+    "name:en": "Broadway",
+    "name:ja": "ブロードウェイ",
+    "name:ru": "Бродвей",
+    "name:zh": "百老匯",
+    "name:zh-Hans": "百老汇",
+    "name:zh-Hant": "百老匯",
+    "note": "closed to motor vehicles May 24, 2009",
+    "oneway": "no",
+    "surface": "paving_stones",
+    "wikidata": "Q11260",
+    "wikipedia": "en:Broadway (Manhattan)"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420726,
+  "bounds": {
+    "minlat": 40.7586876,
+    "minlon": -73.9851525,
+    "maxlat": 40.7587105,
+    "maxlon": -73.9851336
+  },
+  "nodes": [
+    6598535172,
+    10228962346
+  ],
+  "geometry": [
+    { "lat": 40.7587105, "lon": -73.9851336 },
+    { "lat": 40.7586876, "lon": -73.9851525 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420728,
+  "bounds": {
+    "minlat": 40.7586936,
+    "minlon": -73.9854681,
+    "maxlat": 40.7588235,
+    "maxlon": -73.9850834
+  },
+  "nodes": [
+    8250885534,
+    6598535174,
+    6598535184,
+    10228962359,
+    6598535172,
+    6597464478
+  ],
+  "geometry": [
+    { "lat": 40.7588235, "lon": -73.9854681 },
+    { "lat": 40.7588043, "lon": -73.9854128 },
+    { "lat": 40.7587749, "lon": -73.9853242 },
+    { "lat": 40.7587369, "lon": -73.9852116 },
+    { "lat": 40.7587105, "lon": -73.9851336 },
+    { "lat": 40.7586936, "lon": -73.9850834 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420731,
+  "bounds": {
+    "minlat": 40.7585700,
+    "minlon": -73.9852358,
+    "maxlat": 40.7585920,
+    "maxlon": -73.9852176
+  },
+  "nodes": [
+    6597464471,
+    6598535171
+  ],
+  "geometry": [
+    { "lat": 40.7585920, "lon": -73.9852176 },
+    { "lat": 40.7585700, "lon": -73.9852358 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "no",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420732,
+  "bounds": {
+    "minlat": 40.7586705,
+    "minlon": -73.9854622,
+    "maxlat": 40.7586923,
+    "maxlon": -73.9854538
+  },
+  "nodes": [
+    6598535187,
+    10228962351
+  ],
+  "geometry": [
+    { "lat": 40.7586705, "lon": -73.9854622 },
+    { "lat": 40.7586923, "lon": -73.9854538 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420734,
+  "bounds": {
+    "minlat": 40.7587907,
+    "minlon": -73.9854168,
+    "maxlat": 40.7588043,
+    "maxlon": -73.9854128
+  },
+  "nodes": [
+    10228962350,
+    6598535174
+  ],
+  "geometry": [
+    { "lat": 40.7587907, "lon": -73.9854168 },
+    { "lat": 40.7588043, "lon": -73.9854128 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420736,
+  "bounds": {
+    "minlat": 40.7593996,
+    "minlon": -73.9852285,
+    "maxlat": 40.7594147,
+    "maxlon": -73.9852242
+  },
+  "nodes": [
+    6598535173,
+    10228962354
+  ],
+  "geometry": [
+    { "lat": 40.7593996, "lon": -73.9852285 },
+    { "lat": 40.7594147, "lon": -73.9852242 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420738,
+  "bounds": {
+    "minlat": 40.7587369,
+    "minlon": -73.9852116,
+    "maxlat": 40.7593107,
+    "maxlon": -73.9850107
+  },
+  "nodes": [
+    10228962358,
+    10228962359
+  ],
+  "geometry": [
+    { "lat": 40.7593107, "lon": -73.9850107 },
+    { "lat": 40.7587369, "lon": -73.9852116 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420740,
+  "bounds": {
+    "minlat": 40.7593107,
+    "minlon": -73.9850107,
+    "maxlat": 40.7593228,
+    "maxlon": -73.9850024
+  },
+  "nodes": [
+    10228962369,
+    10228962358
+  ],
+  "geometry": [
+    { "lat": 40.7593228, "lon": -73.9850024 },
+    { "lat": 40.7593107, "lon": -73.9850107 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420741,
+  "bounds": {
+    "minlat": 40.7593228,
+    "minlon": -73.9850024,
+    "maxlat": 40.7594019,
+    "maxlon": -73.9849449
+  },
+  "nodes": [
+    10228962369,
+    2435108448,
+    10228962370
+  ],
+  "geometry": [
+    { "lat": 40.7593228, "lon": -73.9850024 },
+    { "lat": 40.7593682, "lon": -73.9849694 },
+    { "lat": 40.7594019, "lon": -73.9849449 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "footway": "crossing",
+    "highway": "footway",
+    "lit": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420743,
+  "bounds": {
+    "minlat": 40.7586185,
+    "minlon": -73.9849407,
+    "maxlat": 40.7586283,
+    "maxlon": -73.9849185
+  },
+  "nodes": [
+    10228962373,
+    6598535170
+  ],
+  "geometry": [
+    { "lat": 40.7586283, "lon": -73.9849407 },
+    { "lat": 40.7586185, "lon": -73.9849185 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420746,
+  "bounds": {
+    "minlat": 40.7584850,
+    "minlon": -73.9851933,
+    "maxlat": 40.7585511,
+    "maxlon": -73.9850432
+  },
+  "nodes": [
+    10228962375,
+    6598535188,
+    6596799513
+  ],
+  "geometry": [
+    { "lat": 40.7585511, "lon": -73.9851933 },
+    { "lat": 40.7585239, "lon": -73.9851316 },
+    { "lat": 40.7584850, "lon": -73.9850432 }
+  ],
+  "tags": {
+    "crossing": "traffic_signals",
+    "crossing:markings": "zebra",
+    "footway": "crossing",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420748,
+  "bounds": {
+    "minlat": 40.7581095,
+    "minlon": -73.9856781,
+    "maxlat": 40.7586705,
+    "maxlon": -73.9854622
+  },
+  "nodes": [
+    6598535187,
+    6598535214
+  ],
+  "geometry": [
+    { "lat": 40.7586705, "lon": -73.9854622 },
+    { "lat": 40.7581095, "lon": -73.9856781 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "lit": "no",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420749,
+  "bounds": {
+    "minlat": 40.7580917,
+    "minlon": -73.9856201,
+    "maxlat": 40.7585700,
+    "maxlon": -73.9852358
+  },
+  "nodes": [
+    10228962377,
+    6598535171
+  ],
+  "geometry": [
+    { "lat": 40.7580917, "lon": -73.9856201 },
+    { "lat": 40.7585700, "lon": -73.9852358 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "no",
+    "surface": "paving_stones"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420751,
+  "bounds": {
+    "minlat": 40.7593175,
+    "minlon": -73.9849486,
+    "maxlat": 40.7594318,
+    "maxlon": -73.9846936
+  },
+  "nodes": [
+    10228962521,
+    10228962401,
+    10228962343,
+    6597464410
+  ],
+  "geometry": [
+    { "lat": 40.7594318, "lon": -73.9849486 },
+    { "lat": 40.7594259, "lon": -73.9849355 },
+    { "lat": 40.7593284, "lon": -73.9847178 },
+    { "lat": 40.7593175, "lon": -73.9846936 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 1118420791,
+  "bounds": {
+    "minlat": 40.7592026,
+    "minlon": -73.9844881,
+    "maxlat": 40.7597482,
+    "maxlon": -73.9840865
+  },
+  "nodes": [
+    11198923680,
+    10172901889,
+    10228962342,
+    10228962336
+  ],
+  "geometry": [
+    { "lat": 40.7597482, "lon": -73.9840865 },
+    { "lat": 40.7597305, "lon": -73.9840996 },
+    { "lat": 40.7592223, "lon": -73.9844736 },
+    { "lat": 40.7592026, "lon": -73.9844881 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 1198594027,
+  "bounds": {
+    "minlat": 40.7574076,
+    "minlon": -73.9888429,
+    "maxlat": 40.7585323,
+    "maxlon": -73.9861699
+  },
+  "nodes": [
+    42435671,
+    10168088476,
+    42443559,
+    10224024814
+  ],
+  "geometry": [
+    { "lat": 40.7585323, "lon": -73.9888429 },
+    { "lat": 40.7584814, "lon": -73.9887219 },
+    { "lat": 40.7578359, "lon": -73.9871891 },
+    { "lat": 40.7574076, "lon": -73.9861699 }
+  ],
+  "tags": {
+    "bicycle": "yes",
+    "cycleway": "shared_lane",
+    "highway": "residential",
+    "lanes": "1",
+    "name": "West 44th Street",
+    "name:ru": "Западная 44-я стрит",
+    "oneway": "yes",
+    "sidewalk:both": "separate",
+    "surface": "asphalt"
+  }
+},
+{
+  "type": "way",
+  "id": 1216256939,
+  "bounds": {
+    "minlat": 40.7590739,
+    "minlon": -73.9849793,
+    "maxlat": 40.7592260,
+    "maxlon": -73.9849051
+  },
+  "nodes": [
+    11269427255,
+    7254138685
+  ],
+  "geometry": [
+    { "lat": 40.7590739, "lon": -73.9849793 },
+    { "lat": 40.7592260, "lon": -73.9849051 }
+  ],
+  "tags": {
+    "access": "yes",
+    "handrail": "both",
+    "highway": "steps",
+    "incline": "up",
+    "layer": "1",
+    "lit": "yes",
+    "name": "Times Square Red Steps",
+    "step_count": "28",
+    "surface": "glass",
+    "tactile_paving": "no",
+    "width": "10"
+  }
+},
+{
+  "type": "way",
+  "id": 1317983503,
+  "bounds": {
+    "minlat": 40.7592219,
+    "minlon": -73.9865346,
+    "maxlat": 40.7595319,
+    "maxlon": -73.9861965
+  },
+  "nodes": [
+    2639531774,
+    2639531762,
+    12197834836,
+    2639531732,
+    2639531738,
+    12197834835,
+    2639531774
+  ],
+  "geometry": [
+    { "lat": 40.7595319, "lon": -73.9863576 },
+    { "lat": 40.7594647, "lon": -73.9861965 },
+    { "lat": 40.7592833, "lon": -73.9863281 },
+    { "lat": 40.7592219, "lon": -73.9863727 },
+    { "lat": 40.7592905, "lon": -73.9865346 },
+    { "lat": 40.7593504, "lon": -73.9864907 },
+    { "lat": 40.7595319, "lon": -73.9863576 }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "223",
+    "addr:state": "NY",
+    "addr:street": "West 46th Street",
+    "brand": "SpringHill Suites",
+    "brand:wikidata": "Q7580351",
+    "building": "yes",
+    "name": "SpringHill Suites",
+    "official_name": "SpringHill Suites by Marriott",
+    "rooms": "200",
+    "tourism": "hotel",
+    "website": "https://www.marriott.com/en-us/hotels/nycwf-springhill-suites-new-york-manhattan-times-square/overview/"
+  }
+},
+{
+  "type": "way",
+  "id": 1323445132,
+  "bounds": {
+    "minlat": 40.7576406,
+    "minlon": -73.9865384,
+    "maxlat": 40.7581440,
+    "maxlon": -73.9862002
+  },
+  "nodes": [
+    12246639281,
+    12246639280
+  ],
+  "geometry": [
+    { "lat": 40.7581440, "lon": -73.9862002 },
+    { "lat": 40.7576406, "lon": -73.9865384 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "tunnel": "building_passage"
+  }
+},
+{
+  "type": "way",
+  "id": 1323445133,
+  "bounds": {
+    "minlat": 40.7576326,
+    "minlon": -73.9865444,
+    "maxlat": 40.7576406,
+    "maxlon": -73.9865384
+  },
+  "nodes": [
+    12246639280,
+    12246639279
+  ],
+  "geometry": [
+    { "lat": 40.7576406, "lon": -73.9865384 },
+    { "lat": 40.7576326, "lon": -73.9865444 }
+  ],
+  "tags": {
+    "highway": "footway"
+  }
+},
+{
+  "type": "way",
+  "id": 1323445134,
+  "bounds": {
+    "minlat": 40.7581440,
+    "minlon": -73.9862002,
+    "maxlat": 40.7581546,
+    "maxlon": -73.9861925
+  },
+  "nodes": [
+    12246639278,
+    12246639281
+  ],
+  "geometry": [
+    { "lat": 40.7581546, "lon": -73.9861925 },
+    { "lat": 40.7581440, "lon": -73.9862002 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1331490756,
+  "bounds": {
+    "minlat": 40.7592484,
+    "minlon": -73.9877864,
+    "maxlat": 40.7598091,
+    "maxlon": -73.9864805
+  },
+  "nodes": [
+    12319626489,
+    6598535177,
+    6598535176,
+    6598535186,
+    8250885536,
+    8250885535
+  ],
+  "geometry": [
+    { "lat": 40.7598091, "lon": -73.9877864 },
+    { "lat": 40.7597970, "lon": -73.9877620 },
+    { "lat": 40.7597873, "lon": -73.9877587 },
+    { "lat": 40.7597756, "lon": -73.9877359 },
+    { "lat": 40.7596276, "lon": -73.9873834 },
+    { "lat": 40.7592484, "lon": -73.9864805 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1331490758,
+  "bounds": {
+    "minlat": 40.7590351,
+    "minlon": -73.9878773,
+    "maxlat": 40.7596876,
+    "maxlon": -73.9863048
+  },
+  "nodes": [
+    12319626500,
+    6598535209,
+    6598535208,
+    6598535206
+  ],
+  "geometry": [
+    { "lat": 40.7596876, "lon": -73.9878773 },
+    { "lat": 40.7596824, "lon": -73.9878432 },
+    { "lat": 40.7596832, "lon": -73.9878308 },
+    { "lat": 40.7590351, "lon": -73.9863048 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "lit": "yes",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1346429228,
+  "bounds": {
+    "minlat": 40.7581885,
+    "minlon": -73.9882998,
+    "maxlat": 40.7590503,
+    "maxlon": -73.9862703
+  },
+  "nodes": [
+    8396064851,
+    6598535218,
+    6598535220
+  ],
+  "geometry": [
+    { "lat": 40.7581885, "lon": -73.9862703 },
+    { "lat": 40.7584018, "lon": -73.9867726 },
+    { "lat": 40.7590503, "lon": -73.9882998 }
+  ],
+  "tags": {
+    "footway": "sidewalk",
+    "highway": "footway",
+    "surface": "concrete"
+  }
+},
+{
+  "type": "way",
+  "id": 1413518739,
+  "bounds": {
+    "minlat": 40.7593906,
+    "minlon": -73.9850231,
+    "maxlat": 40.7594945,
+    "maxlon": -73.9849847
+  },
+  "nodes": [
+    12989986304,
+    12989986306,
+    12989986305
+  ],
+  "geometry": [
+    { "lat": 40.7594945, "lon": -73.9849847 },
+    { "lat": 40.7594519, "lon": -73.9850004 },
+    { "lat": 40.7593906, "lon": -73.9850231 }
+  ],
+  "tags": {
+    "highway": "living_street",
+    "lit": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 1499401838,
+  "bounds": {
+    "minlat": 40.7581948,
+    "minlon": -73.9839137,
+    "maxlat": 40.7582353,
+    "maxlon": -73.9838558
+  },
+  "nodes": [
+    13730544794,
+    13730544795,
+    13730544796,
+    13730544797,
+    13730544794
+  ],
+  "geometry": [
+    { "lat": 40.7582353, "lon": -73.9838940 },
+    { "lat": 40.7582180, "lon": -73.9838558 },
+    { "lat": 40.7581948, "lon": -73.9838765 },
+    { "lat": 40.7582130, "lon": -73.9839137 },
+    { "lat": 40.7582353, "lon": -73.9838940 }
+  ],
+  "tags": {
+    "building": "yes",
+    "man_made": "tower",
+    "source": "survey",
+    "tower:type": "bell_tower"
+  }
+},
+{
+  "type": "way",
+  "id": 1526888552,
+  "bounds": {
+    "minlat": 40.7577799,
+    "minlon": -73.9849395,
+    "maxlat": 40.7583022,
+    "maxlon": -73.9845734
+  },
+  "nodes": [
+    13915675573,
+    13915675574
+  ],
+  "geometry": [
+    { "lat": 40.7583022, "lon": -73.9845734 },
+    { "lat": 40.7577799, "lon": -73.9849395 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "indoor": "yes",
+    "note": "POPS",
+    "opening_hours": "Mo-Fr 08:00-19:00"
+  }
+},
+{
+  "type": "way",
+  "id": 1526888553,
+  "bounds": {
+    "minlat": 40.7569216,
+    "minlon": -73.9848327,
+    "maxlat": 40.7574368,
+    "maxlon": -73.9844726
+  },
+  "nodes": [
+    13915675575,
+    1753010841,
+    1753010855,
+    13915675576
+  ],
+  "geometry": [
+    { "lat": 40.7574368, "lon": -73.9844726 },
+    { "lat": 40.7574191, "lon": -73.9844848 },
+    { "lat": 40.7569358, "lon": -73.9848228 },
+    { "lat": 40.7569216, "lon": -73.9848327 }
+  ],
+  "tags": {
+    "highway": "footway",
+    "indoor": "yes",
+    "level": "0",
+    "note": "POPS"
+  }
+},
+{
+  "type": "relation",
+  "id": 3576201,
+  "bounds": {
+    "minlat": 40.7589015,
+    "minlon": -73.9839125,
+    "maxlat": 40.7592455,
+    "maxlon": -73.9834896
+  },
+  "members": [
+    {
+      "type": "way",
+      "ref": 266170845,
+      "role": "outer",
+      "geometry": [
+         { "lat": 40.7591406, "lon": -73.9834896 },
+         { "lat": 40.7590597, "lon": -73.9835486 },
+         { "lat": 40.7590675, "lon": -73.9835672 },
+         { "lat": 40.7589650, "lon": -73.9836420 },
+         { "lat": 40.7589572, "lon": -73.9836234 },
+         { "lat": 40.7589015, "lon": -73.9836641 },
+         { "lat": 40.7590063, "lon": -73.9839125 },
+         { "lat": 40.7590565, "lon": -73.9838759 },
+         { "lat": 40.7590492, "lon": -73.9838587 },
+         { "lat": 40.7591578, "lon": -73.9837795 },
+         { "lat": 40.7591651, "lon": -73.9837967 },
+         { "lat": 40.7592455, "lon": -73.9837380 },
+         { "lat": 40.7591406, "lon": -73.9834896 }
+      ]
+    },
+    {
+      "type": "way",
+      "ref": 266170849,
+      "role": "inner",
+      "geometry": [
+         { "lat": 40.7590456, "lon": -73.9836994 },
+         { "lat": 40.7591050, "lon": -73.9836561 },
+         { "lat": 40.7591209, "lon": -73.9836938 },
+         { "lat": 40.7590615, "lon": -73.9837371 },
+         { "lat": 40.7590456, "lon": -73.9836994 }
+      ]
+    },
+    {
+      "type": "way",
+      "ref": 266170850,
+      "role": "inner",
+      "geometry": [
+         { "lat": 40.7590489, "lon": -73.9837463 },
+         { "lat": 40.7590128, "lon": -73.9837727 },
+         { "lat": 40.7589969, "lon": -73.9837350 },
+         { "lat": 40.7590330, "lon": -73.9837086 },
+         { "lat": 40.7590489, "lon": -73.9837463 }
+      ]
+    }
+  ],
+  "tags": {
+    "addr:city": "New York",
+    "addr:housenumber": "157",
+    "addr:postcode": "10036",
+    "addr:state": "NY",
+    "addr:street": "West 47th Street",
+    "air_conditioning": "yes",
+    "brand": "OYO",
+    "brand:wikidata": "Q24906315",
+    "building": "hotel",
+    "email": "info@oyotimessquare.com",
+    "height": "34.2",
+    "internet_access": "wlan",
+    "internet_access:fee": "customers",
+    "name": "OYO Times Square Hotel",
+    "nycdoitt:bin": "1022676",
+    "payment:american_express": "yes",
+    "payment:cash": "yes",
+    "payment:discover_card": "yes",
+    "payment:jcb": "yes",
+    "payment:mastercard": "yes",
+    "payment:visa": "yes",
+    "phone": "+1-212-768-3700",
+    "reservation": "yes",
+    "tourism": "hotel",
+    "type": "multipolygon",
+    "website": "https://www.oyotimessquare.com/",
+    "wheelchair": "yes"
+  }
+}
+
+  ]
+}
