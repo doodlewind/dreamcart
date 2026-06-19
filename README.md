@@ -148,7 +148,7 @@ bun run bootstrap
 
 `bun run bootstrap` ([scripts/bootstrap.ts](scripts/bootstrap.ts)) is idempotent
 and installs/configures:
-- submodules + the local `rust-psp` patch (`bun run setup`)
+- submodules (`bun run setup`)
 - **LLVM** (`brew install llvm` — Apple clang can't target MIPS)
 - **PPSSPP** (`brew install --cask ppsspp`) — PSP emulator
 - **Azahar** (downloaded from GitHub releases) — 3DS emulator
@@ -161,11 +161,10 @@ It reports anything it can't auto-install (Homebrew/Docker not present, Docker
 daemon stopped); fix those and re-run. Then everything runs on Bun — there's no
 Python/Make glue.
 
-> The `quickjs-rs` submodule points at `doodlewind/quickjs-rs` with QuickJS
-> 2026-06-04 vendored plus DreamCart's PSP C/stdio shims and 32-bit `size_t`
-> ABI/API exports. The remaining local submodule patch is the small `rust-psp`
-> nightly/tooling compatibility layer in [patches/](patches). LLVM `llvm-ar` is
-> used for the static archive (Apple `ar` silently drops MIPS objects →
+> The `quickjs-rs` and `rust-psp` submodules point at `doodlewind/*` forks.
+> Those forks carry DreamCart's PSP C/stdio shims, 32-bit `size_t` ABI/API
+> exports, and PSP nightly/tooling compatibility fixes. LLVM `llvm-ar` is used
+> for the static archive (Apple `ar` silently drops MIPS objects →
 > `undefined symbol: JS_*`).
 
 ## Run on PSP

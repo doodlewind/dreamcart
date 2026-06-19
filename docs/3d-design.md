@@ -29,7 +29,7 @@
 >   non-indexed `Vertex16` buffer (VFPU/GE alignment); Web/3DS draw indexed. Same
 >   image either way.
 > - **Three pre-existing PSP gaps fixed during bring-up (none 3D-specific):**
->   (1) added the `JS_GetArrayBuffer` FFI binding (`patches/quickjs-rs.patch`);
+>   (1) added the `JS_GetArrayBuffer` FFI binding in the `quickjs-rs` fork;
 >   (2) `runtime/src/c_heap.rs` gives newlib a C heap (its `strtod`/`__dtoa`, reached
 >   by parsing/formatting *any* non-trivial float, `malloc`'d into nothing and
 >   aborted — had silently broken every framework game, 2D included);
