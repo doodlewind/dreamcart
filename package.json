@@ -17,6 +17,7 @@
     "test": "bun framework/test/contract.ts && bun framework/test/golden.ts",
     "build": "bun run bake && bun run typecheck && bun run bundle && bun run web",
     "psp": "bun runtime/build.ts",
+    "psp:diag": "bun scripts/build-psp-diag.ts",
     "psp:all": "bun scripts/build-psp-all.ts",
     "3ds": "bun runtime-3ds/build.ts",
     "android": "bun android/sync-assets.ts && (cd android && ./gradlew :app:assembleDebug)",

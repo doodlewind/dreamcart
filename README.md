@@ -62,6 +62,18 @@ separate homebrew entry under `PSP/GAME/<game>/`. The script also packs each
 EBOOT with a generated PSP menu title, `ICON0.PNG`, and `PIC1.PNG` placeholder
 preview based on the game's `// @title`.
 
+For real PSP/Vita smoke testing, build a minimal diagnostic EBOOT:
+
+``` sh
+bun run psp:diag
+# -> dist/psp-diag/PSP/GAME/dreamcart-diag/EBOOT.PBP
+```
+
+It first prints boot, memory, EDRAM, and controller state through the PSP debug
+screen, then switches to a GU color-cycle loop. If a device hangs, the last
+visible line identifies the failing phase. For the normal game path with
+on-screen startup stages, build with `PSPJS_DIAG_MODE=trace bun run psp`.
+
 ## Play (one command)
 `bun run play <web|psp|3ds> [game]` builds the chosen game and launches the
 matching emulator:

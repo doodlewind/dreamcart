@@ -51,6 +51,7 @@ const cargoArgs = Bun.argv.slice(2);
 const profile = outputProfile(cargoArgs);
 const game = process.env.PSPJS_GAME ?? "raw-snake.js";
 console.log("PSP build: " + game);
+if (process.env.PSPJS_DIAG_MODE) console.log("PSP diag mode: " + process.env.PSPJS_DIAG_MODE);
 if (!rustup) {
   console.error("rustup not found; run `bun run bootstrap` first");
   process.exit(1);

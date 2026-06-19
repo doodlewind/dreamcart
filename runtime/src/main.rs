@@ -13,8 +13,9 @@ use core::ffi::c_void;
 
 use libquickjs_sys::*;
 use psp::sys::{
-    self, CtrlMode, DepthFunc, DisplayPixelFormat, FrontFaceDirection, GuContextType, GuState,
-    GuSyncBehavior, GuSyncMode, SceCtrlData, ShadingModel, TexturePixelFormat, ThreadAttributes,
+    self, ClearBuffer, CtrlMode, DepthFunc, DisplayPixelFormat, FrontFaceDirection, GuContextType,
+    GuState, GuSyncBehavior, GuSyncMode, SceCtrlData, ShadingModel, TexturePixelFormat,
+    ThreadAttributes,
 };
 use psp::vram_alloc::get_vram_allocator;
 use psp::{Align16, BUF_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
@@ -34,9 +35,17 @@ static mut LIST: Align16<[u32; 0x40000]> = Align16([0; 0x40000]);
 // The game source, selected at build time by `PSPJS_GAME` (see build.rs) and
 // NUL-terminated there for JS_Eval (which wants input[len] == '\0').
 static GAME_JS: &str = include_str!(concat!(env!("OUT_DIR"), "/game.js"));
+static PSPJS_GAME: &str = env!("PSPJS_GAME");
+static PSPJS_DIAG_MODE: &str = env!("PSPJS_DIAG_MODE");
 
 fn psp_main() {
-    unsafe { boot() }
+    unsafe {
+        if PSPJS_DIAG_MODE == "boot" {
+            run_boot_diag();
+        } else {
+            boot();
+        }
+    }
 }
 
 /// The `psp::module!` macro starts the main thread with only a 256 KB stack.
@@ -44,6 +53,7 @@ fn psp_main() {
 /// overflows the stack (-> abort). Run all the real work on a worker thread with
 /// a large (2 MB) stack instead. Raw demos fit in 256 KB but this is harmless.
 unsafe fn boot() {
+    trace("psp_main: creating worker thread");
     let id = sys::sceKernelCreateThread(
         b"pspjs_main\0".as_ptr(),
         worker_main,
@@ -53,38 +63,161 @@ unsafe fn boot() {
         core::ptr::null_mut(),
     );
     if id.0 >= 0 {
+        trace_i32("worker thread id", id.0);
         sys::sceKernelStartThread(id, 0, core::ptr::null_mut());
         sys::sceKernelWaitThreadEnd(id, core::ptr::null_mut());
     } else {
+        trace_i32("sceKernelCreateThread failed", id.0);
         run(); // fallback: small-stack inline (raw demos still work)
     }
 }
 
 unsafe extern "C" fn worker_main(_argc: usize, _argv: *mut c_void) -> i32 {
+    trace("worker_main: entered");
     run();
     0
 }
 
-unsafe fn run() {
+#[inline]
+fn trace_enabled() -> bool {
+    PSPJS_DIAG_MODE == "trace"
+}
+
+unsafe fn trace(msg: &str) {
+    if trace_enabled() {
+        psp::dprintln!("[pspjs trace] {}", msg);
+    }
+}
+
+unsafe fn trace_i32(label: &str, value: i32) {
+    if trace_enabled() {
+        psp::dprintln!("[pspjs trace] {}: {}", label, value);
+    }
+}
+
+unsafe fn trace_u32(label: &str, value: u32) {
+    if trace_enabled() {
+        psp::dprintln!("[pspjs trace] {}: 0x{:08x}", label, value);
+    }
+}
+
+unsafe fn trace_usize(label: &str, value: usize) {
+    if trace_enabled() {
+        psp::dprintln!("[pspjs trace] {}: {}", label, value);
+    }
+}
+
+unsafe fn diag_halt(msg: &str) -> ! {
+    psp::dprintln!("[pspjs halt] {}", msg);
+    psp::dprintln!("HOME exits. Last stage stays on screen.");
+    loop {
+        sys::sceDisplayWaitVblankStart();
+    }
+}
+
+#[inline]
+fn pack_abgr(r: u32, g: u32, b: u32) -> u32 {
+    0xff00_0000 | (b << 16) | (g << 8) | r
+}
+
+/// Real-device smoke test: show text before GU, then switch to a color-cycling
+/// GU loop. If a Vita/PSP freezes, the last visible line identifies the phase.
+unsafe fn run_boot_diag() -> ! {
     psp::enable_home_button();
 
+    psp::dprintln!("DreamCart PSP boot diag");
+    psp::dprintln!("game: {}", PSPJS_GAME);
+    psp::dprintln!("devkit: 0x{:08x}", sys::sceKernelDevkitVersion());
+    psp::dprintln!(
+        "free mem: {} / max block: {}",
+        sys::sceKernelTotalFreeMemSize(),
+        sys::sceKernelMaxFreeMemSize()
+    );
+    psp::dprintln!("edram: {:p}", sys::sceGeEdramGetAddr());
+
+    sys::sceCtrlSetSamplingCycle(0);
+    sys::sceCtrlSetSamplingMode(CtrlMode::Analog);
+    let mut pad = SceCtrlData::default();
+    for tick in 0..180 {
+        sys::sceCtrlReadBufferPositive(&mut pad, 1);
+        if tick % 30 == 0 {
+            psp::dprintln!(
+                "text phase {:03}: buttons=0x{:08x} lx={} ly={}",
+                tick,
+                pad.buttons.bits(),
+                pad.lx,
+                pad.ly
+            );
+        }
+        sys::sceDisplayWaitVblankStart();
+    }
+
+    psp::dprintln!("starting GU phase");
+    psp::dprintln!("expect cycling solid colors next");
+    for _ in 0..90 {
+        sys::sceDisplayWaitVblankStart();
+    }
+
     init_graphics();
+
+    let mut frame: u32 = 0;
+    loop {
+        sys::sceCtrlReadBufferPositive(&mut pad, 1);
+        let buttons = pad.buttons.bits();
+        let r = ((frame * 3) & 0xff) ^ (buttons & 0xff);
+        let g = ((frame * 5) & 0xff) ^ ((buttons >> 8) & 0xff);
+        let b = ((frame * 7) & 0xff) ^ ((buttons >> 16) & 0xff);
+
+        sys::sceGuStart(GuContextType::Direct, &mut LIST as *mut _ as *mut c_void);
+        sys::sceGuClearColor(pack_abgr(r, g, b));
+        sys::sceGuClear(ClearBuffer::COLOR_BUFFER_BIT);
+        sys::sceGuFinish();
+        sys::sceGuSync(GuSyncMode::Finish, GuSyncBehavior::Wait);
+        sys::sceDisplayWaitVblankStart();
+        sys::sceGuSwapBuffers();
+        frame = frame.wrapping_add(1);
+    }
+}
+
+unsafe fn run() {
+    trace("run: enabling HOME callback");
+    psp::enable_home_button();
+
+    trace("run: init_graphics begin");
+    init_graphics();
+    trace("run: init_graphics ok");
 
     // ---- Controller ----
     sys::sceCtrlSetSamplingCycle(0);
     sys::sceCtrlSetSamplingMode(CtrlMode::Analog);
     let mut pad = SceCtrlData::default();
+    trace("run: controller ok");
 
     // ---- QuickJS: runtime, context, native API, evaluate the game ----
     // Use the Rust/PSP allocator (newlib malloc has no heap under rust-psp).
+    trace_usize("run: free mem before JS", sys::sceKernelTotalFreeMemSize());
+    trace("run: JS_NewRuntime begin");
     let rt = qjs_alloc::new_runtime();
+    if rt.is_null() {
+        diag_halt("JS_NewRuntime returned null");
+    }
+    trace("run: JS_NewRuntime ok");
     let ctx = JS_NewContext(rt);
+    if ctx.is_null() {
+        diag_halt("JS_NewContext returned null");
+    }
+    trace("run: JS_NewContext ok");
     let global = JS_GetGlobalObject(ctx);
+    trace("run: global object ok");
 
+    trace("run: register gfx");
     gfx::register(ctx, global);
+    trace("run: register gfx3d");
     gfx3d::register(ctx, global);
+    trace("run: register bridge");
     bridge::register(ctx, global);
 
+    trace("run: JS_Eval begin");
     let res = JS_Eval(
         ctx,
         GAME_JS.as_ptr() as *const _,
@@ -94,16 +227,30 @@ unsafe fn run() {
     );
     if JS_ValueGetTag(res) == JS_TAG_EXCEPTION {
         bridge::log_exception(ctx);
+        if trace_enabled() {
+            diag_halt("JS_Eval threw an exception");
+        }
     }
     JS_FreeValue(ctx, res);
+    trace("run: JS_Eval ok");
 
     // Look up globalThis.frame once; keep it alive for the whole loop.
     let frame_fn = JS_GetPropertyStr(ctx, global, b"frame\0".as_ptr() as *const _);
+    if JS_IsUndefined(frame_fn) {
+        if trace_enabled() {
+            diag_halt("globalThis.frame is undefined");
+        }
+    }
+    trace("run: frame lookup ok");
 
     // ---- Fixed-timestep frame loop (~60Hz via vblank) ----
+    let mut frame_count: u32 = 0;
     loop {
         sys::sceCtrlReadBufferPositive(&mut pad, 1);
         let mask = pad.buttons.bits() as i32;
+        if trace_enabled() && frame_count < 4 {
+            trace_u32("frame buttons", pad.buttons.bits());
+        }
 
         // Open this frame's display list; JS gfx.* calls enqueue into it.
         sys::sceGuStart(GuContextType::Direct, &mut LIST as *mut _ as *mut c_void);
@@ -112,6 +259,9 @@ unsafe fn run() {
         let r = JS_Call(ctx, frame_fn, global, 1, args.as_mut_ptr());
         if JS_ValueGetTag(r) == JS_TAG_EXCEPTION {
             bridge::log_exception(ctx);
+            if trace_enabled() {
+                diag_halt("frame(buttons) threw an exception");
+            }
         }
         JS_FreeValue(ctx, r); // free the return value every frame (leak guard)
 
@@ -120,6 +270,7 @@ unsafe fn run() {
         sys::sceGuSync(GuSyncMode::Finish, GuSyncBehavior::Wait);
         sys::sceDisplayWaitVblankStart();
         sys::sceGuSwapBuffers();
+        frame_count = frame_count.wrapping_add(1);
     }
 }
 
