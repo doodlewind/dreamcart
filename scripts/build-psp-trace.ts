@@ -39,7 +39,7 @@ if (cargoArgs.includes("--help") || cargoArgs.includes("-h")) {
 console.log(`Building PSP trace EBOOT for ${game}...`);
 await $`bun ${join(root, "runtime/build.ts")} ${cargoArgs}`.env({
   ...process.env,
-  PSPJS_DIAG_MODE: "trace",
+  PSPJS_TRACE: "1",
   PSPJS_GAME: game,
 });
 
