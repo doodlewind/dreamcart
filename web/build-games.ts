@@ -33,6 +33,16 @@ export async function buildGames(): Promise<number> {
     // raw games are self-contained, so source == what runs.
     const src = isFw ? await Bun.file(srcPath).text() : await Bun.file(runDir + f).text();
     const meta = parseMeta(src);
+    // Per-game binary asset pack (docs/dcpak-format.md), embedded base64 so the
+    // playground needs no extra fetch; engine.js decodes it to __dcpak before eval.
+    // Empty (32-byte header) and missing packs are omitted to keep the manifest
+    // small — asset-free games read nothing.
+    const pakPath = runDir + name + ".dcpak";
+    let dcpak = "";
+    if (existsSync(pakPath)) {
+      const bytes = new Uint8Array(await Bun.file(pakPath).arrayBuffer());
+      if (bytes.length > 32) dcpak = Buffer.from(bytes).toString("base64");
+    }
     games[f] = {
       title: meta.title ?? name,
       order: meta.order ?? 99,
@@ -41,6 +51,7 @@ export async function buildGames(): Promise<number> {
       run: await Bun.file(runDir + f).text(),
       src,
       lang: "js", // everything authored in JS now
+      dcpak, // base64 .dcpak ("" when the game has no baked assets)
     };
   }
   await Bun.write(

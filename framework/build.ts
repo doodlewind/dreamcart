@@ -3,11 +3,13 @@
 // Games are authored in plain JS (framework/games/*.js) and import the TS SDK
 // from framework/src; Bun resolves the .ts SDK while bundling the .js entry.
 // Run: bun framework/build.ts
-import { readdirSync, mkdirSync } from "node:fs";
+import { readdirSync, mkdirSync, existsSync } from "node:fs";
+import { unpack, subset } from "./bake/dcpak";
 
 const here = new URL(".", import.meta.url).pathname;
 const gamesDir = here + "games/";
 const outDir = here + "../runtime/src/game/";
+const storePath = here + "src/assets.dcstore";
 mkdirSync(outDir, { recursive: true });
 
 const entrypoints = readdirSync(gamesDir)
@@ -33,3 +35,25 @@ if (!result.success) {
   process.exit(1);
 }
 console.log("bundled", entrypoints.length, "framework game(s) -> runtime/src/game/");
+
+// Per-game asset pack: subset the binary master store (assets.dcstore) into a
+// <name>.dcpak holding only the blobs whose key string survives into the bundle.
+// Bun (minify:false) keeps the dc*('module:path') key literals verbatim, so an
+// includes() check tree-shakes the assets exactly like the old base64 modules did.
+// Every game gets a pack (empty when it imports no baked assets) so each host has
+// a uniform artifact to load next to <name>.js.
+const store = existsSync(storePath) ? unpack(new Uint8Array(await Bun.file(storePath).arrayBuffer())) : [];
+// Match the QUOTED literal form (dc*("module:key") / '...') rather than the bare
+// key, so a key can never be a substring of another key and over-include its blob.
+// Keys never contain quotes, so the bounded match has no false positives or
+// negatives under Bun's non-minified output (which preserves the literals verbatim).
+const presentIn = (bundle: string, key: string): boolean =>
+  bundle.includes(`"${key}"`) || bundle.includes(`'${key}'`);
+for (const entry of entrypoints) {
+  const name = entry.slice(gamesDir.length, -3); // strip dir + ".js"
+  const bundle = await Bun.file(outDir + name + ".js").text();
+  const pak = subset(store, (key) => presentIn(bundle, key));
+  await Bun.write(outDir + name + ".dcpak", pak);
+  const used = store.filter((b) => presentIn(bundle, b.key)).length;
+  if (used > 0) console.log(`  ${name}.dcpak: ${used} blob(s), ${(pak.length / 1024).toFixed(1)} KB`);
+}

@@ -629,10 +629,28 @@
     try { delete window.frame; } catch (e) { window.frame = undefined; }
   }
 
-  // Load (or reload) a game from source. Returns null on success, else an error.
-  function load(src) {
+  // Decode a base64 string (the manifest's per-game dcpak) into an ArrayBuffer.
+  function b64ToArrayBuffer(b64) {
+    if (!b64) return undefined;
+    var bin = atob(b64);
+    var n = bin.length;
+    var u8 = new Uint8Array(n);
+    for (var i = 0; i < n; i++) u8[i] = bin.charCodeAt(i);
+    return u8.buffer;
+  }
+
+  // Load (or reload) a game from source. `dcpak` is the game's binary asset pack
+  // (base64 string from the manifest, or an ArrayBuffer). Returns null on success.
+  function load(src, dcpak) {
     stop();
     installGlobals();
+    // Expose the asset pack as globalThis.__dcpak BEFORE eval (the baked asset
+    // modules read it at module-eval time). See docs/dcpak-format.md. Set every
+    // load — to the decoded pack, or undefined for asset-free games — so a stale
+    // pack never carries across a reload.
+    try {
+      window.__dcpak = (dcpak instanceof ArrayBuffer) ? dcpak : b64ToArrayBuffer(dcpak);
+    } catch (e) { window.__dcpak = undefined; }
     // Run the game body in a fresh function scope so its top-level vars don't
     // leak or collide on reload; the game assigns globalThis.frame itself.
     try {
