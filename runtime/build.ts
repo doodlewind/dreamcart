@@ -14,7 +14,15 @@ const TOOLCHAIN = "nightly-2026-05-28";
 const rustup = Bun.which("rustup") ?? (existsSync(`${home}/.cargo/bin/rustup`) ? `${home}/.cargo/bin/rustup` : null);
 const rustflags = [
   process.env.RUSTFLAGS,
-  process.env.PSPJS_SUPPRESS_LINKER_MESSAGES === "1" ? "-A linker-messages" : undefined,
+  // The prebuilt PSPSDK newlib (libc.a/libm.a) is compiled +abicalls, while the
+  // rust-psp target is +noabicalls. rust-lld's `linker_messages` lint (warn by
+  // default since the 2026 nightly) then floods one "linking abicalls code with
+  // non-abicalls code" warning PER newlib object — a benign, structural property
+  // of the rust-psp + PSPSDK combination that has always held (the EBOOT links
+  // and runs). Suppress it by DEFAULT so the noise can't bury a real linker
+  // message; set PSPJS_SHOW_LINKER_MESSAGES=1 to inspect raw linker output. Real
+  // link failures (undefined symbols, etc.) are hard errors, unaffected by this.
+  process.env.PSPJS_SHOW_LINKER_MESSAGES === "1" ? undefined : "-A linker-messages",
   "-A unexpected-cfgs",
   "-A unstable-name-collisions",
 ].filter(Boolean).join(" ");
