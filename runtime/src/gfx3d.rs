@@ -261,6 +261,10 @@ unsafe fn apply_texture(tex_table: &[TextureEntry], th: u32) {
         sys::sceGuTexImage(MipmapLevel::None, t.w, t.h, t.tbw, t.pixels.as_ptr() as *const c_void);
         sys::sceGuTexFunc(TextureEffect::Modulate, TextureColorComponent::Rgba);
         sys::sceGuTexFilter(TextureFilter::Linear, TextureFilter::Linear);
+        // REPEAT both axes explicitly (it is the GE default, but the Web host must be
+        // set to match — see web/engine.js — so pin it here too rather than rely on
+        // the default). World-space UVs (BSP texel units, tiled facades) exceed [0,1].
+        sys::sceGuTexWrap(sys::GuTexWrapMode::Repeat, sys::GuTexWrapMode::Repeat);
         sys::sceGuTexScale(1.0, 1.0);
         sys::sceGuTexOffset(0.0, 0.0);
     }

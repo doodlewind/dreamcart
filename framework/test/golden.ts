@@ -137,6 +137,9 @@ const SPECS: { name: string; frames: number; input?: (f: number) => number }[] =
   { name: "fps3d", frames: 180, input: (f) => (f < 40 ? 0x20 : f < 110 ? 0x10 : 0x80) | (f % 24 === 0 ? 0x4000 : 0) },
   // bsp: walk the BSP-imported box room (D-pad UP, then strafe, then run).
   { name: "bsp3d", frames: 90, input: (f) => (f < 30 ? 0x10 : f < 60 ? 0x10 | 0x20 : 0x8000 | 0x10) },
+  // bsp-compare: static ground-truth pose (no input) — the committable structure golden
+  // that the WebGL/PPSSPP ground-truth harness (framework/test/bsp-compare/) compares to.
+  { name: "bsp-compare", frames: 2 },
 ];
 
 let pass = 0, fail = 0, skipped = 0;

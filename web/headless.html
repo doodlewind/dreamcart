@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>bsp ground-truth headless</title>
+<!--
+  Headless single-frame renderer for the BSP ground-truth harness
+  (framework/test/bsp-compare/). Loads the SAME web runtime (engine.js, WebGL2 g3d
+  host) the playground uses, runs the static bsp-compare game, and exposes a stable
+  480x272 frame for Playwright/Chrome readback. ?map=box (default) selects the map.
+-->
+<style>html,body{margin:0;background:#000}#screen{width:480px;height:272px;image-rendering:pixelated}</style>
+<canvas id="screen" width="480" height="272"></canvas>
+<script src="engine.js"></script>
+<script src="games.generated.js"></script>
+<script>
+  (function () {
+    try {
+      PSPJS.mount(document.getElementById('screen'));
+      var map = new URLSearchParams(location.search).get('map') || 'box';
+      window.__BSP_MAP = map; // bsp-compare reads globalThis.__BSP_MAP at load time
+      var g = (window.GAMES || {})['bsp-compare.js'];
+      if (!g) { window.__error = 'bsp-compare.js not in GAMES'; return; }
+      var err = PSPJS.load(g.run); // draws one frame immediately
+      if (err) { window.__error = String(err && err.message || err); return; }
+      PSPJS.start();
+      // The scene is static; let a few frames settle, then signal ready.
+      var n = 0;
+      (function spin() { if (++n > 8) { window.__ready = true; return; } requestAnimationFrame(spin); })();
+    } catch (e) { window.__error = String(e && e.message || e); }
+  })();
+</script>
