@@ -18,6 +18,9 @@
       var q = new URLSearchParams(location.search);
       window.__BSP_MAP = q.get('map') || 'box'; // bsp-compare reads globalThis.__BSP_MAP at load time
       window.__BSP_VIEW = q.get('view') || '';   // '', 'overhead', or 'hero' (local diagnostics)
+      if (q.get('cap')) window.__BSP_CAPTURE = 1; // bsp3d capture mode: frame-indexed camera path
+      // After `frames` rAFs the engine's frame index == frames, so capturePose(frames) is
+      // the shot pose — load with frames=N to render pose N of the sequence (seq-capture.ts).
       var gameKey = q.get('game') || 'bsp-compare.js';
       var heldBtn = parseInt(q.get('hold') || '0', 10) | 0; // hold a button mask each frame
       var settle = parseInt(q.get('frames') || '8', 10) | 0;

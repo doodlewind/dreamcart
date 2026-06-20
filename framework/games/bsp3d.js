@@ -26,6 +26,12 @@ import { BSP_BOX as BSP } from '../src/assets-bsp-box';
 /** @param {number} v @param {number} a @param {number} b @returns {number} */
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
+// Capture mode (set by the PSP runtime's `capture` feature, or headless.html?cap=1 /
+// the oracle on web): ignore input and drive the camera from a deterministic,
+// frame-indexed path so the SAME pose renders on every host (PSP / WebGL / oracle) and a
+// whole camera sweep can be diffed frame-by-frame to surface motion flicker/jump.
+const CAPTURE = !!(/** @type {any} */ (globalThis).__BSP_CAPTURE);
+
 /**
  * Small-tile ground grid (one mesh) — guard-band-safe + follows the camera.
  * @param {number} n @param {number} step @param {number} color
@@ -122,6 +128,9 @@ class BspScene extends Scene {
       rotation: Quat.fromEuler(-HALF_PI, 0, 0),
       scale: new Vec3(THREE_SOLDIER.scale, THREE_SOLDIER.scale, THREE_SOLDIER.scale),
     }));
+    // Capture mode isolates MAP rendering: hide the soldier so its (bit-inexact rsqrt)
+    // skinning doesn't pollute the frame-by-frame diff.
+    if (CAPTURE) this.actor.visible = false;
 
     this.total = this.world.root.children.length;
     this.reset();
@@ -147,9 +156,32 @@ class BspScene extends Scene {
     this._lastNow = t;
   }
 
+  /**
+   * Deterministic, input-free camera path for capture mode: stand at the spawn and sweep
+   * the orbit yaw, frame-indexed so frame N is byte-identical across hosts. The yaw motion
+   * is exactly the camera movement that provokes the flicker/jump bugs we're hunting.
+   * @param {UpdateContext} ctx
+   */
+  capturePose(ctx) {
+    // Pose is a pure function of the frame index. On PSP that's ctx.frame (the dumped
+    // frame); on WebGL the harness pins __capFrameOverride per shot so the SAME pose
+    // renders regardless of how many rAFs the page happened to tick (exact alignment).
+    const g = /** @type {any} */ (globalThis);
+    const ov = g.__capFrameOverride;
+    const f = (ov === undefined || ov === null) ? ctx.frame : ov;
+    this.st.x = BSP.spawn[0];
+    this.st.z = BSP.spawn[1];
+    this.st.y = floorAt(this.floors, this.st.x, this.st.z, BSP.spawnY, BSP.spawnY);
+    this.camYaw = BSP.spawn[2] + f * 0.06; // ~0.06 rad/frame yaw sweep
+    g.__renderedFrame = f; // handshake: the harness waits for this to equal its target pose
+  }
+
   /** @param {UpdateContext} ctx */
   update(ctx) {
     this.measureFps();
+    if (CAPTURE) {
+      this.capturePose(ctx);
+    } else {
     const inp = ctx.input;
     if (inp.pressed(Btn.Start)) this.reset();
     const run = inp.held(Btn.Square);
@@ -172,6 +204,7 @@ class BspScene extends Scene {
     const clip = !moving ? THREE_SOLDIER.clips.Idle : run ? THREE_SOLDIER.clips.Run : THREE_SOLDIER.clips.Walk;
     if (this.soldier.player.clip !== clip) this.soldier.play(clip);
     this.soldier.player.advance(ctx.dt * (run ? 1.4 : 1.0));
+    }
 
     // Stand on the real floor under the player (smoothed for steps/ramps).
     const targetY = floorAt(this.floors, this.st.x, this.st.z, this.st.y, this.st.y);
@@ -194,6 +227,7 @@ class BspScene extends Scene {
 
   /** @param {Graphics} g */
   draw(g) {
+    if (CAPTURE) return; // no HUD text in captured frames (keeps the diff to map pixels)
     const drawn = this.total - this.world.culledCount;
     g.text('BSP MAP 3D', 8, 8, Colors.white, 1);
     g.text(BSP.title, 8, 20, Colors.yellow, 1);
