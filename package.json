@@ -20,6 +20,7 @@
     "psp:trace": "bun scripts/build-psp-trace.ts",
     "psp:all": "bun scripts/build-psp-all.ts",
     "bsp": "bun scripts/bsp-map.ts",
+    "bsp-loop": "bun framework/test/bsp-compare/run.ts",
     "3ds": "bun runtime-3ds/build.ts",
     "android": "bun android/sync-assets.ts && (cd android && ./gradlew :app:assembleDebug)",
     "android:install": "cd android && ./gradlew :app:installDebug && adb shell am start -n games.dreamcart/.MainActivity"

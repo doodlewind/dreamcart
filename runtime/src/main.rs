@@ -200,6 +200,24 @@ unsafe fn run() {
         sys::sceDisplayWaitVblankStart();
         sys::sceGuSwapBuffers();
         frame_count = frame_count.wrapping_add(1);
+
+        // Capture build only: hand the just-presented display framebuffer to the
+        // PPSSPP headless host for ground-truth comparison (the "emulator:" device's
+        // EMIT_SCREENSHOT=0x20 devctl). Harmless no-op everywhere else. Settle a few
+        // frames first so boot / first-upload transients aren't what gets captured.
+        #[cfg(feature = "capture")]
+        {
+            if frame_count >= 4 {
+                sys::sceIoDevctl(
+                    b"emulator:\0".as_ptr(),
+                    0x20,
+                    core::ptr::null_mut(),
+                    0,
+                    core::ptr::null_mut(),
+                    0,
+                );
+            }
+        }
     }
 }
 

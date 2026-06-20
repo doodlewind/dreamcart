@@ -25,6 +25,21 @@ await $`bun ${dir}/webgl-shoot.ts`.cwd(root).env(env);
 console.log(`# structural diff: WebGL vs oracle (geometry coverage) ...`);
 await $`bun ${dir}/diff.ts ${dir}/${map}.webgl.png ${dir}/${map}.oracle.png --structural --out ${dir}/${map}.struct`.cwd(root).nothrow();
 
+// Textured HOST gate: capture what the PSP engine actually renders (PPSSPP) and diff it
+// against the WebGL ground truth. This closes the loop. Opt out with BSP_HOST=0 (e.g. on
+// a machine with no emulator); a capture failure degrades to the manual hint, the WebGL/
+// oracle legs above still succeed.
+if (process.env.BSP_HOST !== '0') {
+  console.log(`\n# capturing PPSSPP frame (backend=${process.env.CAPTURE_BACKEND || 'auto'}) ...`);
+  const cap = await $`bun ${dir}/ppsspp-shoot.ts`.cwd(root).env(env).nothrow();
+  if (cap.exitCode === 0) {
+    console.log(`# host gate: WebGL vs PPSSPP (textured) ...`);
+    await $`bun ${dir}/diff.ts ${dir}/${map}.webgl.png ${dir}/${map}.ppsspp.png --out ${dir}/${map}.host`.cwd(root).nothrow();
+    console.log(`\nhost gate -> ${dir}/${map}.host.{score.json,heatmap.png,sidebyside.png}`);
+  } else {
+    console.log(`\n! PPSSPP capture unavailable (exit ${cap.exitCode}). Capture manually per ${dir}/ppsspp-capture.md, then:`);
+    console.log(`  bun ${dir}/diff.ts ${dir}/${map}.webgl.png ${dir}/${map}.ppsspp.png --out ${dir}/${map}.host`);
+  }
+}
+
 console.log(`\nWebGL ground truth -> ${dir}/${map}.webgl.png`);
-console.log(`For the textured host gate, capture PPSSPP per ${dir}/ppsspp-capture.md, then:`);
-console.log(`  bun ${dir}/diff.ts ${dir}/${map}.webgl.png ${dir}/${map}.ppsspp.png --out ${dir}/${map}.host`);
