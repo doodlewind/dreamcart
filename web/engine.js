@@ -40,6 +40,10 @@
     return 'rgb(' + (r & 255) + ',' + (g & 255) + ',' + (b & 255) + ')';
   }
 
+  // VN glyph atlas slots (gfx.vnUploadFont / gfx.vnDrawGlyphs), mirroring the
+  // PSP runtime/src/gfx.rs native path on Canvas2D.
+  var vnFonts = [null, null];
+
   // The native API exposed to the game (mirrors the Rust/C bridges).
   var gfx = {
     clear: function (r, g, b) {
@@ -53,6 +57,33 @@
     fillRect: function (x, y, w, h, r, g, b) {
       ctx.fillStyle = rgb(r, g, b);
       ctx.fillRect(x | 0, y | 0, w | 0, h | 0);
+    },
+    vnUploadFont: function (slot, rows, count, cellW, cellH, bpr) {
+      if (slot < 0 || slot > 1) return;
+      vnFonts[slot] = { rows: new Uint8Array(rows), count: count, cellW: cellW, cellH: cellH, bpr: bpr };
+    },
+    vnDrawGlyphs: function (slot, glyphs, count, rgbv) {
+      var f = vnFonts[slot | 0];
+      if (!f) return;
+      var v = new Int32Array(glyphs);
+      var rows = f.rows, cw = f.cellW, ch = f.cellH, bpr = f.bpr, stride = bpr * ch;
+      ctx.fillStyle = rgb((rgbv >> 16) & 255, (rgbv >> 8) & 255, rgbv & 255);
+      for (var i = 0; i < count; i++) {
+        var id = v[i * 3];
+        if (id <= 0 || id >= f.count) continue;
+        var gx = v[i * 3 + 1], gy = v[i * 3 + 2], cell = id * stride;
+        for (var ry = 0; ry < ch; ry++) {
+          var row = cell + ry * bpr, col = 0;
+          while (col < cw) {
+            if (rows[row + (col >> 3)] & (0x80 >> (col & 7))) {
+              var run = 1;
+              while (col + run < cw && rows[row + ((col + run) >> 3)] & (0x80 >> ((col + run) & 7))) run++;
+              ctx.fillRect(gx + col, gy + ry, run, 1);
+              col += run;
+            } else col++;
+          }
+        }
+      }
     },
   };
 

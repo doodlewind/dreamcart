@@ -145,6 +145,20 @@ struct Glyph {
 static mut FONT: Option<[Glyph; 128]> = None;
 static mut FONT_HEIGHT: i32 = 8;
 
+/// A large variable-cell bitmap font (the VN Japanese atlas), uploaded once per
+/// slot from JS (gfx.vnUploadFont). Glyphs are fixed cellW×cellH 1-bit cells,
+/// MSB = leftmost pixel, indexed by glyph id (id 0 reserved BLANK). The atlas
+/// can be tens of KB so it lives on the heap, not in a fixed static array.
+struct VnFont {
+    cell_w: i32,
+    cell_h: i32,
+    bpr: i32, // bytes per row
+    count: i32,
+    rows: alloc::vec::Vec<u8>,
+}
+// Two slots: 0 = base size, 1 = ruby (furigana) size.
+static mut VN_FONTS: [Option<VnFont>; 2] = [None, None];
+
 /// Push one screen-clipped sprite rect into `SPRITES` at slot `n`; returns the
 /// next slot (unchanged if fully off-screen or the scratch is full).
 #[inline]
@@ -292,6 +306,119 @@ unsafe extern "C" fn js_gfx_draw_text(
     JS_NewInt32(ctx, maxw)
 }
 
+/// `gfx.vnUploadFont(slot, rows: ArrayBuffer, count, cellW, cellH, bpr)` — install
+/// one VN glyph atlas slot. `rows` is `count` cells × `cellH` rows × `bpr` bytes,
+/// each row a 1-bit mask (MSB = leftmost pixel). Copied onto the heap so it
+/// outlives the JS ArrayBuffer. slot 0 = base, slot 1 = ruby.
+unsafe extern "C" fn js_gfx_vn_upload_font(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 6 {
+        return JS_UNDEFINED;
+    }
+    let slot = arg_i32(ctx, argc, argv, 0);
+    if slot < 0 || slot > 1 {
+        return JS_UNDEFINED;
+    }
+    let mut len: size_t = 0;
+    let p = JS_GetArrayBuffer(ctx, &mut len, *argv.offset(1));
+    let count = arg_i32(ctx, argc, argv, 2);
+    let cell_w = arg_i32(ctx, argc, argv, 3);
+    let cell_h = arg_i32(ctx, argc, argv, 4);
+    let bpr = arg_i32(ctx, argc, argv, 5);
+    if p.is_null() || count <= 0 || cell_w <= 0 || cell_h <= 0 || bpr <= 0 {
+        return JS_UNDEFINED;
+    }
+    let need = (count * bpr * cell_h) as usize;
+    if (len as usize) < need {
+        return JS_UNDEFINED;
+    }
+    let mut v = alloc::vec::Vec::with_capacity(need);
+    for i in 0..need {
+        v.push(*p.add(i));
+    }
+    VN_FONTS[slot as usize] = Some(VnFont { cell_w, cell_h, bpr, count, rows: v });
+    JS_UNDEFINED
+}
+
+/// `gfx.vnDrawGlyphs(slot, glyphs: ArrayBuffer, count, rgb)` — draw `count` glyphs
+/// from a VN atlas slot in batched sprite draws. `glyphs` is `count` × 3 LE i32
+/// `[glyphId, x, y]`; `rgb` = 0xRRGGBB. Each glyph's 1-bit cell is rasterized to
+/// run-length rects natively (the heavy per-pixel loop stays off the JS core);
+/// the scratch is flushed and reused when it fills, so glyph count is unbounded.
+unsafe extern "C" fn js_gfx_vn_draw_glyphs(
+    ctx: *mut JSContext,
+    _this: JSValue,
+    argc: i32,
+    argv: *mut JSValue,
+) -> JSValue {
+    if argc < 4 {
+        return JS_UNDEFINED;
+    }
+    let slot = arg_i32(ctx, argc, argv, 0);
+    if slot < 0 || slot > 1 {
+        return JS_UNDEFINED;
+    }
+    let font = match VN_FONTS[slot as usize].as_ref() {
+        Some(f) => f,
+        None => return JS_UNDEFINED,
+    };
+    let mut len: size_t = 0;
+    let buf = JS_GetArrayBuffer(ctx, &mut len, *argv.offset(1));
+    if buf.is_null() {
+        return JS_UNDEFINED;
+    }
+    let want = arg_i32(ctx, argc, argv, 2).max(0) as usize;
+    let count = want.min((len as usize) / 12); // 3 i32 = 12 bytes/glyph
+    let rgb = arg_i32(ctx, argc, argv, 3) as u32;
+    let color =
+        0xff00_0000 | ((rgb & 0xff) << 16) | (((rgb >> 8) & 0xff) << 8) | ((rgb >> 16) & 0xff);
+
+    let cw = font.cell_w;
+    let ch = font.cell_h;
+    let bpr = font.bpr;
+    let stride = (bpr * ch) as usize;
+    let rows = font.rows.as_slice();
+    let mut n = 0usize;
+    for i in 0..count {
+        let o = i * 12;
+        let id = rd_i32(buf, o);
+        if id <= 0 || id >= font.count {
+            continue; // 0 = blank / out of range
+        }
+        let gx = rd_i32(buf, o + 4);
+        let gy = rd_i32(buf, o + 8);
+        let cell = id as usize * stride;
+        for ry in 0..ch {
+            let row = cell + (ry * bpr) as usize;
+            let mut col = 0i32;
+            while col < cw {
+                if rows[row + (col >> 3) as usize] & (0x80 >> (col & 7)) != 0 {
+                    let mut run = 1i32;
+                    while col + run < cw
+                        && rows[row + ((col + run) >> 3) as usize] & (0x80 >> ((col + run) & 7)) != 0
+                    {
+                        run += 1;
+                    }
+                    n = push_sprite(n, color, gx + col, gy + ry, run, 1);
+                    if n >= MAX_RECTS {
+                        flush_sprites(n);
+                        n = 0;
+                    }
+                    col += run;
+                } else {
+                    col += 1;
+                }
+            }
+        }
+    }
+    flush_sprites(n);
+    JS_UNDEFINED
+}
+
 /// `gfx.fillRects(buffer: ArrayBuffer, count)` — draw many filled rects in ONE
 /// GE draw call. `buffer` is `count` × 5 little-endian i32: `[x, y, w, h, rgb]`
 /// (rgb = 0xRRGGBB). This is the batched fast path for text (the glyph rasterizer
@@ -394,6 +521,11 @@ pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
     JS_SetPropertyStr(ctx, gfx, b"uploadFont\0".as_ptr() as *const _, f_upfont);
     let f_text = JS_NewCFunction2(ctx, Some(js_gfx_draw_text), b"drawText\0".as_ptr() as *const _, 5, JS_CFUNC_generic, 0);
     JS_SetPropertyStr(ctx, gfx, b"drawText\0".as_ptr() as *const _, f_text);
+
+    let f_vnup = JS_NewCFunction2(ctx, Some(js_gfx_vn_upload_font), b"vnUploadFont\0".as_ptr() as *const _, 6, JS_CFUNC_generic, 0);
+    JS_SetPropertyStr(ctx, gfx, b"vnUploadFont\0".as_ptr() as *const _, f_vnup);
+    let f_vndraw = JS_NewCFunction2(ctx, Some(js_gfx_vn_draw_glyphs), b"vnDrawGlyphs\0".as_ptr() as *const _, 4, JS_CFUNC_generic, 0);
+    JS_SetPropertyStr(ctx, gfx, b"vnDrawGlyphs\0".as_ptr() as *const _, f_vndraw);
 
     // JS_SetPropertyStr consumes ownership of `gfx`.
     JS_SetPropertyStr(ctx, global, b"gfx\0".as_ptr() as *const _, gfx);
