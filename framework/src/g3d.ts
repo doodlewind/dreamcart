@@ -57,6 +57,7 @@ export const OP_BIND_TEXTURE = 0x0004; // payload: u32 texHandle (0xffffffff = u
 export const OP_SET_LIGHTS = 0x0005; // payload: u32 count, u32 ambientABGR, count×{u32 colorABGR, 3 f32 dir}
 export const OP_DRAW_SKINNED = 0x0006; // OP_DRAW + u32 boneCount, then boneCount×12 f32 (3×4 bone matrices)
 export const OP_SET_FOG = 0x0007; // payload: u32 colorABGR, f32 near, f32 far (0xffffffff color = disable)
+export const OP_SET_BLEND = 0x0008; // payload: u32 mode (0 = opaque/default, 1 = additive). Additive draws skip depth-write.
 export const OP_DRAW_SKIN_ANIM = 0x0009; // native skin + native sampler: u32 skinHandle, u32 clipHandle, u32 tint, f32 phase, 16 f32 model
 
 // Vertex-format bitfield. v1 ships POS|COLOR; v2 adds NORMAL/UV/WEIGHTS.
@@ -182,6 +183,21 @@ export class CommandEncoder {
     this.view.setUint16(this.pos + 2, 1, true);
     this.pos += 4;
     this.view.setUint32(this.pos, texHandle >>> 0, true);
+    this.pos += 4;
+    this.records++;
+  }
+
+  /**
+   * Emit OP_SET_BLEND: set the framebuffer blend mode for subsequent draws.
+   * mode 0 = opaque (default; depth-write on), mode 1 = additive (src+dst, depth-write
+   * off so overlapping VFX accumulate). Sticky GE state, like bindTexture.
+   */
+  setBlend(mode: number): void {
+    this.ensure(4 + 4);
+    this.view.setUint16(this.pos, OP_SET_BLEND, true);
+    this.view.setUint16(this.pos + 2, 1, true);
+    this.pos += 4;
+    this.view.setUint32(this.pos, mode >>> 0, true);
     this.pos += 4;
     this.records++;
   }

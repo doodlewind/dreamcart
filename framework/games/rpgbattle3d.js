@@ -11,10 +11,11 @@
 // Knight model: KayKit "Character Pack: Adventurers" by Kay Lousberg — CC0 (public
 // domain). See assets/vendor/CREDITS.md. One model is baked + instanced twice.
 import {
-  start, Scene, Scene3D, Mesh, SkinnedMesh, Lighting, DirectionalLight,
-  Vec3, Quat, Colors, rgb, Btn, dsin, HALF_PI, PI,
+  start, Scene, Scene3D, Mesh, TexMeshBuilder, SkinnedMesh, Lighting, DirectionalLight,
+  Material, Texture, Vec3, Quat, Colors, rgb, Btn, dsin, HALF_PI, PI,
 } from '../src/index';
 import { RPG_HERO } from '../src/assets-rpg-hero';
+import { VFX_BOOM, VFX_SPARK } from '../src/assets-vfx';
 
 /** @import { UpdateContext, Graphics, Node3D } from '../src/index' */
 /** @typedef {{ hp: number, mp: number, atk: number, def: number, spd: number }} Stats */
@@ -33,6 +34,15 @@ function mix(a, b, t) {
   const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
   const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
   return ((ar + (br - ar) * t) | 0) << 16 | ((ag + (bg - ag) * t) | 0) << 8 | ((ab + (bb - ab) * t) | 0);
+}
+
+/** A unit camera-facing quad (XY plane, +Z) with UVs + white verts, for additive VFX. */
+function billboardQuad() {
+  const b = new TexMeshBuilder({ uv: true, normal: false });
+  const w = 0xffffff;
+  const a = b.vertex(-0.5, -0.5, 0, w, 0, 1), c = b.vertex(0.5, -0.5, 0, w, 1, 1), d = b.vertex(0.5, 0.5, 0, w, 1, 0), e = b.vertex(-0.5, 0.5, 0, w, 0, 0);
+  b.tri(a, c, d); b.tri(a, d, e);
+  return b.build();
 }
 
 /** A fighter: stats + its skinned model node + the home position it lunges from. */
@@ -85,6 +95,13 @@ class BattleScene extends Scene {
   frame = 0;
   msg = '';
   /** @type {any} */ rng = null; // ctx.rng, captured each update
+  hitStop = 0; // freeze the turn FSM for a few frames on impact (juice)
+  /** @type {any} */ vfxNode = null;
+  /** @type {Material} */ vfxMat = /** @type {any} */ (null);
+  boomTex = /** @type {Texture[]} */ ([]);
+  sparkTex = /** @type {Texture[]} */ ([]);
+  vfx = { on: false, t: 0, tex: /** @type {Texture[]} */ ([]), x: 0, y: 1.5, scale: 1 };
+  screenFlash = 0;
   /** @type {{x:number,y:number,vy:number,life:number,text:string,color:number}[]} */ dmgNums = [];
 
   /** @param {UpdateContext} ctx */
@@ -112,6 +129,14 @@ class BattleScene extends Scene {
     for (const f of [this.hero, this.enemy]) {
       f.node = this.world.add({ skinned: f.skin, position: new Vec3(f.homeX, 0, 0), rotation: Quat.fromEuler(0, f.faceYaw, 0), scale: new Vec3(RPG_HERO.scale, RPG_HERO.scale, RPG_HERO.scale), tint: f.tint });
     }
+
+    // Additive VFX billboard (one reusable quad; texture swapped per frame). Textures
+    // upload once. blend:'add' makes the premultiplied frames glow over the scene.
+    this.boomTex = VFX_BOOM.frames.map((px) => new Texture(px, VFX_BOOM.w, VFX_BOOM.h));
+    this.sparkTex = VFX_SPARK.frames.map((px) => new Texture(px, VFX_SPARK.w, VFX_SPARK.h));
+    this.vfxMat = new Material({ blend: 'add' });
+    this.vfxNode = this.world.add({ mesh: billboardQuad(), material: this.vfxMat });
+    this.vfxNode.visible = false;
 
     // Fixed 2.5D 3/4 camera framing both fighters.
     this.world.camera.lookAt(new Vec3(0, 5.2, 11), new Vec3(0, 1.6, -1), new Vec3(0, 1, 0));
@@ -166,7 +191,9 @@ class BattleScene extends Scene {
     this.target.hp = Math.max(0, this.target.hp - dmg);
     this.addDmgNum(this.target, (crit ? '!' : '') + dmg, crit ? Colors.yellow : Colors.white);
     this.target.play(CLIP.Hit_A); this.target.skin.player.time = 0;
-    this.shake = 6; this.flash = 1;
+    this.shake = crit ? 11 : 8; this.flash = 1; this.hitStop = crit ? 5 : 3; this.screenFlash = crit ? 3 : 2;
+    // additive explosion at the target's chest; spark accent on a crit
+    this.vfx = { on: true, t: 0, tex: this.boomTex, x: this.target.homeX, y: 2.0, scale: crit ? 6.0 : 4.8 };
     this.msg = (crit ? 'Critical! ' : '') + dmg + ' damage!';
     this.phase = PHASE.IMPACT; this.timer = 1;
   }
@@ -231,6 +258,16 @@ class BattleScene extends Scene {
     if (this.shake > 0.05) this.shake *= 0.8; else this.shake = 0;
     if (this.flash > 0.02) this.flash *= 0.85; else this.flash = 0;
     this.updateLunge();
+
+    // advance the additive VFX billboard (frame-stepped at ~28 fps, at the target)
+    if (this.vfx.on) {
+      this.vfx.t += ctx.dt;
+      const fr = Math.floor(this.vfx.t * 28);
+      if (fr >= this.vfx.tex.length) { this.vfx.on = false; this.vfxNode.visible = false; }
+      else { this.vfxNode.visible = true; this.vfxMat.texture = this.vfx.tex[fr]; this.vfxNode.position = new Vec3(this.vfx.x, this.vfx.y, 0.3); this.vfxNode.scale = new Vec3(this.vfx.scale, this.vfx.scale, this.vfx.scale); }
+    }
+    if (this.screenFlash > 0) this.screenFlash--;
+    if (this.hitStop > 0) { this.hitStop--; return; } // freeze the turn FSM during hit-stop
 
     switch (this.phase) {
       case PHASE.INTRO:
@@ -305,8 +342,10 @@ class BattleScene extends Scene {
     // banners
     if (this.phase === PHASE.WIN) g.textCentered('VICTORY', 240, 90, Colors.yellow, 3);
     if (this.phase === PHASE.LOSE) g.textCentered('DEFEAT', 240, 90, Colors.red, 3);
+    // impact screen-edge flash (juice)
+    if (this.screenFlash > 0) { const c = Colors.white; g.rect(0, 0, 480, 3, c); g.rect(0, 269, 480, 3, c); g.rect(0, 0, 3, 272, c); g.rect(477, 0, 3, 272, c); }
     g.text('RPG BATTLE 3D', 8, 8, Colors.white, 1);
-    g.text('KayKit CC0', 8, 258, Colors.gray, 1);
+    g.text('KayKit CC0  +  CC0 VFX', 8, 258, Colors.gray, 1);
   }
 
   /** Name + HP bar. @param {Graphics} g @param {number} x @param {number} y @param {number} w @param {Fighter} f @param {boolean} named */

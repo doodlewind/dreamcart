@@ -316,7 +316,17 @@ export class Scene3D {
       node.skinned.emit(post, world, node.tint);
     } else if (node.mesh) {
       const h = node.mesh.handle();
-      if (h >= 0 && this.dynCount < 256) {
+      if (h < 0) {
+        // skip
+      } else if (node.material?.blend === 'add') {
+        // Additive VFX: emit into the post OP stream (blend bracket) rather than the
+        // opaque dynBytes fast path, so the native host blends it after the scene.
+        const tex = node.material.texture;
+        this.bindIfChanged(tex ? tex.handle() : -1, post);
+        post.setBlend(1);
+        post.draw(h, world, node.tint);
+        post.setBlend(0);
+      } else if (this.dynCount < 256) {
         const o = this.dynCount * 76;
         const dv = this.dynView;
         dv.setInt32(o, h, true);
@@ -547,7 +557,10 @@ export class Scene3D {
       if (h >= 0) {
         const tex = node.material?.texture;
         this.bindIfChanged(tex ? tex.handle() : -1, enc);
+        const add = node.material?.blend === 'add';
+        if (add) enc.setBlend(1);
         enc.draw(h, world, node.tint);
+        if (add) enc.setBlend(0);
       }
     }
     for (const c of node.children) this.emit(c, world, enc);

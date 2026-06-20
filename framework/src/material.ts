@@ -82,9 +82,12 @@ export class Texture {
 export class Material {
   texture?: Texture;
   baseColor: Color;
+  /** 'add' = additive blend (glowy VFX); undefined = opaque. */
+  blend?: 'add';
 
-  constructor(opts: { texture?: Texture; baseColor?: Color } = {}) {
+  constructor(opts: { texture?: Texture; baseColor?: Color; blend?: 'add' } = {}) {
     this.texture = opts.texture;
     this.baseColor = opts.baseColor ?? 0xffffff;
+    this.blend = opts.blend;
   }
 }

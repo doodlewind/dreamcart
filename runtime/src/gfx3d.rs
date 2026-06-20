@@ -20,9 +20,9 @@ use core::ptr::null;
 
 use libquickjs_sys::*;
 use psp::sys::{
-    self, ClearBuffer, GuPrimitive, GuState, LightComponent, LightType, MatrixMode, MipmapLevel,
-    ScePspFMatrix4, ScePspFVector3, TextureColorComponent, TextureEffect, TextureFilter,
-    TexturePixelFormat, VertexType,
+    self, BlendFactor, BlendOp, ClearBuffer, GuPrimitive, GuState, LightComponent, LightType,
+    MatrixMode, MipmapLevel, ScePspFMatrix4, ScePspFVector3, TextureColorComponent, TextureEffect,
+    TextureFilter, TexturePixelFormat, VertexType,
 };
 use psp::Align16;
 
@@ -62,6 +62,7 @@ const OP_BIND_TEXTURE: u32 = 0x0004;
 const OP_SET_LIGHTS: u32 = 0x0005;
 const OP_DRAW_SKINNED: u32 = 0x0006;
 const OP_SET_FOG: u32 = 0x0007;
+const OP_SET_BLEND: u32 = 0x0008;
 const OP_DRAW_SKIN_ANIM: u32 = 0x0009;
 
 // Vertex-format bitfield. The GE interleaves components in a FIXED order
@@ -973,6 +974,8 @@ unsafe extern "C" fn js_g3d_submit(
     // reversed-Z convention; re-enable DepthTest defensively (a prior frame's HUD
     // pass disabled it).
     sys::sceGuEnable(sys::GuState::DepthTest);
+    sys::sceGuDisable(GuState::Blend); // opaque by default; OP_SET_BLEND toggles additive
+    sys::sceGuDepthMask(0); // 0 = depth writes ON
     sys::sceGuClearColor(BG_CLEAR_ABGR);
     sys::sceGuClearDepth(0); // reversed-Z: clear depth to 0 (far)
     sys::sceGuClear(ClearBuffer::COLOR_BUFFER_BIT | ClearBuffer::DEPTH_BUFFER_BIT);
@@ -1075,6 +1078,16 @@ unsafe extern "C" fn js_g3d_submit(
                 let far = read_f32(buf, base + 8);
                 sys::sceGuFog(near, far, color);
                 sys::sceGuEnable(GuState::Fog);
+            }
+        } else if op == OP_SET_BLEND {
+            // payload = u32 mode (0 = opaque, 1 = additive premultiplied src+dst).
+            if read_u32(buf, base) == 1 {
+                sys::sceGuEnable(GuState::Blend);
+                sys::sceGuBlendFunc(BlendOp::Add, BlendFactor::Fix, BlendFactor::Fix, 0xffff_ffff, 0xffff_ffff);
+                sys::sceGuDepthMask(1); // 1 = disable depth writes (overlapping VFX accumulate)
+            } else {
+                sys::sceGuDisable(GuState::Blend);
+                sys::sceGuDepthMask(0);
             }
         } else if op == OP_DRAW_SKINNED {
             // payload = u32 handle, u32 tintABGR, u32 boneCount, 16 f32 model,

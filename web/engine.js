@@ -76,6 +76,7 @@
   var OP_SET_LIGHTS = 0x0005;
   var OP_DRAW_SKINNED = 0x0006;
   var OP_SET_FOG = 0x0007;
+  var OP_SET_BLEND = 0x0008;
   var OP_DRAW_SKIN_ANIM = 0x0009; // v2: native-sampler skin (PSP only); web has no uploadClip so it never receives this — declared for wire-parity
   var FMT_POS = 0x0001;          // 3 x f32
   var FMT_COLOR = 0x0002;        // u32 ABGR
@@ -412,6 +413,7 @@
       gl.viewport(0, 0, W, H);
       gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
+      gl.disable(gl.BLEND); // opaque by default; OP_SET_BLEND toggles additive for VFX
       // Reversed-Z: clear depth to 0 (far), keep the GREATER (nearer) fragment.
       // Unconditional — near maps to the higher depth value with OR without
       // EXT_clip_control (see initGL). Background matches raster3d.ts.
@@ -458,6 +460,11 @@
           setLights(dv, base);
         } else if (op === OP_SET_FOG) {
           setFog(dv, base);
+        } else if (op === OP_SET_BLEND) {
+          // Additive (mode 1): premultiplied src + dst, no depth write so overlapping
+          // VFX accumulate. Mode 0: back to opaque. Textures are baked premultiplied.
+          if (dv.getUint32(base, true) === 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false); }
+          else { gl.disable(gl.BLEND); gl.depthMask(true); }
         } else if (op === OP_DRAW_SKINNED) {
           var sh = dv.getUint32(base, true);
           var st = dv.getUint32(base + 4, true) >>> 0;
