@@ -25,6 +25,7 @@ function makeGfx(buf: Uint8Array) {
       for (let xx = x0; xx < x1; xx++) { buf[o++] = r; buf[o++] = g; buf[o++] = b; buf[o++] = 255; }
     }
   };
+  const vnFonts: (MockVnFont | null)[] = [null, null];
   return {
     clear: (r: number, g: number, b: number) => put(0, 0, W, H, r, g, b),
     fillRect: (x: number, y: number, w: number, h: number, r: number, g: number, b: number) => put(x, y, w, h, r, g, b),
@@ -38,8 +39,40 @@ function makeGfx(buf: Uint8Array) {
         put(v[o], v[o + 1], v[o + 2], v[o + 3], (rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
       }
     },
+    // VN glyph atlas (gfx.vnUploadFont / vnDrawGlyphs) — same pixels as the PSP
+    // native path so any golden that exercises it is host-identical.
+    vnUploadFont: (slot: number, rows: ArrayBuffer, count: number, cellW: number, cellH: number, bpr: number) => {
+      if (slot >= 0 && slot <= 1) vnFonts[slot] = { rows: new Uint8Array(rows), count, cellW, cellH, bpr };
+    },
+    vnDrawGlyphs: (slot: number, glyphs: ArrayBuffer, count: number, rgb: number) => {
+      const f = vnFonts[slot];
+      if (!f) return;
+      const v = new Int32Array(glyphs);
+      const r = (rgb >> 16) & 255, g = (rgb >> 8) & 255, b = rgb & 255;
+      const { rows, cellW: cw, cellH: ch, bpr } = f;
+      const stride = bpr * ch;
+      for (let i = 0; i < count; i++) {
+        const id = v[i * 3];
+        if (id <= 0 || id >= f.count) continue;
+        const gx = v[i * 3 + 1], gy = v[i * 3 + 2], cell = id * stride;
+        for (let ry = 0; ry < ch; ry++) {
+          const row = cell + ry * bpr;
+          let col = 0;
+          while (col < cw) {
+            if (rows[row + (col >> 3)] & (0x80 >> (col & 7))) {
+              let run = 1;
+              while (col + run < cw && rows[row + ((col + run) >> 3)] & (0x80 >> ((col + run) & 7))) run++;
+              put(gx + col, gy + ry, run, 1, r, g, b);
+              col += run;
+            } else col++;
+          }
+        }
+      }
+    },
   };
 }
+
+interface MockVnFont { rows: Uint8Array; count: number; cellW: number; cellH: number; bpr: number }
 
 // minimal PNG encoder (for human-viewable goldens)
 const CRC = (() => {

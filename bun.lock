@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "psp-js",
+      "dependencies": {
+        "opentype.js": "^2.0.0",
+      },
       "devDependencies": {
         "@gltf-transform/core": "^4.4.0",
         "typescript": "^5.6.3",
@@ -13,6 +16,8 @@
   },
   "packages": {
     "@gltf-transform/core": ["@gltf-transform/core@4.4.0", "", { "dependencies": { "property-graph": "^4.1.0" } }, "sha512-cOPxOhHFFz5hwmix+li1+Nnq5qMV/QD3fTCsVlApxxFACtFdjkt2R/juseD4gvZ7D2c/yl6OilKH0pvI735YyQ=="],
+
+    "opentype.js": ["opentype.js@2.0.0", "", { "bin": { "ot": "bin/ot" } }, "sha512-kCyjv6xdDY1W/jLWZ/L3QhhTlKUqDZMQ5+Jdlw12b3dXkKNpYBqqlMMj0YDQPShWFTMwgZI1hG14kN3XUDSg/A=="],
 
     "pako": ["pako@1.0.11", "", {}, "sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw=="],
 

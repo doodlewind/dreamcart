@@ -27,5 +27,8 @@
     "@gltf-transform/core": "^4.4.0",
     "typescript": "^5.6.3",
     "upng-js": "^2.1.0"
+  },
+  "dependencies": {
+    "opentype.js": "^2.0.0"
   }
 }

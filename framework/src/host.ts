@@ -20,6 +20,17 @@ export interface RawGfx {
    */
   uploadFont?(table: ArrayBuffer, height: number): void;
   drawText?(str: string, x: number, y: number, rgb: number, scale: number): number;
+  /**
+   * Optional VN glyph atlas (large variable-cell Japanese font, used by the
+   * wa2 visual-novel game). `vnUploadFont` installs one slot ONCE (`rows` is
+   * `count` cells × `cellH` rows × `bpr` bytes, each row a 1-bit mask, MSB =
+   * leftmost pixel; glyph id 0 is a reserved blank). `vnDrawGlyphs` then draws
+   * `count` glyphs in batched native draws — `glyphs` is `count` × 3 LE i32
+   * `[glyphId, x, y]`, `rgb` = 0xRRGGBB. Hosts without these simply omit them
+   * (the wa2 game feature-detects and shows a fallback notice).
+   */
+  vnUploadFont?(slot: number, rows: ArrayBuffer, count: number, cellW: number, cellH: number, bpr: number): void;
+  vnDrawGlyphs?(slot: number, glyphs: ArrayBuffer, count: number, rgb: number): void;
 }
 
 declare global {
