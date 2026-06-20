@@ -23,3 +23,19 @@ https://github.com/mrdoob/three.js/blob/dev/examples/models/gltf/Soldier.glb
 
 The embedded JPEG diffuse texture was extracted and converted to PNG for
 DreamCart's deterministic offline bake. See `assets/vendor/three-soldier/LICENSE.txt`.
+
+## KayKit Knight (CC0)
+"KayKit — Character Pack: Adventurers" by Kay Lousberg (https://kaylousberg.com),
+licensed CC0 1.0 (public domain, no attribution required — credited here for provenance).
+Source: https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0
+
+Knight.glb + knight_texture.png are committed under `assets/vendor/kaykit-knight/`.
+Used by framework/games/rpgbattle3d.js (baked to assets-rpg-hero.ts, instanced as both
+the hero and the tinted enemy). See `assets/vendor/kaykit-knight/LICENSE.txt`.
+
+## Hit VFX sprite sheets (CC0)
+Additive billboard hit effects (framework/games/rpgbattle3d.js), baked by
+framework/bake/bake-vfx.ts into assets-vfx.ts. Both CC0 1.0 (public domain):
+- "Explosion Sheet" (boom3) by StumpyStrust — https://opengameart.org/content/explosion-sheet
+- "Spark effect" by kurohina — https://opengameart.org/content/spark-effect
+Committed under assets/vendor/vfx/.

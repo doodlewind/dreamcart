@@ -135,6 +135,9 @@ const SPECS: { name: string; frames: number; input?: (f: number) => number }[] =
   { name: "adventure3d", frames: 180, input: (f) => (f < 70 ? 0x10 : f < 120 ? 0x10 | 0x80 : 0x8000) | (f > 30 && f < 115 ? 0x4000 : 0) },
   // fps: turn right, walk forward, shoot a few times.
   { name: "fps3d", frames: 180, input: (f) => (f < 40 ? 0x20 : f < 110 ? 0x10 : 0x80) | (f % 24 === 0 ? 0x4000 : 0) },
+  // rpgbattle3d: turn-based duel. Per 90-frame cycle: Down to Power Strike, CROSS to
+  // confirm; the menu waits on input so the scripted edges land deterministically.
+  { name: "rpgbattle3d", frames: 360, input: (f) => { const p = f % 90; return p === 10 ? 0x40 : p === 20 || p === 50 ? 0x4000 : 0; } },
 ];
 
 let pass = 0, fail = 0, skipped = 0;

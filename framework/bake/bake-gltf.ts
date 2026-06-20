@@ -382,6 +382,7 @@ interface SkinnedBakeConfig {
   fps: number;
   boneLimit: 4 | 8;
   defaultClipName?: string;
+  clipNames?: string[]; // if set, bake ONLY these animation clips (asset packs ship dozens)
   headerLines: string[];
 }
 
@@ -591,6 +592,8 @@ async function bakeSkinned(config: SkinnedBakeConfig): Promise<void> {
   interface Clip { name: string; fps: number; frameCount: number; t: Float32Array; r: Float32Array; s: Float32Array }
   const clips: Clip[] = [];
   for (const [animIndex, anim] of root.listAnimations().entries()) {
+    // Asset packs (e.g. KayKit) ship dozens of clips; bake only the allow-listed ones.
+    if (config.clipNames && !config.clipNames.includes(anim.getName())) continue;
     // gather channels: per joint, per path, (times, values).
     const chans = anim.listChannels();
     let dur = 0;
@@ -717,9 +720,35 @@ async function bakeThreeSoldier(): Promise<void> {
   });
 }
 
+// KayKit "Knight" (Character Pack: Adventurers) — CC0. The protagonist of the 2.5D RPG
+// battle game (rpgbattle3d.js), instanced twice (hero + tinted enemy). The pack ships 76
+// clips; bake only the five combat clips to stay in the soldier-class budget.
+async function bakeRpgHero(): Promise<void> {
+  await bakeSkinned({
+    key: 'rpg-hero',
+    constName: 'RPG_HERO',
+    typePrefix: 'RpgHero',
+    sourceLabel: 'KayKit Knight (CC0)',
+    glbPath: 'kaykit-knight/Knight.glb',
+    texturePath: 'kaykit-knight/knight_texture.png',
+    textureSize: 128,
+    scale: 1.0,
+    fps: 24,
+    boneLimit: 8,
+    defaultClipName: 'Idle',
+    clipNames: ['Idle', 'Walking_A', '1H_Melee_Attack_Chop', 'Hit_A', 'Death_A'],
+    headerLines: [
+      '"KayKit Character Pack: Adventurers" Knight by Kay Lousberg — CC0 1.0 (public',
+      'domain, no attribution required). See assets/vendor/CREDITS.md. Only the five',
+      'combat clips are baked (the pack ships 76). Skinned: bone-batched for the PSP GE.',
+    ],
+  });
+}
+
 console.log('bake-gltf: baking vendored glTF assets...');
 await bakeNature();
 await bakeCar();
 await bakeFox();
 await bakeThreeSoldier();
+await bakeRpgHero();
 console.log('bake-gltf: done.');
