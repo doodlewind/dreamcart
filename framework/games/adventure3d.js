@@ -5,7 +5,7 @@
 // adventure3d.js — a compact tactical walking demo: static arena map, cover,
 // simple collision, and a skinned soldier character on the native PSP skin path.
 import {
-  start, Scene, Scene3D, Node3D, Mesh, SkinnedMesh,
+  start, Scene, Scene3D, Node3D, Mesh, MeshBuilder, SkinnedMesh,
   Vec3, Quat, Colors, rgb, Btn, dsin, dcos, PI, HALF_PI,
 } from '../src/index';
 import { THREE_SOLDIER } from '../src/assets-three-soldier';
@@ -14,6 +14,35 @@ import { THREE_SOLDIER } from '../src/assets-three-soldier';
 
 /** @param {number} v @param {number} a @param {number} b @returns {number} */
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+const GROUND_STEP = 8; // metres per ground tile (small => guard-band safe)
+const GROUND_TILES = 20; // 20×8 = 160 m grid (edge past the 62 m fog) so no void ever shows
+
+/**
+ * A flat tile-grid centred at origin (one mesh, many small quads). The chase camera
+ * can roam OUTSIDE the fixed arena floor; a single big floor plane would then leave a
+ * black void in the foreground (no floor under the camera) AND its huge triangles trip
+ * the PSP guard band. This grid follows the camera, so the floor is always under it.
+ * @param {number} n @param {number} step @param {number} color
+ */
+function gridGround(n, step, color) {
+  const b = new MeshBuilder();
+  const half = (n * step) / 2;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const x0 = -half + i * step;
+      const z0 = -half + j * step;
+      const x1 = x0 + step;
+      const z1 = z0 + step;
+      const i0 = b.vertex(x0, 0, z1, color);
+      const i1 = b.vertex(x1, 0, z1, color);
+      const i2 = b.vertex(x1, 0, z0, color);
+      const i3 = b.vertex(x0, 0, z0, color);
+      b.quad(i0, i1, i2, i3);
+    }
+  }
+  return b.build();
+}
 
 const WALL = [rgb(104, 109, 111), rgb(82, 87, 90), rgb(138, 142, 140), rgb(55, 58, 60), rgb(92, 96, 98), rgb(72, 76, 78)];
 const FLOOR = [rgb(74, 74, 70), rgb(64, 64, 61), rgb(94, 91, 82), rgb(48, 48, 46), rgb(78, 76, 70), rgb(58, 58, 55)];
@@ -25,6 +54,7 @@ class TacticalScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
   /** @type {SkinnedMesh} */ soldier = /** @type {any} */ (null);
   /** @type {Node3D} */ actor = /** @type {any} */ (null);
+  /** @type {Node3D} */ ground = /** @type {any} */ (null);
   /** @type {{ minX: number, maxX: number, minZ: number, maxZ: number }[]} */
   blockers = [];
   x = -11.5;
@@ -41,6 +71,13 @@ class TacticalScene extends Scene {
     this.world.camera.setPerspective(62, 480 / 272, 0.08, 92);
 
     this.world.fog = { color: rgb(27, 31, 34), near: 34, far: 62 };
+
+    // Camera-following ground (small tiles, one mesh) so the chase camera never
+    // reveals a floorless black void when the soldier nears an arena edge.
+    this.ground = this.world.add(new Node3D({
+      mesh: gridGround(GROUND_TILES, GROUND_STEP, FLOOR[2]),
+      position: new Vec3(0, -0.04, 0),
+    }));
 
     this.buildArena();
 
@@ -61,7 +98,7 @@ class TacticalScene extends Scene {
   }
 
   buildArena() {
-    this.addBox(0, -0.08, 0, 38, 0.16, 38, FLOOR, false);
+    // (floor is the camera-following gridGround set up in onEnter)
     this.addBox(0, 1.55, -18.6, 38.8, 3.1, 0.85, WALL);
     this.addBox(0, 1.55, 18.6, 38.8, 3.1, 0.85, WALL);
     this.addBox(-18.6, 1.55, 0, 0.85, 3.1, 38.8, WALL);
@@ -99,12 +136,7 @@ class TacticalScene extends Scene {
     node.bounds = { min: [-w / 2, -h / 2, -d / 2], max: [w / 2, h / 2, d / 2] };
     this.world.add(node);
     if (solid) {
-      this.blockers.push({
-        minX: x - w / 2,
-        maxX: x + w / 2,
-        minZ: z - d / 2,
-        maxZ: z + d / 2,
-      });
+      this.blockers.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
     }
   }
 
@@ -198,6 +230,13 @@ class TacticalScene extends Scene {
       this.z - fwdZ * 7.2,
     );
     this.world.camera.lookAt(eye, new Vec3(focus.x + fwdX * 2.4, focus.y, focus.z + fwdZ * 2.4), new Vec3(0, 1, 0));
+
+    // Keep the ground grid under the camera (snapped to its tile size so it doesn't
+    // visibly swim), so there's always floor beneath the view.
+    this.ground.position = new Vec3(
+      Math.round(eye.x / GROUND_STEP) * GROUND_STEP, -0.04,
+      Math.round(eye.z / GROUND_STEP) * GROUND_STEP,
+    );
   }
 
   /** @param {Graphics} g */

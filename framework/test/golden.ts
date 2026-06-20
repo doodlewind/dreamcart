@@ -143,6 +143,8 @@ const SPECS: { name: string; frames: number; input?: (f: number) => number }[] =
   { name: "adventure3d", frames: 180, input: (f) => (f < 70 ? 0x10 : f < 120 ? 0x10 | 0x80 : 0x8000) | (f > 30 && f < 115 ? 0x4000 : 0) },
   // fps: turn right, walk forward, shoot a few times.
   { name: "fps3d", frames: 180, input: (f) => (f < 40 ? 0x20 : f < 110 ? 0x10 : 0x80) | (f % 24 === 0 ? 0x4000 : 0) },
+  // city: walk the OSM-baked Paris streetscape toward the Arc; turn, walk, run.
+  { name: "city3d", frames: 90, input: (f) => (f < 30 ? 0x4000 : f < 60 ? 0x4000 | 0x80 : 0x8000 | 0x4000) },
 ];
 
 let pass = 0, fail = 0, skipped = 0;
