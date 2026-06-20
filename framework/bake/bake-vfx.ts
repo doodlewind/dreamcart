@@ -14,7 +14,7 @@ const vendor = ROOT + 'assets/vendor/vfx/';
 interface VfxConf { file: string; cols: number; rows: number; first: number; frames: number; size: number; }
 const VFX: Record<string, VfxConf> = {
   // StumpyStrust "Explosion Sheet" boom3 (CC0) — fiery burst; the bright opening frames.
-  BOOM: { file: 'boom3.png', cols: 8, rows: 8, first: 0, frames: 22, size: 48 },
+  BOOM: { file: 'boom3.png', cols: 8, rows: 8, first: 0, frames: 22, size: 64 },
   // kurohina "Spark effect" (CC0) — bright star-burst hit spark.
   SPARK: { file: 'spark_strip9.png', cols: 9, rows: 1, first: 0, frames: 9, size: 32 },
 };

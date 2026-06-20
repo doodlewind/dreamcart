@@ -36,11 +36,14 @@ function mix(a, b, t) {
   return ((ar + (br - ar) * t) | 0) << 16 | ((ag + (bg - ag) * t) | 0) << 8 | ((ab + (bb - ab) * t) | 0);
 }
 
-/** A unit camera-facing quad (XY plane, +Z) with UVs + white verts, for additive VFX. */
+/** A unit camera-facing quad (XY plane, +Z) with UVs + white verts, for additive VFX.
+ * Normal points up-toward-the-sun so GE hardware lighting renders it fully bright
+ * (an unlit additive sprite) on every host. */
 function billboardQuad() {
-  const b = new TexMeshBuilder({ uv: true, normal: false });
-  const w = 0xffffff;
-  const a = b.vertex(-0.5, -0.5, 0, w, 0, 1), c = b.vertex(0.5, -0.5, 0, w, 1, 1), d = b.vertex(0.5, 0.5, 0, w, 1, 0), e = b.vertex(-0.5, 0.5, 0, w, 0, 0);
+  const b = new TexMeshBuilder({ uv: true, normal: true });
+  const w = 0xffffff, nx = 0, ny = 1, nz = 0;
+  const a = b.vertex(-0.5, -0.5, 0, w, 0, 1, nx, ny, nz), c = b.vertex(0.5, -0.5, 0, w, 1, 1, nx, ny, nz),
+    d = b.vertex(0.5, 0.5, 0, w, 1, 0, nx, ny, nz), e = b.vertex(-0.5, 0.5, 0, w, 0, 0, nx, ny, nz);
   b.tri(a, c, d); b.tri(a, d, e);
   return b.build();
 }
@@ -135,8 +138,10 @@ class BattleScene extends Scene {
     this.boomTex = VFX_BOOM.frames.map((px) => new Texture(px, VFX_BOOM.w, VFX_BOOM.h));
     this.sparkTex = VFX_SPARK.frames.map((px) => new Texture(px, VFX_SPARK.w, VFX_SPARK.h));
     this.vfxMat = new Material({ blend: 'add' });
+    // Stays VISIBLE (so the native buildFlat registers it as a dynamic root — it only
+    // walks once); hidden between hits by collapsing its scale to 0, not via .visible.
     this.vfxNode = this.world.add({ mesh: billboardQuad(), material: this.vfxMat });
-    this.vfxNode.visible = false;
+    this.vfxNode.scale = new Vec3(0, 0, 0);
 
     // Fixed 2.5D 3/4 camera framing both fighters.
     this.world.camera.lookAt(new Vec3(0, 5.2, 11), new Vec3(0, 1.6, -1), new Vec3(0, 1, 0));
@@ -263,8 +268,8 @@ class BattleScene extends Scene {
     if (this.vfx.on) {
       this.vfx.t += ctx.dt;
       const fr = Math.floor(this.vfx.t * 28);
-      if (fr >= this.vfx.tex.length) { this.vfx.on = false; this.vfxNode.visible = false; }
-      else { this.vfxNode.visible = true; this.vfxMat.texture = this.vfx.tex[fr]; this.vfxNode.position = new Vec3(this.vfx.x, this.vfx.y, 0.3); this.vfxNode.scale = new Vec3(this.vfx.scale, this.vfx.scale, this.vfx.scale); }
+      if (fr >= this.vfx.tex.length) { this.vfx.on = false; this.vfxNode.scale = new Vec3(0, 0, 0); }
+      else { this.vfxMat.texture = this.vfx.tex[fr]; this.vfxNode.position = new Vec3(this.vfx.x, this.vfx.y, 0.3); this.vfxNode.scale = new Vec3(this.vfx.scale, this.vfx.scale, this.vfx.scale); }
     }
     if (this.screenFlash > 0) this.screenFlash--;
     if (this.hitStop > 0) { this.hitStop--; return; } // freeze the turn FSM during hit-stop
