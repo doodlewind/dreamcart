@@ -1,0 +1,11 @@
+KayKit — Character Pack: Adventurers
+by Kay Lousberg — https://kaylousberg.com
+
+Licensed under CC0 1.0 Universal (Public Domain Dedication).
+https://creativecommons.org/publicdomain/zero/1.0/
+
+No rights reserved. You can copy, modify, distribute and use the work, even for
+commercial purposes, without asking permission. Attribution is not required.
+
+Source: https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0
+Files: Knight.glb, knight_texture.png (the "Knight" character + its diffuse texture).
