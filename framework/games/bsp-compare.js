@@ -12,7 +12,7 @@
 // Map via globalThis.__BSP_MAP (default 'box', the committed CC0 fixture). Other maps
 // are gitignored (copyrighted) and used for manual checks only.
 import {
-  start, Scene, Scene3D, Node3D, MeshBuilder, Material, Texture, meshFromBaked, Vec3, rgb, dsin, dcos,
+  start, Scene, Scene3D, Node3D, MeshBuilder, Material, Texture, meshFromBaked, Vec3, rgb, dsin, dcos, floorAt,
 } from '../src/index';
 import { BSP_BOX } from '../src/assets-bsp-box';
 
@@ -60,12 +60,24 @@ class CompareScene extends Scene {
     world.camera.setPerspective(64, 480 / 272, 0.08, farFog * 4);
     world.fog = { color: BSP.skyColor, near: farFog * 0.6, far: farFog };
 
-    // Fixed camera at the spawn pose (deterministic via dsin/dcos).
-    const sx = BSP.spawn[0], sz = BSP.spawn[1], h = BSP.spawn[2], fy = BSP.floorY;
+    // Fixed camera at the spawn pose (deterministic via dsin/dcos), standing on the
+    // floor under the spawn (NOT the map's global-min vertex).
+    const floors = new Float32Array(BSP.floorSpans.buffer, BSP.floorSpans.byteOffset, BSP.floorSpans.byteLength >> 2);
+    const sx = BSP.spawn[0], sz = BSP.spawn[1], h = BSP.spawn[2];
+    const fy = floorAt(floors, sx, sz, BSP.spawnY, BSP.spawnY);
     const fwdX = dsin(h), fwdZ = dcos(h);
     const dist = Math.min(8.5, Math.max(3.5, BSP.span * 0.9));
-    const eye = new Vec3(sx - fwdX * dist, fy + 2.4, sz - fwdZ * dist);
-    world.camera.lookAt(eye, new Vec3(sx + fwdX * 2.0, fy + 1.4, sz + fwdZ * 2.0), new Vec3(0, 1, 0));
+    let eye = new Vec3(sx - fwdX * dist, fy + 2.4, sz - fwdZ * dist);
+    let focus = new Vec3(sx + fwdX * 2.0, fy + 1.4, sz + fwdZ * 2.0);
+    const view = /** @type {any} */ (globalThis).__BSP_VIEW;
+    if (view === 'overhead') { // local diagnostic: top-down coverage
+      eye = new Vec3(0, fy + BSP.span * 1.8, 0.01);
+      focus = new Vec3(0, fy, 0);
+    } else if (view === 'hero') { // local diagnostic: elevated 3/4 survey of the spawn area
+      eye = new Vec3(sx - fwdX * 14, fy + 16, sz - fwdZ * 14);
+      focus = new Vec3(sx + fwdX * 16, fy + 1, sz + fwdZ * 16);
+    }
+    world.camera.lookAt(eye, focus, new Vec3(0, 1, 0));
 
     // Camera-following ground + skybox, FIXED at the static camera (matches bsp3d): the
     // skybox covers the map's dropped sky-texture openings so they read as sky, not void.

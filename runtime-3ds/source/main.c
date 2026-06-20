@@ -424,6 +424,8 @@ int main(int argc, char **argv) {
         if (k & KEY_B)      mask |= 0x2000;  // CIRCLE
         if (k & KEY_X)      mask |= 0x8000;  // SQUARE
         if (k & KEY_Y)      mask |= 0x1000;  // TRIANGLE
+        if (k & KEY_L)      mask |= 0x100;   // LTRIGGER
+        if (k & KEY_R)      mask |= 0x200;   // RTRIGGER
         if (k & KEY_START)  mask |= 0x08;    // START
         if (k & KEY_SELECT) mask |= 0x01;    // SELECT
 

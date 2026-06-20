@@ -1,7 +1,7 @@
 // @ts-check
 // @title BSP Map 3D
 // @order 18
-// @controls D-PAD move (soldier turns to face); SQUARE run; O/^ orbit cam; START reset
+// @controls D-PAD walk (turns to face); SQUARE run; hold L + LEFT/RIGHT look; START reset
 // bsp3d.js — walk a GoldSrc / CS 1.6 map. The .bsp is parsed + baked by
 // framework/bake/bake-bsp.ts into assets-bsp-*.ts (worldspawn faces -> textured,
 // shade-baked sub-meshes keyed by texture, + a spawn + wall collision rects). This
@@ -14,7 +14,7 @@
 import {
   start, Scene, Scene3D, Node3D, Mesh, MeshBuilder, SkinnedMesh, meshFromBaked,
   Material, Texture, Vec3, Quat, Colors, rgb, Btn, dsin, dcos, HALF_PI,
-  walkStep,
+  walkStep, floorAt,
 } from '../src/index';
 import { THREE_SOLDIER } from '../src/assets-three-soldier';
 // Baked BSP scene — DIRECT import (never via index.ts; that would embed the blob in
@@ -75,7 +75,8 @@ class BspScene extends Scene {
   /** @type {Node3D} */ ground = /** @type {any} */ (null);
   /** @type {Node3D} */ sky = /** @type {any} */ (null);
   /** @type {Float32Array} */ aabbs = /** @type {any} */ (null);
-  /** Shared walker state. */ st = { x: 0, z: 0, heading: 0 };
+  /** @type {Float32Array} */ floors = /** @type {any} */ (null);
+  /** Shared walker state (y = floor-tracked height). */ st = { x: 0, z: 0, y: 0, heading: 0 };
   camYaw = 0;
   span = BSP.span;
   floorY = BSP.floorY;
@@ -110,6 +111,8 @@ class BspScene extends Scene {
 
     const ab = BSP.solidAABBs;
     this.aabbs = new Float32Array(ab.buffer, ab.byteOffset, ab.byteLength >> 2);
+    const fl = BSP.floorSpans;
+    this.floors = new Float32Array(fl.buffer, fl.byteOffset, fl.byteLength >> 2);
 
     this.soldier = SkinnedMesh.fromBaked(THREE_SOLDIER);
     this.soldier.play(THREE_SOLDIER.clips.Walk);
@@ -127,6 +130,8 @@ class BspScene extends Scene {
 
   reset() {
     this.st.x = BSP.spawn[0]; this.st.z = BSP.spawn[1]; this.st.heading = BSP.spawn[2];
+    // Start on the floor under the spawn entity (NOT the map's global-min vertex).
+    this.st.y = floorAt(this.floors, this.st.x, this.st.z, BSP.spawnY, BSP.spawnY);
     this.camYaw = BSP.spawn[2];
     this.soldier.play(THREE_SOLDIER.clips.Walk);
   }
@@ -147,27 +152,44 @@ class BspScene extends Scene {
     this.measureFps();
     const inp = ctx.input;
     if (inp.pressed(Btn.Start)) this.reset();
-    if (inp.held(Btn.Circle)) this.camYaw += 1.7 * ctx.dt;
-    if (inp.held(Btn.Triangle)) this.camYaw -= 1.7 * ctx.dt;
-
-    const iz = (inp.held(Btn.Up) ? 1 : 0) - (inp.held(Btn.Down) ? 1 : 0);
-    const ix = (inp.held(Btn.Right) ? 1 : 0) - (inp.held(Btn.Left) ? 1 : 0);
     const run = inp.held(Btn.Square);
+
+    // Hold L (keyboard Q/L): Left/Right orbit the camera; Up/Down still walk forward/back.
+    // Otherwise: the d-pad moves the soldier in that (camera-relative) direction and he
+    // turns to face it first. (Circle/Triangle = optional alt camera orbit.)
+    const camMode = inp.held(Btn.LTrigger);
+    if (camMode) {
+      if (inp.held(Btn.Right)) this.camYaw += 2.4 * ctx.dt;
+      if (inp.held(Btn.Left)) this.camYaw -= 2.4 * ctx.dt;
+    } else {
+      if (inp.held(Btn.Circle)) this.camYaw += 1.7 * ctx.dt;
+      if (inp.held(Btn.Triangle)) this.camYaw -= 1.7 * ctx.dt;
+    }
+    const iz = (inp.held(Btn.Up) ? 1 : 0) - (inp.held(Btn.Down) ? 1 : 0);
+    const ix = camMode ? 0 : (inp.held(Btn.Right) ? 1 : 0) - (inp.held(Btn.Left) ? 1 : 0);
     const moving = walkStep(this.st, this.aabbs, this.span - 0.5, ix, iz, run, this.camYaw, ctx.dt);
 
     const clip = !moving ? THREE_SOLDIER.clips.Idle : run ? THREE_SOLDIER.clips.Run : THREE_SOLDIER.clips.Walk;
     if (this.soldier.player.clip !== clip) this.soldier.play(clip);
     this.soldier.player.advance(ctx.dt * (run ? 1.4 : 1.0));
 
-    this.actor.position = new Vec3(this.st.x, this.floorY, this.st.z);
-    this.actor.rotation = Quat.fromEuler(0, this.st.heading, 0);
+    // Stand on the real floor under the player (smoothed for steps/ramps).
+    const targetY = floorAt(this.floors, this.st.x, this.st.z, this.st.y, this.st.y);
+    this.st.y += (targetY - this.st.y) * Math.min(1, 12 * ctx.dt);
+
+    this.actor.position = new Vec3(this.st.x, this.st.y, this.st.z);
+    // +PI: the soldier model's forward is -Z after its upright (-90° X) base rotation, so
+    // a plain heading rotation would face it 180° opposite the move direction.
+    this.actor.rotation = Quat.fromEuler(0, this.st.heading + Math.PI, 0);
 
     const camFx = dsin(this.camYaw), camFz = dcos(this.camYaw);
-    const eye = new Vec3(this.st.x - camFx * this.camDist, this.floorY + 2.4, this.st.z - camFz * this.camDist);
-    const focus = new Vec3(this.st.x + camFx * 1.5, this.floorY + 1.4, this.st.z + camFz * 1.5);
+    const eye = new Vec3(this.st.x - camFx * this.camDist, this.st.y + 2.4, this.st.z - camFz * this.camDist);
+    const focus = new Vec3(this.st.x + camFx * 1.5, this.st.y + 1.4, this.st.z + camFz * 1.5);
     this.world.camera.lookAt(eye, focus, new Vec3(0, 1, 0));
-    this.ground.position = new Vec3(Math.round(eye.x / GSTEP) * GSTEP, this.floorY - 0.05, Math.round(eye.z / GSTEP) * GSTEP);
-    this.sky.position = new Vec3(eye.x, this.floorY + 30, eye.z);
+    // Gray fallback ground follows the player's floor, just below it (fills seams/voids
+    // without masking the real textured floor it sits under).
+    this.ground.position = new Vec3(Math.round(eye.x / GSTEP) * GSTEP, this.st.y - 0.5, Math.round(eye.z / GSTEP) * GSTEP);
+    this.sky.position = new Vec3(eye.x, this.st.y + 30, eye.z);
   }
 
   /** @param {Graphics} g */
@@ -176,7 +198,7 @@ class BspScene extends Scene {
     g.text('BSP MAP 3D', 8, 8, Colors.white, 1);
     g.text(BSP.title, 8, 20, Colors.yellow, 1);
     if (this.fps > 0) g.text(this.fps + ' FPS  ' + drawn + '/' + this.total, 410 - 96, 8, Colors.yellow, 1);
-    g.text('D-PAD MOVE  [] RUN  O/^ ORBIT CAM', 8, 246, Colors.cyan, 1);
+    g.text('D-PAD WALK  [] RUN  L+LR LOOK', 8, 246, Colors.cyan, 1);
     g.text(BSP.attribution, 8, 258, Colors.gray, 1);
   }
 }

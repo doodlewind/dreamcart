@@ -14,14 +14,17 @@
   var BTN = {
     SELECT: 0x01, START: 0x08,
     UP: 0x10, RIGHT: 0x20, DOWN: 0x40, LEFT: 0x80,
+    LTRIGGER: 0x100, RTRIGGER: 0x200,
     TRIANGLE: 0x1000, CIRCLE: 0x2000, CROSS: 0x4000, SQUARE: 0x8000,
   };
 
-  // Keyboard -> button. Arrows/WASD = d-pad; Z/X/A/S = face; Enter = START.
+  // Keyboard -> button. Arrows/WASD = d-pad; Z/X/C/V = face; Q/L + E/R = L/R triggers;
+  // Enter = START.
   var KEYMAP = {
     ArrowUp: BTN.UP, ArrowRight: BTN.RIGHT, ArrowDown: BTN.DOWN, ArrowLeft: BTN.LEFT,
     KeyW: BTN.UP, KeyD: BTN.RIGHT, KeyS: BTN.DOWN, KeyA: BTN.LEFT,
     KeyZ: BTN.CROSS, KeyX: BTN.CIRCLE, KeyC: BTN.SQUARE, KeyV: BTN.TRIANGLE,
+    KeyQ: BTN.LTRIGGER, KeyL: BTN.LTRIGGER, KeyE: BTN.RTRIGGER, KeyR: BTN.RTRIGGER,
     Enter: BTN.START, Space: BTN.CROSS, ShiftRight: BTN.SELECT,
   };
 

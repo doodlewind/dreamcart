@@ -15,16 +15,20 @@
   (function () {
     try {
       PSPJS.mount(document.getElementById('screen'));
-      var map = new URLSearchParams(location.search).get('map') || 'box';
-      window.__BSP_MAP = map; // bsp-compare reads globalThis.__BSP_MAP at load time
-      var g = (window.GAMES || {})['bsp-compare.js'];
-      if (!g) { window.__error = 'bsp-compare.js not in GAMES'; return; }
+      var q = new URLSearchParams(location.search);
+      window.__BSP_MAP = q.get('map') || 'box'; // bsp-compare reads globalThis.__BSP_MAP at load time
+      window.__BSP_VIEW = q.get('view') || '';   // '', 'overhead', or 'hero' (local diagnostics)
+      var gameKey = q.get('game') || 'bsp-compare.js';
+      var heldBtn = parseInt(q.get('hold') || '0', 10) | 0; // hold a button mask each frame
+      var settle = parseInt(q.get('frames') || '8', 10) | 0;
+      var g = (window.GAMES || {})[gameKey];
+      if (!g) { window.__error = gameKey + ' not in GAMES'; return; }
       var err = PSPJS.load(g.run); // draws one frame immediately
       if (err) { window.__error = String(err && err.message || err); return; }
+      if (heldBtn) PSPJS.pressVirtual(heldBtn, true);
       PSPJS.start();
-      // The scene is static; let a few frames settle, then signal ready.
       var n = 0;
-      (function spin() { if (++n > 8) { window.__ready = true; return; } requestAnimationFrame(spin); })();
+      (function spin() { if (++n > settle) { window.__ready = true; return; } requestAnimationFrame(spin); })();
     } catch (e) { window.__error = String(e && e.message || e); }
   })();
 </script>
