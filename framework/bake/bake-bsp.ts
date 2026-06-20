@@ -105,6 +105,9 @@ const visible: FaceOut[] = [];
 const texArea = new Map<number, number>(); // miptex index -> total engine area (for the keep cap)
 for (let fi = m0.firstface; fi < m0.firstface + m0.numfaces; fi++) {
   const f = bsp.faces[fi];
+  // Drop sky/no-lightmap brush faces (TEX_SPECIAL) — they show the sky, which the
+  // runtime's camera-following skybox renders. (de_dust2's ~1356 dropped faces are all
+  // the "sky" texture; the runtime covers those openings, so they are NOT holes.)
   if (bsp.isSpecial(f)) continue;
   const ti = bsp.texinfos[f.texinfo];
   if (!ti) continue;
