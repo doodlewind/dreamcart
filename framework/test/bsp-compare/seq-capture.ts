@@ -38,20 +38,37 @@ rmSync(seq, { recursive: true, force: true });
 mkdirSync(seq, { recursive: true });
 
 // --- 1. Build the bsp3d capture EBOOT (frame-indexed path, soldier hidden, no HUD). ---
-console.log('# bundling + building bsp3d capture EBOOT ...');
-await $`bun framework/build.ts`.cwd(root).quiet();
-await $`bun web/build-games.ts`.cwd(root).quiet();
-if (map !== 'box') {
-  // Non-box maps need bsp3d.js pointed at their (gitignored) baked module; do that before
-  // building, revert after. For v1 only box is wired here.
-  console.warn(`# WARN: map '${map}' != box — bsp3d.js must import BSP_<MAP>; see ppsspp-capture.md.`);
+// Non-box maps: temporarily point bsp3d.js's single map import at the (gitignored) baked
+// module so BOTH the WebGL bundle and the PSP EBOOT render that map; revert after building
+// (the built artifacts keep the map; the source tree stays clean).
+const bsp3dPath = root + 'framework/games/bsp3d.js';
+const origBsp3d = await Bun.file(bsp3dPath).text();
+let restored = false;
+const restoreBsp3d = async () => { if (!restored) { await Bun.write(bsp3dPath, origBsp3d); restored = true; } };
+try {
+  if (map !== 'box') {
+    const sym = 'BSP_' + map.toUpperCase();                  // de_dust2 -> BSP_DE_DUST2
+    const mod = '../src/assets-bsp-' + map.replace(/_/g, '-'); // -> assets-bsp-de-dust2
+    const injected = origBsp3d.replace(
+      "import { BSP_BOX as BSP } from '../src/assets-bsp-box';",
+      `import { ${sym} as BSP } from '${mod}';`,
+    );
+    if (injected === origBsp3d) throw new Error('could not inject map import into bsp3d.js');
+    await Bun.write(bsp3dPath, injected);
+  }
+  console.log(`# bundling + building bsp3d capture EBOOT (${map}) ...`);
+  await $`bun framework/build.ts`.cwd(root).quiet();
+  await $`bun web/build-games.ts`.cwd(root).quiet();
+  await $`bun runtime/build.ts --features capture`.cwd(root).env({ ...process.env, PSPJS_GAME: 'bsp3d.js' });
+} finally {
+  await restoreBsp3d();
 }
-await $`bun runtime/build.ts --features capture`.cwd(root).env({ ...process.env, PSPJS_GAME: 'bsp3d.js' });
 
 // --- 2. PSP capture: one headless run dumps frames [CAP_START, CAP_START+CAP_N). ---
 console.log('# PSP capture (PPSSPPHeadless --graphics=software) ...');
 rmSync(DCCAP, { recursive: true, force: true });
-await $`${HEADLESS} --graphics=software --timeout=28 ${EBOOT}`.cwd('/tmp').env({ ...process.env }).nothrow();
+const TIMEOUT = map === 'box' ? 28 : 55; // big maps boot slower (larger QuickJS module)
+await $`${HEADLESS} --graphics=software --timeout=${TIMEOUT} ${EBOOT}`.cwd('/tmp').env({ ...process.env }).nothrow();
 const raws = readdirSync(DCCAP).filter((f) => /^f\d+\.raw$/.test(f)).sort();
 if (raws.length < CAP_N) console.warn(`# WARN: only ${raws.length}/${CAP_N} PSP frames captured`);
 for (const r of raws) {
@@ -70,21 +87,17 @@ const server = Bun.spawn(['bun', 'web/serve.ts'], { cwd: root, env: { ...process
 await new Promise((r) => setTimeout(r, 1600));
 try {
   const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-unsafe-swiftshader'] });
-  const page = await browser.newPage({ viewport: { width: 480, height: 272 }, deviceScaleFactor: 1 });
-  await page.goto(`http://127.0.0.1:${PORT}/headless.html?map=${map}&game=bsp3d.js&cap=1&hold=0&frames=4`, { waitUntil: 'load', timeout: 20000 });
-  await page.waitForFunction('window.__ready || window.__error', null, { timeout: 25000 });
-  const err = await page.evaluate('window.__error');
-  if (err) throw new Error('page: ' + err);
-  // One page; pin each pose via __capFrameOverride so it matches the PSP frame exactly,
-  // independent of how many rAFs the engine ticked.
+  // One page load PER pose (?pose=N pins a static camera, the page settles, then we shoot) —
+  // bulletproof vs live stepping, which raced the engine's rAF and misrendered a band of
+  // poses. Same reliable path as the static M1 capture.
   for (const f of frames) {
-    await page.evaluate((ff: number) => { (window as any).__capFrameOverride = ff; }, f);
-    // Wait until the engine has actually rendered this pose (rAF cadence is unreliable in
-    // headless Chrome, so don't guess with a timeout) + one more rAF so the frame is on
-    // screen before we read it back.
-    await page.waitForFunction((ff: number) => (window as any).__renderedFrame === ff, f, { timeout: 5000 });
-    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    const page = await browser.newPage({ viewport: { width: 480, height: 272 }, deviceScaleFactor: 1 });
+    await page.goto(`http://127.0.0.1:${PORT}/headless.html?map=${map}&game=bsp3d.js&cap=1&hold=0&frames=8&pose=${f}`, { waitUntil: 'load', timeout: 20000 });
+    await page.waitForFunction('window.__ready || window.__error', null, { timeout: 25000 });
+    const err = await page.evaluate('window.__error');
+    if (err) throw new Error('page: ' + err);
     await page.locator('#screen').screenshot({ path: `${seq}/web.${pad(f)}.png` });
+    await page.close();
   }
   await browser.close();
 } finally {

@@ -19,8 +19,10 @@
       window.__BSP_MAP = q.get('map') || 'box'; // bsp-compare reads globalThis.__BSP_MAP at load time
       window.__BSP_VIEW = q.get('view') || '';   // '', 'overhead', or 'hero' (local diagnostics)
       if (q.get('cap')) window.__BSP_CAPTURE = 1; // bsp3d capture mode: frame-indexed camera path
-      // After `frames` rAFs the engine's frame index == frames, so capturePose(frames) is
-      // the shot pose — load with frames=N to render pose N of the sequence (seq-capture.ts).
+      // ?pose=N pins capturePose to a single static pose for this load, so the page renders
+      // ONE deterministic frame and settles before the screenshot — no live-stepping race
+      // (one page load per pose; mirrors the reliable static bsp-compare path).
+      if (q.get('pose') !== null) window.__capFrameOverride = parseInt(q.get('pose'), 10) | 0;
       var gameKey = q.get('game') || 'bsp-compare.js';
       var heldBtn = parseInt(q.get('hold') || '0', 10) | 0; // hold a button mask each frame
       var settle = parseInt(q.get('frames') || '8', 10) | 0;
@@ -31,7 +33,15 @@
       if (heldBtn) PSPJS.pressVirtual(heldBtn, true);
       PSPJS.start();
       var n = 0;
-      (function spin() { if (++n > settle) { window.__ready = true; return; } requestAnimationFrame(spin); })();
+      // When a pose is pinned (?pose=N), don't signal ready until the engine has actually
+      // rendered THAT pose (capturePose sets __renderedFrame) AND settled — so the
+      // screenshot can never race a pre-pose frame into the (preserved) drawing buffer.
+      var want = (q.get('pose') !== null) ? (parseInt(q.get('pose'), 10) | 0) : null;
+      (function spin() {
+        var posed = (want === null) || (window.__renderedFrame === want);
+        if (++n > settle && posed) { window.__ready = true; return; }
+        requestAnimationFrame(spin);
+      })();
     } catch (e) { window.__error = String(e && e.message || e); }
   })();
 </script>

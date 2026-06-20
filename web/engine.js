@@ -725,7 +725,9 @@
     // Try to acquire WebGL2 BEFORE touching the DOM layout, so a missing context
     // leaves the existing 2D-only page byte-identical to today.
     try {
-      gl = c.getContext('webgl2', { antialias: false, depth: true, alpha: false });
+      // preserveDrawingBuffer: headless captures read the canvas through the compositor,
+      // which otherwise returns a cleared/last-composited buffer non-deterministically.
+      gl = c.getContext('webgl2', { antialias: false, depth: true, alpha: false, preserveDrawingBuffer: true });
     } catch (e) { gl = null; }
     if (!gl) return; // no WebGL2 -> leave g3d undefined; framework skips 3D
 

@@ -216,8 +216,16 @@ class BspScene extends Scene {
     this.actor.rotation = Quat.fromEuler(0, this.st.heading + Math.PI, 0);
 
     const camFx = dsin(this.camYaw), camFz = dcos(this.camYaw);
-    const eye = new Vec3(this.st.x - camFx * this.camDist, this.st.y + 2.4, this.st.z - camFz * this.camDist);
-    const focus = new Vec3(this.st.x + camFx * 1.5, this.st.y + 1.4, this.st.z + camFz * 1.5);
+    // Capture mode uses a FIRST-PERSON rotate-in-place camera (eye at the spawn, looking
+    // along camYaw): it sweeps the surroundings to test render fidelity without the chase
+    // cam ever backing into nearby geometry (that camera-vs-wall collision is a separate
+    // gameplay concern and would confound a PSP-vs-ground-truth pixel diff).
+    const eye = CAPTURE
+      ? new Vec3(this.st.x, this.st.y + 1.6, this.st.z)
+      : new Vec3(this.st.x - camFx * this.camDist, this.st.y + 2.4, this.st.z - camFz * this.camDist);
+    const focus = CAPTURE
+      ? new Vec3(this.st.x + camFx * 2, this.st.y + 1.6, this.st.z + camFz * 2)
+      : new Vec3(this.st.x + camFx * 1.5, this.st.y + 1.4, this.st.z + camFz * 1.5);
     this.world.camera.lookAt(eye, focus, new Vec3(0, 1, 0));
     // Gray fallback ground follows the player's floor, just below it (fills seams/voids
     // without masking the real textured floor it sits under).
