@@ -25,6 +25,15 @@ fn main() {
     code.push('\0'); // NUL-terminate for JS_Eval
     fs::write(&out, code).unwrap();
 
+    // Embed the game's binary asset pack alongside the JS (see docs/dcpak-format.md).
+    // main.rs include_bytes!-es $OUT_DIR/game.dcpak and exposes it to JS as __dcpak.
+    // Games without baked assets (and raw demos) have no .dcpak -> write empty bytes
+    // so include_bytes! always resolves; main.rs skips an empty pack.
+    let dcpak_name = format!("{}.dcpak", game.strip_suffix(".js").unwrap_or(&game));
+    let dcpak_out = Path::new(&env::var("OUT_DIR").unwrap()).join("game.dcpak");
+    let dcpak_bytes = fs::read(game_dir.join(&dcpak_name)).unwrap_or_default();
+    fs::write(&dcpak_out, &dcpak_bytes).unwrap();
+
     // Rebuild when the selection changes or any game file is edited.
     println!("cargo:rustc-env=PSPJS_GAME={}", game);
     println!("cargo:rustc-env=PSPJS_TRACE={}", trace);
