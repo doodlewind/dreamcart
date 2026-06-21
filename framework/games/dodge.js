@@ -16,6 +16,8 @@ import {
   SCREEN_H,
   SPRITES,
 } from '../src/index';
+import { SoundBank } from '../src/audio';
+import { voiceTable } from '../src/assets-audio';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
 
@@ -44,8 +46,16 @@ class RootScene extends Scene {
   deathFrame = -1; // frame of death, -1 while alive
   over = false;
 
+  /** @type {SoundBank} */ snd = /** @type {any} */ (null);
+
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
+    // One-shot SFX: a coin.pickup chime on collect and a collision.impact thud on
+    // death. No HUD reads audio scalars, so the golden pixels stay byte-exact —
+    // the only new artifact is the additive .snd.json event stream.
+    this.snd = new SoundBank({ sfx: { coin: 'coin.pickup', hit: 'collision.impact' } });
+    if (typeof snd !== 'undefined' && snd) snd.defineVoices(voiceTable());
+    ctx.engine.audio = this.snd;
     this.reset(ctx);
   }
 
@@ -188,6 +198,7 @@ class RootScene extends Scene {
       if (dx * dx + dy * dy <= (c.r + pr) * (c.r + pr)) {
         this.bonus += 120; // worth 2 seconds
         this.burst(ctx, c.x, c.y, Colors.yellow, 10);
+        if (this.snd) this.snd.play('coin');
       } else {
         kept.push(c);
       }
@@ -203,6 +214,7 @@ class RootScene extends Scene {
         this.deathFrame = ctx.frame;
         this.burst(ctx, cx, cy, Colors.red, 24);
         this.burst(ctx, cx, cy, Colors.orange, 12);
+        if (this.snd) this.snd.play('hit');
         break;
       }
     }

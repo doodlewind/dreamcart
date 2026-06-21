@@ -262,6 +262,73 @@ for (const spec of SPECS) {
       if (flaps === expectedFlaps && onlyFlaps) console.log(`PASS  flappy audio events (flap-on-flap x${flaps})`);
       else { console.log(`FAIL  flappy audio events: flaps=${flaps} expected=${expectedFlaps} onlyFlaps=${onlyFlaps}`); fail++; }
     }
+
+    // racing3d / car3d (engine LOOP path): the EXISTING golden input holds ACCEL
+    // (Btn.Cross) for the whole run, so the car accelerates from rest and the
+    // engine voice (idx 7) is set looping with gain>0, its pitch ramping up as
+    // speed rises — proving SND_OP_SET_LOOP-on + the per-quantized-pitch retune
+    // (op=2). flush() now emits a SET_LOOP only on a state DELTA (changed pitch/
+    // gain/on), so the stream carries one op per DISTINCT quantized pitch (not one
+    // per frame); once speed saturates at maxSpeed the pitch stops changing and no
+    // further ops are sent. The held input never returns to rest, so the OFF
+    // transition (gain==0 from stopLoop) is proven by a SEPARATE auxiliary run
+    // below (accel then idle), which is NOT a committed golden.
+    if (spec.name === "racing3d" || spec.name === "car3d") {
+      const ENGINE = 7; // 'engine' voice index (Voices insertion order)
+      const setLoops = sndLog.filter((r) => r[1] === 2);
+      const on = setLoops.filter((r) => r[2] === ENGINE && r[4] > 0);
+      // Pitch must strictly ramp up over the accel phase (retune working), not be
+      // pinned to the start value (the old audio.rs re-param bug dropped c.pitch).
+      const firstPitch = on.length ? on[0][3] : 0;
+      const lastPitch = on.length ? on[on.length - 1][3] : 0;
+      const ramps = on.length > 0 && lastPitch > firstPitch;
+      const onlyEngine = setLoops.every((r) => r[2] === ENGINE);
+      if (on.length > 0 && ramps && onlyEngine) {
+        console.log(`PASS  ${spec.name} engine loop (SET_LOOP-on x${on.length}, pitch ${firstPitch}->${lastPitch})`);
+      } else {
+        console.log(`FAIL  ${spec.name} engine loop: on=${on.length} ramps=${ramps} (${firstPitch}->${lastPitch}) onlyEngine=${onlyEngine}`); fail++;
+      }
+      // OFF-path proof: accel for 40 frames, then idle long enough for decel to
+      // bring speed back below the idle threshold, so driveEngine() calls
+      // stopLoop() and flush() emits a SET_LOOP with gain==0. Auxiliary only —
+      // its sndLog is asserted, never written as a golden.
+      const offIn = (f: number) => (f < 40 ? 0x4000 : 0);
+      const { sndLog: offLog } = await runGame(file, 240, offIn);
+      const offSet = offLog.filter((r) => r[1] === 2 && r[2] === ENGINE);
+      const offOn = offSet.some((r) => r[4] > 0);
+      const offOff = offSet.some((r) => r[4] === 0);
+      if (offOn && offOff) console.log(`PASS  ${spec.name} engine loop OFF transition (stopLoop -> gain==0)`);
+      else { console.log(`FAIL  ${spec.name} engine loop OFF: on=${offOn} off=${offOff}`); fail++; }
+    }
+
+    // dodge (one-shot SFX, no HUD): the EXISTING golden input (seed 1337, left/
+    // right weave) survives ~2.7s then collides with a hazard, firing a single
+    // collision.impact one-shot (TRIGGER op=1, voice idx 1) on death. The
+    // committed dodge.snd.json pins the full stream; assert the death thud below.
+    if (spec.name === "dodge") {
+      const IMPACT = 1; // 'collision.impact' voice index
+      const triggers = sndLog.filter((r) => r[1] === 1);
+      const impacts = triggers.filter((r) => r[2] === IMPACT).length;
+      if (impacts >= 1) console.log(`PASS  dodge audio events (collision.impact x${impacts})`);
+      else { console.log(`FAIL  dodge audio events: impacts=${impacts}`); fail++; }
+
+      // coin.pickup proof: the COMMITTED golden input never grabs a coin (the
+      // weave dies before overlapping one), so play('coin') is proven by a
+      // SEPARATE auxiliary run (a hand-found survive-and-collect weave on dodge's
+      // committed seed 1337). Auxiliary only — its sndLog is asserted, never
+      // written as a golden. The plan is a fixed direction-bitmask schedule
+      // (held 8 frames each) that, on seed 1337, walks the hero onto a spawned
+      // coin around frame ~291 WITHOUT dying first.
+      const COIN = 3; // 'coin.pickup' voice index
+      const coinPlan = [144,0,128,0,144,128,128,16,32,128,16,0,144,128,96,96,32,144,32,144,128,96,128,0,96,32,192,144,64,144,16,64,144,0,0,128,96,48,144,96,48,48,0,64,128,96,64,128,128,48,144,96,48,64,144,144,128,192,96,144];
+      const coinIn = (f: number) => coinPlan[(f >> 3) % coinPlan.length];
+      const { sndLog: coinLog } = await runGame(file, 500, coinIn);
+      const coinHits = coinLog.filter((r) => r[1] === 1 && r[2] === COIN).length;
+      const diedFirstCoin = coinLog.some((r) => r[1] === 1 && r[2] === IMPACT
+        && r[0] < (coinLog.find((x) => x[1] === 1 && x[2] === COIN)?.[0] ?? Infinity));
+      if (coinHits >= 1 && !diedFirstCoin) console.log(`PASS  dodge coin pickup (play('coin') -> TRIGGER x${coinHits})`);
+      else { console.log(`FAIL  dodge coin pickup: coinHits=${coinHits} diedFirstCoin=${diedFirstCoin}`); fail++; }
+    }
   }
 }
 
