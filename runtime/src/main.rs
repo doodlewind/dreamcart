@@ -22,6 +22,7 @@ use psp::vram_alloc::get_vram_allocator;
 use psp::{Align16, BUF_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 mod arena;
+mod audio;
 mod bridge;
 mod c_heap;
 mod gfx;
@@ -146,6 +147,17 @@ unsafe fn run() {
     let mut pad = SceCtrlData::default();
     trace("run: controller ok");
 
+    // ---- Audio thread ----
+    // CRITICAL ORDERING: start the dedicated audio synth thread BEFORE
+    // qjs_alloc::new_runtime(). arena.rs grabs most of the kernel partition on the
+    // first JS allocation; the audio thread's 64 KB stack must be carved out first,
+    // and the audio thread NEVER touches the single-threaded arena allocator (see
+    // runtime/src/audio.rs top comment). It idles (mixes silence) until the first
+    // snd.submit, so 2D games that never use sound pay only one low-prio slice/granule.
+    trace("run: starting audio thread");
+    let aid = audio::start_audio_thread();
+    trace_i32("audio thread id", aid);
+
     // ---- QuickJS: runtime, context, native API, evaluate the game ----
     // Use the Rust/PSP allocator (newlib malloc has no heap under rust-psp).
     trace_usize("run: free mem before JS", sys::sceKernelTotalFreeMemSize());
@@ -169,6 +181,8 @@ unsafe fn run() {
     gfx3d::register(ctx, global);
     trace("run: register bridge");
     bridge::register(ctx, global);
+    trace("run: register audio");
+    audio::register(ctx, global);
 
     // Capture builds tell the game to run its deterministic, input-free camera path
     // (frame-indexed `capturePose`), so PPSSPPHeadless can dump a reproducible sequence.

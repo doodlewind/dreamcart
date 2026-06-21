@@ -13,6 +13,8 @@ import {
   Vec3, Colors, Btn, dsin, dcos,
 } from '../src/index';
 import { FOX } from '../src/assets-fox';
+import { SoundBank } from '../src/audio';
+import { voiceTable } from '../src/assets-audio';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
 
@@ -28,6 +30,7 @@ class SkinScene extends Scene {
   t = 0;
   clipIdx = 0;
   fps = new Fps();
+  /** @type {SoundBank} */ snd = /** @type {any} */ (null);
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -53,6 +56,12 @@ class SkinScene extends Scene {
     this.cy = ((mn[1] + mx[1]) / 2) * s;
     this.cz = ((mn[2] + mx[2]) / 2) * s;
     this.radius = Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) * s;
+
+    // Shared footstep glue (deterministic, no HUD -> golden pixels unchanged).
+    this.snd = new SoundBank({ steps: { voice: 'footstep' } });
+    if (typeof snd !== 'undefined' && snd) snd.defineVoices(voiceTable());
+    this.snd.bindSteps(this.skin);
+    ctx.engine.audio = this.snd;
 
     ctx.engine.scene3d = this.world;
   }

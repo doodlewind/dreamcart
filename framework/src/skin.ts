@@ -92,6 +92,14 @@ export class SkinnedMesh {
   scale: number;
   clips: Record<string, BakedClip>;
   jointCount: number;
+  /**
+   * Persistent loop-wrap callback (audio.ts SoundBank.bindSteps installs it). It
+   * is stored on the MESH, not the player, because play() discards the old player
+   * and makes a fresh one each clip switch — play() copies this onto every new
+   * player so a footstep binding survives clip changes. Null on the non-audio
+   * path, so advance()'s deterministic math is byte-unchanged when unbound.
+   */
+  onWrap: (() => void) | null = null;
 
   private constructor(skin: BakedSkin) {
     this.scale = skin.scale;
@@ -117,6 +125,9 @@ export class SkinnedMesh {
   /** Start (or switch to) a clip; returns the player so the game can advance it. */
   play(clip: BakedClip): AnimationPlayer {
     this.player = new AnimationPlayer(clip, this.jointCount);
+    // Re-apply the persistent footstep hook to the fresh player (it was bound on
+    // the MESH, not this discarded player). Null when no audio is bound -> no-op.
+    this.player.onWrap = this.onWrap;
     return this.player;
   }
 

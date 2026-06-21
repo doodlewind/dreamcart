@@ -11,6 +11,8 @@ import {
   start, Scene, Btn, Colors, rgb,
   SCREEN_W, SCREEN_H, SPRITES,
 } from '../src/index';
+import { SoundBank } from '../src/audio';
+import { voiceTable } from '../src/assets-audio';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
 
@@ -36,9 +38,22 @@ class ShooterScene extends Scene {
   lives = 3;
   over = false;
   frames = 0; // local frame counter, drives the blinking prompt
+  /** @type {SoundBank} */
+  snd = /** @type {any} */ (null);
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
+    // 8-voice stress: many short one-shots per second across distinct voices.
+    if (!this.snd) {
+      this.snd = new SoundBank({
+        sfx: {
+          gunshot: 'gunshot', hit: 'hit', damage: 'damage',
+          spawn: 'spawn', gameover: 'gameover',
+        },
+      });
+      if (typeof snd !== 'undefined' && snd) snd.defineVoices(voiceTable());
+      ctx.engine.audio = this.snd;
+    }
     this.shipX = (SCREEN_W - SHIP) / 2;
     this.shipY = SCREEN_H - SHIP - 8;
     this.bullets = [];
@@ -94,6 +109,7 @@ class ShooterScene extends Scene {
     if (i.held(Btn.Cross) && this.cooldown === 0) {
       this.bullets.push({ x: this.shipX + SHIP / 2 - 1, y: this.shipY });
       this.cooldown = 8;
+      this.snd.play('gunshot');
     }
 
     // --- Advance bullets upward; cull off-screen ---
@@ -109,6 +125,7 @@ class ShooterScene extends Scene {
         y: -ENEMY,
         vx: ctx.rng.chance(0.5) ? ctx.rng.range(-1.6, 1.6) : 0, // some drift
       });
+      this.snd.play('spawn');
     }
 
     // --- Advance enemies; drift sideways and bounce off edges ---
@@ -135,6 +152,8 @@ class ShooterScene extends Scene {
       if (hit) {
         this.enemies.splice(ei, 1);
         this.score++;
+        // pitch the kill blip up slightly with score for an 8-voice stress feel.
+        this.snd.play('hit', { pitch: 1 + (this.score % 8) * 0.05 });
         continue;
       }
       // Enemy reached the bottom, or collided with the ship -> lose a life.
@@ -143,9 +162,11 @@ class ShooterScene extends Scene {
       if (reachedBottom || hitShip) {
         this.enemies.splice(ei, 1);
         this.lives--;
+        this.snd.play('damage');
         if (this.lives <= 0) {
           this.lives = 0;
           this.over = true;
+          this.snd.play('gameover');
         }
       }
     }
@@ -173,6 +194,13 @@ class ShooterScene extends Scene {
     // HUD.
     g.text('SCORE ' + this.score, 6, 6, Colors.white, 2);
     g.text('LIVES ' + this.lives, SCREEN_W - 110, 6, Colors.cyan, 2);
+
+    // AUDIO HUD (bottom-left): last event, VU bar, active voice count.
+    const ax = 6, ay = SCREEN_H - 20;
+    g.text('SND ' + (this.snd.lastEvent || '-') + ' x' + this.snd.active, ax, ay, Colors.white, 1);
+    const vw = Math.floor((this.snd.vu * 60) / 255);
+    g.rect(ax, ay + 10, 60, 4, rgb(40, 40, 50));
+    if (vw > 0) g.rect(ax, ay + 10, vw, 4, Colors.green);
 
     if (this.over) {
       // Dim the scene with a dark band behind the text, then blink the prompt.

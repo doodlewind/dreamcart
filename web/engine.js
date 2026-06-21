@@ -626,11 +626,160 @@
     m[12] = 0; m[13] = 0; m[14] = 0; m[15] = 1;
   }
 
+  // ===========================================================================
+  // Audio layer (`snd`) — a WebAudio implementation of the DreamCart sound
+  // contract (framework/src/audio.ts RawSnd). The framework's SoundBank batches a
+  // game's play()/loop() calls into one little-endian DCAU buffer per frame and
+  // hands it to snd.submit(); here we decode it and schedule WebAudio oscillators
+  // / noise buffers so the sound is audible by ear on the Web build. defineVoices
+  // installs the baked, integer-quantized voice table once.
+  //
+  // Wire constants — MUST stay byte-identical to framework/src/audio.ts (DCAU_*)
+  // and the baked-table magic in framework/bake/sound-defs.ts (DCAV_*).
+  var DCAU_MAGIC = 0x55414344; // 'DCAU'
+  var DCAU_VERSION = 0x0001;
+  var SND_OP_TRIGGER = 0x0001;
+  var SND_OP_SET_LOOP = 0x0002;
+  var SND_OP_MASTER = 0x0003;
+  var DCAV_MAGIC = 0x56414344; // 'DCAV' baked voice table
+  var DCAV_VERSION = 0x0001;   // baked voice-table layout version (parity-guarded)
+  var VOICE_BYTES = 24;
+  var SND_SR = 44100;          // matches sound-defs.ts SAMPLE_RATE / audio.rs
+
+  var audioCtx = null, masterGain = null, audioVoices = [], loopNodes = {};
+
+  function ensureAudioCtx() {
+    if (audioCtx) return audioCtx;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { audioCtx = new AC(); } catch (e) { return null; }
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 1;
+    masterGain.connect(audioCtx.destination);
+    return audioCtx;
+  }
+
+  // Parse the baked DCAV voice table into plain JS objects (floats reconstructed
+  // from the integer fields purely for the WebAudio preview — the synth-side ints
+  // never leave the wire on PSP).
+  function parseVoiceTable(buffer) {
+    var dv = new DataView(buffer);
+    // Reject a bad magic OR an unknown version (a layout bump must fail loudly,
+    // not mis-parse the 24-byte records). Header: u32 magic, u16 version, u16 count.
+    if (dv.getUint32(0, true) !== DCAV_MAGIC) return [];
+    if (dv.getUint16(4, true) !== DCAV_VERSION) return [];
+    var count = dv.getUint16(6, true);
+    var out = [];
+    for (var i = 0; i < count; i++) {
+      var o = 8 + i * VOICE_BYTES;
+      out.push({
+        wave: dv.getUint8(o + 0),
+        duty: dv.getUint8(o + 1) / 255,
+        freq: dv.getUint16(o + 2, true),
+        sweep: dv.getInt16(o + 4, true),
+        dur: dv.getUint16(o + 6, true) / SND_SR,
+        attack: dv.getUint16(o + 8, true) / SND_SR,
+        decay: dv.getUint16(o + 10, true) / SND_SR,
+        release: dv.getUint16(o + 12, true) / SND_SR,
+        sustain: dv.getUint16(o + 14, true) / 32767,
+        gain: dv.getUint16(o + 16, true) / 32767,
+      });
+    }
+    return out;
+  }
+
+  var noiseBuf = null;
+  function getNoiseBuffer() {
+    if (noiseBuf) return noiseBuf;
+    var n = SND_SR; // 1s of white noise, looped
+    noiseBuf = audioCtx.createBuffer(1, n, SND_SR);
+    var d = noiseBuf.getChannelData(0);
+    var s = 22222;
+    for (var i = 0; i < n; i++) { s = (s * 1103515245 + 12345) & 0x7fffffff; d[i] = (s / 0x40000000) - 1; }
+    return noiseBuf;
+  }
+  var WAVE_NAMES = ['square', 'sawtooth', 'sine']; // 0,1,2; 3 = noise
+
+  // Build one voice's source + envelope graph, started at audioCtx time `t0`.
+  function scheduleVoice(v, pitch, gain, loop) {
+    if (!audioCtx) return null;
+    var t0 = audioCtx.currentTime;
+    var env = audioCtx.createGain();
+    env.connect(masterGain);
+    var src, freq = v.freq * pitch;
+    if (v.wave === 3) {
+      src = audioCtx.createBufferSource();
+      src.buffer = getNoiseBuffer();
+      src.loop = true;
+    } else {
+      src = audioCtx.createOscillator();
+      src.type = WAVE_NAMES[v.wave] || 'square';
+      src.frequency.setValueAtTime(freq, t0);
+      if (v.sweep) src.frequency.linearRampToValueAtTime(Math.max(20, freq + v.sweep), t0 + v.dur);
+    }
+    src.connect(env);
+    var peak = Math.max(0.0001, v.gain * gain);
+    var sus = peak * v.sustain;
+    env.gain.setValueAtTime(0, t0);
+    env.gain.linearRampToValueAtTime(peak, t0 + v.attack);
+    env.gain.linearRampToValueAtTime(sus, t0 + v.attack + v.decay);
+    if (!loop) {
+      var relStart = Math.max(t0 + v.attack + v.decay, t0 + v.dur - v.release);
+      env.gain.setValueAtTime(sus, relStart);
+      env.gain.linearRampToValueAtTime(0, relStart + v.release);
+      src.start(t0);
+      src.stop(t0 + v.dur + 0.02);
+    } else {
+      src.start(t0);
+    }
+    return { src: src, env: env };
+  }
+
+  var snd = {
+    defineVoices: function (buffer) {
+      ensureAudioCtx();
+      audioVoices = parseVoiceTable(buffer);
+      return audioVoices.length;
+    },
+    submit: function (buffer, byteLength) {
+      if (!ensureAudioCtx()) return;
+      // Browsers gate audio until a user gesture; resume opportunistically.
+      if (audioCtx.state === 'suspended') { try { audioCtx.resume(); } catch (e) {} }
+      var dv = new DataView(buffer, 0, byteLength);
+      if (dv.getUint32(0, true) !== DCAU_MAGIC) return;
+      var ops = dv.getUint16(6, true);
+      for (var i = 0; i < ops; i++) {
+        var o = 8 + i * 8;
+        var op = dv.getUint16(o, true);
+        var vi = dv.getUint16(o + 2, true);
+        var pitch = dv.getUint16(o + 4, true) / 256;
+        var gain = dv.getUint16(o + 6, true) / 255;
+        if (op === SND_OP_MASTER) {
+          if (masterGain) masterGain.gain.value = gain;
+        } else if (op === SND_OP_TRIGGER) {
+          var v = audioVoices[vi];
+          if (v) scheduleVoice(v, pitch || 1, gain, false);
+        } else if (op === SND_OP_SET_LOOP) {
+          var ex = loopNodes[vi];
+          if (gain <= 0) {
+            if (ex) { try { ex.env.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.05); ex.src.stop(audioCtx.currentTime + 0.08); } catch (e) {} loopNodes[vi] = null; }
+          } else if (!ex) {
+            var lv = audioVoices[vi];
+            if (lv) loopNodes[vi] = scheduleVoice(lv, pitch || 1, gain, true);
+          }
+        }
+      }
+    },
+    poll: function () { var n = 0; for (var k in loopNodes) if (loopNodes[k]) n++; return n; },
+  };
+
   function installGlobals() {
     window.gfx = gfx;
     // Only expose g3d when a WebGL2 context was acquired in mount(); otherwise
     // leave it undefined so the framework skips the 3D pass (capability probe).
     if (gl) window.g3d = g3d; else { try { delete window.g3d; } catch (e) { window.g3d = undefined; } }
+    // Expose the WebAudio sound contract (no-op for games that never use it).
+    window.snd = snd;
     window.log = function (msg) { logSink(String(msg)); };
     // games read globalThis.frame; clear any previous one before (re)loading.
     try { delete window.frame; } catch (e) { window.frame = undefined; }
