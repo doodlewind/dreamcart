@@ -9,6 +9,7 @@
     "play": "bun scripts/play.ts",
     "serve": "bun web/serve.ts",
     "web": "bun web/build-games.ts",
+    "og": "bun web/og.ts",
     "site": "bun web/deploy-build.ts",
     "deploy": "bun web/deploy-build.ts && bunx wrangler pages deploy web/site --project-name dreamcart",
     "bake": "bun framework/bake/bake-font.ts && bun framework/bake/bake-sprites.ts && bun framework/bake/bake-gltf.ts && bun framework/bake/bake-scene.ts && bun framework/bake/bake-bsp.ts box && bun framework/bake/bake-bsp.ts zfight",
