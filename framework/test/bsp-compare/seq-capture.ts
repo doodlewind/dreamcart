@@ -91,8 +91,8 @@ console.log('# WebGL ground-truth frames (Chrome) ...');
 let chromium: any;
 try { ({ chromium } = await import('playwright')); }
 catch { console.error('playwright not installed — run: bun add -d playwright'); process.exit(2); }
-const server = Bun.spawn(['bun', 'web/serve.ts'], { cwd: root, env: { ...process.env, PORT: String(PORT) }, stdout: 'ignore', stderr: 'ignore' });
-await new Promise((r) => setTimeout(r, 1600));
+const { startRefServer } = await import('./ref-server.ts');
+const server = startRefServer(PORT);
 try {
   const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-unsafe-swiftshader'] });
   // One page load PER pose (?pose=N pins a static camera, the page settles, then we shoot) —
@@ -109,7 +109,7 @@ try {
   }
   await browser.close();
 } finally {
-  server.kill();
+  server.stop(true);
 }
 
 // --- 3.5. Software oracle per-pose: raster3d (CPU) renders the SAME bsp3d capture poses

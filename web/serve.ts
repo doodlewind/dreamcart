@@ -1,10 +1,11 @@
-// Bun.serve static server for the DreamCart Playground.
+// Local dev server for the DreamCart site. Builds the full static site into
+// web/site/ (Home, Playground, Docs, Changelog) then serves it, resolving
+// directory routes (e.g. /play/ -> /play/index.html) like Cloudflare Pages.
 //   bun web/serve.ts            -> http://localhost:8123
 //   PORT=3000 bun web/serve.ts
-// Regenerates web/games.generated.js on startup so the manifest is always fresh.
-import { buildGames } from "./build-games.ts";
+import { buildSite } from "./deploy-build.ts";
 
-const ROOT = new URL(".", import.meta.url).pathname; // the web/ dir
+const SITE = new URL("./site/", import.meta.url).pathname;
 
 const TYPES: Record<string, string> = {
   html: "text/html; charset=utf-8",
@@ -12,29 +13,37 @@ const TYPES: Record<string, string> = {
   css: "text/css; charset=utf-8",
   png: "image/png",
   json: "application/json",
+  svg: "image/svg+xml",
+  map: "application/json",
 };
 
-/** Build the manifest and start the static server. Returns the Bun server. */
 export async function startServer(port = Number(process.env.PORT ?? 8123)) {
-  const n = await buildGames();
-  console.log("manifest: " + n + " games");
+  await buildSite();
 
   const server = Bun.serve({
     port,
     hostname: "127.0.0.1",
     async fetch(req) {
       let path = new URL(req.url).pathname;
-      if (path === "/") path = "/index.html";
       const safe = path.replace(/\.\.+/g, "").replace(/^\/+/, "");
-      const file = Bun.file(ROOT + safe);
+      // Directory route -> index.html (Pages-style).
+      let rel = safe;
+      if (rel === "" || rel.endsWith("/")) rel += "index.html";
+      let file = Bun.file(SITE + rel);
+      if (!(await file.exists()) && !rel.includes(".")) {
+        file = Bun.file(SITE + rel + "/index.html");
+      }
       if (!(await file.exists())) return new Response("Not found: " + path, { status: 404 });
-      const ext = safe.split(".").pop() ?? "";
-      return new Response(file, { headers: { "content-type": TYPES[ext] ?? "application/octet-stream" } });
+      const ext = file.name?.split(".").pop() ?? "";
+      return new Response(file, {
+        headers: { "content-type": TYPES[ext] ?? "application/octet-stream" },
+      });
     },
   });
 
-  console.log("DreamCart Playground -> http://localhost:" + server.port + "/");
-  console.log("  pick a game:        http://localhost:" + server.port + "/?game=rpg.js");
+  console.log("DreamCart site -> http://localhost:" + server.port + "/");
+  console.log("  Playground:    http://localhost:" + server.port + "/play/");
+  console.log("  Docs:          http://localhost:" + server.port + "/docs/");
   return server;
 }
 
