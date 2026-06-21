@@ -27,8 +27,10 @@ interface SceneMeta {
   camera?: SceneDescriptor['camera'];
   fog?: SceneDescriptor['fog'];
   prototypes: Record<string, MeshProto>;
-  entities: { proto: string; tint?: number; isStatic?: boolean; id?: string;
-              hasPos: boolean; hasRot: boolean; hasScale: boolean }[];
+  entities: { proto?: string; box?: { size: [number, number, number]; colors: number[] };
+              bounds?: { min: [number, number, number]; max: [number, number, number] };
+              tint?: number; isStatic?: boolean; id?: string;
+              hasPos: boolean; hasRot: boolean; hasScale: boolean; hasMatrix?: boolean }[];
   instances: { proto: string; count: number; tint?: number; isStatic?: boolean;
                merge?: boolean; id?: string }[];
   colliderCount: number;
@@ -41,12 +43,14 @@ function serialize(key: string, d: SceneDescriptor): Blob[] {
   };
 
   const entities = (d.entities ?? []).map((e) => {
+    // Write order MUST mirror loadScene's read order: pos, rot, scale, then matrix.
     push3(e.position);
     push3(e.rotation);
     push3(e.scale);
+    if (e.matrix) for (const v of e.matrix) xforms.push(v);
     return {
-      proto: e.proto, tint: e.tint, isStatic: e.isStatic, id: e.id,
-      hasPos: !!e.position, hasRot: !!e.rotation, hasScale: !!e.scale,
+      proto: e.proto, box: e.box, bounds: e.bounds, tint: e.tint, isStatic: e.isStatic, id: e.id,
+      hasPos: !!e.position, hasRot: !!e.rotation, hasScale: !!e.scale, hasMatrix: !!e.matrix,
     };
   });
 
