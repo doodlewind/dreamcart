@@ -101,6 +101,14 @@ export interface Node3DOpts {
    * interpreted PSP core. Do NOT set on anything that moves or is re-parented.
    */
   isStatic?: boolean;
+  /**
+   * Optional precomputed LOCAL matrix (16 col-major floats). When set, localMatrix()
+   * returns it verbatim instead of composing position/rotation/scale — used to carry
+   * a BAKED composed matrix byte-exactly (a scene-desc node whose stored matrix is
+   * the inline f64 Mat4.compose result; each element fround'd then setFloat32'd is
+   * bit-identical to the inline path). position/rotation/scale are then ignored.
+   */
+  matrix?: number[];
 }
 
 export class Node3D {
@@ -118,6 +126,8 @@ export class Node3D {
   visible = true;
   /** When true, Scene3D caches this node's world matrix + bounds (see opts). */
   isStatic = false;
+  /** Optional precomputed LOCAL matrix override (see Node3DOpts.matrix). */
+  matrix?: number[];
   children: Node3D[] = [];
   // Cached world transform + world-space AABB for static nodes (filled lazily by
   // Scene3D.emit on the first frame, reused thereafter). Public so a game that
@@ -134,6 +144,7 @@ export class Node3D {
     this.material = opts.material;
     this.skinned = opts.skinned;
     this.isStatic = opts.isStatic ?? false;
+    this.matrix = opts.matrix;
     this.tint = opts.tint === undefined ? NO_TINT : colorToABGR(opts.tint);
   }
 
@@ -148,7 +159,7 @@ export class Node3D {
   }
 
   localMatrix(): number[] {
-    return Mat4.compose(this.position, this.rotation, this.scale);
+    return this.matrix ?? Mat4.compose(this.position, this.rotation, this.scale);
   }
 }
 
