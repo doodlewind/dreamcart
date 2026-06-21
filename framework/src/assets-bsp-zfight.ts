@@ -2,7 +2,7 @@
 // Imported from a GoldSrc BSP v30 map: CC0 z-fight / cull test scene
 // Original CC0 BSP v30 fixture (DreamCart)
 //
-// 3 sub-meshes · 108 verts · 54 tris · 3 textures (minArea 0.1 m²).
+// 3 sub-meshes · 21744 verts · 7248 tris · 3 textures (minArea 0.1 m²).
 // Format 15 (UV|COLOR|NORMAL|POS), stride 36. texId indexes textures[];
 // per-vertex COLOR carries a baked directional/lightmap shade (the GE modulates the
 // texture over it; the vertex-colour software oracle uses it directly).
@@ -17,15 +17,15 @@ interface RawMesh { texId: number; vertexCount: number; triCount: number; aabb: 
 const FORMAT = 15;
 const STRIDE = 36;
 const RAW_MESHES: RawMesh[] = [
-  { texId: 0, vertexCount: 28, triCount: 14,
+  { texId: 0, vertexCount: 18816, triCount: 6272,
     aabb: { min: [-6.502, 0, -6.502], max: [6.502, 8.128, 6.502] },
     vertices: dcU8('bsp-zfight:m0.vertices'),
     indices: dcU16('bsp-zfight:m0.indices') },
-  { texId: 1, vertexCount: 72, triCount: 36,
+  { texId: 1, vertexCount: 2736, triCount: 912,
     aabb: { min: [-1.829, 0, -5.486], max: [2.642, 4.267, 1.016] },
     vertices: dcU8('bsp-zfight:m1.vertices'),
     indices: dcU16('bsp-zfight:m1.indices') },
-  { texId: 2, vertexCount: 8, triCount: 4,
+  { texId: 2, vertexCount: 192, triCount: 64,
     aabb: { min: [1.27, 0.508, -1.448], max: [2.388, 3.302, -1.422] },
     vertices: dcU8('bsp-zfight:m2.vertices'),
     indices: dcU16('bsp-zfight:m2.indices') },

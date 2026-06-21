@@ -60,8 +60,9 @@ for (const m of meshes) {
 ok(anyNonBlack, 'per-vertex COLOR is not all black');
 ok(colors.size >= 2, `per-vertex COLOR is not uniform (distinct colors: ${colors.size})`);
 
-// budget ceilings (box is tiny; this guards a future map regen from exploding)
-ok(totalV <= 200 && totalT <= 100, `box geometry within fixture budget (${totalV}v/${totalT}t)`);
+// budget ceilings (box is tiny but tess:1.0 subdivides its large faces for PSP guard-band
+// safety; this still guards a future map regen from exploding).
+ok(totalV <= 8000 && totalT <= 3000, `box geometry within fixture budget (${totalV}v/${totalT}t)`);
 
 // spawn + module surface
 ok(Array.isArray(BSP.spawn) && BSP.spawn.length === 3 && BSP.spawn.every(Number.isFinite), 'spawn is a finite [x,z,heading]');
