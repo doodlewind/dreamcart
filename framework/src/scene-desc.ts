@@ -39,13 +39,24 @@ export type MeshProto =
   | { kind: 'plane'; size: [number, number]; color: number }
   | { kind: 'baked'; key: string };
 
-// One placed node referencing a prototype by key. position/rotation/scale default
-// to origin / identity / 1, matching Node3D's own defaults.
+// One placed node. It references a shared mesh PROTOTYPE by key, OR carries its own
+// INLINE box geometry (`box`) — the latter for a scene of many differently-sized
+// one-off boxes (e.g. an arena's walls/crates), each its own Mesh upload, exactly
+// like a hand-written addBox()/Mesh.box() per node. Exactly one of proto/box is set.
+//
+// Placement: by default position/rotation/scale (origin / identity / 1, matching
+// Node3D's defaults). A rotated/scaled node instead carries a precomputed 16-float
+// LOCAL `matrix` (the inline f64 Mat4.compose, fround'd) so the bake->loadScene
+// round trip is BYTE-EXACT (storing euler and re-composing at load is NOT — see the
+// BYTE-EXACT SCOPE note). When `matrix` is set, position/rotation/scale are ignored.
 export interface EntityDesc {
-  proto: string;
+  proto?: string;
+  box?: { size: [number, number, number]; colors: number[] };
   position?: [number, number, number];
   rotation?: [number, number, number]; // euler radians (XYZ), -> Quat.fromEuler
   scale?: [number, number, number];
+  matrix?: number[]; // 16 col-major floats; overrides position/rotation/scale
+  bounds?: AABBDesc; // LOCAL-space cull AABB (sets node.bounds for frustum culling)
   tint?: number; // RRGGBB; omitted -> untinted
   isStatic?: boolean;
   id?: string; // optional handle so a game can fetch the built node by name
@@ -126,14 +137,19 @@ export function buildScene(d: SceneDescriptor): BuiltScene {
   const nodes: Record<string, Node3D> = {};
 
   for (const e of d.entities ?? []) {
+    // Inline box geometry -> its OWN Mesh (one upload per node, like a hand-written
+    // Mesh.box per addBox); else a shared prototype mesh referenced by key.
+    const m = e.box ? Mesh.box(e.box.size[0], e.box.size[1], e.box.size[2], e.box.colors) : mesh(e.proto!);
     const n = scene.add({
-      mesh: mesh(e.proto),
+      mesh: m,
       position: v3(e.position),
       rotation: e.rotation ? Quat.fromEuler(e.rotation[0], e.rotation[1], e.rotation[2]) : undefined,
       scale: e.scale ? v3(e.scale) : undefined,
+      matrix: e.matrix, // precomputed local matrix; overrides the triples above
       tint: e.tint,
       isStatic: e.isStatic,
     });
+    if (e.bounds) n.bounds = { min: e.bounds.min, max: e.bounds.max };
     if (e.id) nodes[e.id] = n;
   }
 
@@ -183,8 +199,11 @@ interface SceneMeta {
   fog?: SceneDescriptor['fog'];
   prototypes: Record<string, MeshProto>;
   // entities: each carries only its non-numeric fields + which xform slots it uses.
-  entities: { proto: string; tint?: number; isStatic?: boolean; id?: string;
-              hasPos: boolean; hasRot: boolean; hasScale: boolean }[];
+  // `box` (inline geometry) stays in the meta (size/colors are author constants that
+  // JSON round-trips exactly); `hasMatrix` marks a 16-float matrix in the xforms blob.
+  entities: { proto?: string; box?: { size: [number, number, number]; colors: number[] };
+              bounds?: AABBDesc; tint?: number; isStatic?: boolean; id?: string;
+              hasPos: boolean; hasRot: boolean; hasScale: boolean; hasMatrix?: boolean }[];
   instances: { proto: string; count: number; tint?: number; isStatic?: boolean;
                merge?: boolean; id?: string }[];
   colliderCount: number;
@@ -207,15 +226,26 @@ export function loadScene(key: string): BuiltScene {
     o += 3;
     return t;
   };
+  const mat16 = (): number[] => {
+    const m = new Array<number>(16);
+    for (let i = 0; i < 16; i++) m[i] = xf[o + i];
+    o += 16;
+    return m;
+  };
 
+  // Read order per entity MUST mirror bake-scene.ts serialize(): pos, rot, scale,
+  // then matrix (each only when its flag is set).
   const entities: EntityDesc[] = meta.entities.map((e) => ({
     proto: e.proto,
+    box: e.box,
+    bounds: e.bounds,
     tint: e.tint,
     isStatic: e.isStatic,
     id: e.id,
     position: e.hasPos ? triple() : undefined,
     rotation: e.hasRot ? triple() : undefined,
     scale: e.hasScale ? triple() : undefined,
+    matrix: e.hasMatrix ? mat16() : undefined,
   }));
 
   const instances: InstanceGroup[] = meta.instances.map((g) => {

@@ -5,20 +5,15 @@
 // adventure3d.js — a compact tactical walking demo: static arena map, cover,
 // simple collision, and a skinned soldier character on the native PSP skin path.
 import {
-  start, Scene, Scene3D, Node3D, Mesh, SkinnedMesh,
-  Vec3, Quat, Colors, rgb, Btn, HALF_PI, Fps,
+  start, Scene, Node3D, SkinnedMesh,
+  Vec3, Quat, Colors, Btn, HALF_PI, Fps,
 } from '../src/index';
 import { CharController, Collide } from '../src/controller';
 import { ActionMap } from '../src/action';
+import { loadScene } from '../src/scene-desc';
 import { THREE_SOLDIER } from '../src/assets-three-soldier';
 
-/** @import { UpdateContext, Graphics } from '../src/index' */
-
-const WALL = [rgb(104, 109, 111), rgb(82, 87, 90), rgb(138, 142, 140), rgb(55, 58, 60), rgb(92, 96, 98), rgb(72, 76, 78)];
-const FLOOR = [rgb(74, 74, 70), rgb(64, 64, 61), rgb(94, 91, 82), rgb(48, 48, 46), rgb(78, 76, 70), rgb(58, 58, 55)];
-const CRATE = [rgb(132, 98, 55), rgb(98, 70, 42), rgb(155, 121, 72), rgb(82, 57, 36), rgb(120, 86, 48), rgb(94, 65, 39)];
-const METAL = [rgb(86, 100, 112), rgb(63, 75, 86), rgb(118, 130, 138), rgb(43, 49, 54), rgb(76, 88, 98), rgb(56, 65, 72)];
-const TARGET = [rgb(168, 62, 45), rgb(114, 45, 38), rgb(205, 96, 60), rgb(70, 32, 29), rgb(148, 55, 44), rgb(96, 38, 34)];
+/** @import { UpdateContext, Graphics, Scene3D } from '../src/index' */
 
 class TacticalScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
@@ -32,12 +27,19 @@ class TacticalScene extends Scene {
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
-    this.world = new Scene3D();
-    this.world.camera.setPerspective(62, 480 / 272, 0.08, 92);
-
-    this.world.fog = { color: rgb(27, 31, 34), near: 34, far: 62 };
-
-    this.buildArena();
+    // Static arena (floor, walls, cover, crates, metal/target boxes + camera + fog)
+    // from the baked descriptor (framework/scenes/adventure3d.scene.ts). buildScene
+    // adds the boxes in the exact same order the old buildArena() did, and rotated
+    // crates carry a precomputed local matrix, so the .dc3d draw list is byte-
+    // identical. The full literal key keeps build.ts from tree-shaking the blobs.
+    const built = loadScene('adventure3d');
+    this.world = built.scene;
+    // Harvest the arena's solid AABBs (the old buildArena() blockers, in order) into
+    // the flat {minX,maxX,minZ,maxZ} form slideAabb expects (y is unused for the 2D
+    // floor-plan slide).
+    this.blockers = built.colliders.map((c) => ({
+      minX: c.min[0], maxX: c.max[0], minZ: c.min[2], maxZ: c.max[2],
+    }));
 
     // Gated walk/run/back (3.0/6.4/-2.2) + 2.15 turn, forward +Z; chase rig at
     // eyeY 3.4 / lookY 1.35, dist 7.2, lookahead 2.4. AABB slide vs blockers (r .38)
@@ -72,71 +74,6 @@ class TacticalScene extends Scene {
 
     this.reset();
     ctx.engine.scene3d = this.world;
-  }
-
-  buildArena() {
-    this.addBox(0, -0.08, 0, 38, 0.16, 38, FLOOR, false);
-    this.addBox(0, 1.55, -18.6, 38.8, 3.1, 0.85, WALL);
-    this.addBox(0, 1.55, 18.6, 38.8, 3.1, 0.85, WALL);
-    this.addBox(-18.6, 1.55, 0, 0.85, 3.1, 38.8, WALL);
-    this.addBox(18.6, 1.55, 0, 0.85, 3.1, 38.8, WALL);
-
-    this.addBox(-10.8, 1.25, -5.8, 14.8, 2.5, 0.7, WALL);
-    this.addBox(9.8, 1.25, -5.8, 12.8, 2.5, 0.7, WALL);
-    this.addBox(-6.2, 1.25, 7.0, 0.7, 2.5, 16.0, WALL);
-    this.addBox(7.2, 1.25, 5.8, 0.7, 2.5, 13.6, WALL);
-    this.addBox(0.5, 1.25, 7.8, 6.7, 2.5, 0.7, WALL);
-    this.addBox(-12.5, 1.25, 3.2, 5.0, 2.5, 0.7, WALL);
-    this.addBox(13.4, 1.25, -0.8, 0.7, 2.5, 8.6, WALL);
-
-    this.addCrates(-2.4, 0.55, 1.1, 0.15, 3);
-    this.addCrates(11.8, 0.55, 10.4, -0.45, 3);
-    this.addCrates(-13.6, 0.55, -12.0, 0.65, 2);
-    this.addBox(2.7, 0.75, -12.4, 3.4, 1.5, 1.2, METAL);
-    this.addBox(5.8, 0.55, -12.1, 1.2, 1.1, 1.2, TARGET);
-    this.addBox(14.2, 0.75, 4.8, 1.5, 1.5, 3.5, METAL);
-    this.addBox(-9.8, 0.35, 13.4, 4.2, 0.7, 1.2, TARGET);
-  }
-
-  /**
-   * @param {number} x @param {number} y @param {number} z
-   * @param {number} w @param {number} h @param {number} d
-   * @param {number[]} colors
-   * @param {boolean} solid
-   */
-  addBox(x, y, z, w, h, d, colors, solid = true) {
-    const node = new Node3D({
-      mesh: Mesh.box(w, h, d, colors),
-      position: new Vec3(x, y, z),
-      isStatic: true,
-    });
-    node.bounds = { min: [-w / 2, -h / 2, -d / 2], max: [w / 2, h / 2, d / 2] };
-    this.world.add(node);
-    if (solid) {
-      this.blockers.push({
-        minX: x - w / 2,
-        maxX: x + w / 2,
-        minZ: z - d / 2,
-        maxZ: z + d / 2,
-      });
-    }
-  }
-
-  /** @param {number} x @param {number} y @param {number} z @param {number} yaw @param {number} count */
-  addCrates(x, y, z, yaw, count) {
-    for (let i = 0; i < count; i++) {
-      const sx = x + (i % 2) * 1.15;
-      const sz = z + ((i / 2) | 0) * 1.05;
-      const node = new Node3D({
-        mesh: Mesh.box(1.05, 1.1, 1.05, CRATE),
-        position: new Vec3(sx, y + (i === 2 ? 0.55 : 0), sz),
-        rotation: Quat.fromEuler(0, yaw + i * 0.2, 0),
-        isStatic: true,
-      });
-      node.bounds = { min: [-0.75, -0.65, -0.75], max: [0.75, 0.65, 0.75] };
-      this.world.add(node);
-      this.blockers.push({ minX: sx - 0.7, maxX: sx + 0.7, minZ: sz - 0.7, maxZ: sz + 0.7 });
-    }
   }
 
   reset() {
