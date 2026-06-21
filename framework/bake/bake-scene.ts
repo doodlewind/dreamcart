@@ -16,7 +16,7 @@
 //   bun framework/bake/bake-scene.ts
 import { readdirSync, existsSync } from 'node:fs';
 import { pack, unpack, rawBytes, DT_U8, DT_F32, type Blob } from './dcpak';
-import type { SceneDescriptor, MeshProto } from '../src/scene-desc';
+import type { SceneDescriptor, MeshProto, AABBDesc } from '../src/scene-desc';
 
 const here = new URL('.', import.meta.url).pathname;
 const scenesDir = here + '../scenes/';
@@ -28,7 +28,7 @@ interface SceneMeta {
   fog?: SceneDescriptor['fog'];
   prototypes: Record<string, MeshProto>;
   entities: { proto?: string; box?: { size: [number, number, number]; colors: number[] };
-              bounds?: { min: [number, number, number]; max: [number, number, number] };
+              bounds?: AABBDesc;
               tint?: number; isStatic?: boolean; id?: string;
               hasPos: boolean; hasRot: boolean; hasScale: boolean; hasMatrix?: boolean }[];
   instances: { proto: string; count: number; tint?: number; isStatic?: boolean;
