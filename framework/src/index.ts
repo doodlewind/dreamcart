@@ -13,6 +13,7 @@ export * from './light';
 export * from './anim';
 export * from './skin';
 export * from './scene3d';
+export * from './bsp-walk';
 export * from './fps';
 export * from './color';
 export * from './input';

@@ -31,6 +31,8 @@ object Runtime {
         const val RIGHT = 0x20
         const val DOWN = 0x40
         const val LEFT = 0x80
+        const val LTRIGGER = 0x100
+        const val RTRIGGER = 0x200
         const val TRIANGLE = 0x1000
         const val CIRCLE = 0x2000
         const val CROSS = 0x4000

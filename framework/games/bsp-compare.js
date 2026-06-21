@@ -1,0 +1,102 @@
+// @ts-check
+// @title BSP Compare
+// @order 19
+// @controls (none — static ground-truth pose)
+// bsp-compare.js — a STATIC, deterministic render of a baked BSP map for the
+// WebGL-vs-PPSSPP-vs-software ground-truth harness (framework/test/bsp-compare/).
+// No input, no animation, no soldier, no FPS HUD, no camera-follow: a single fixed
+// camera pose so the frame is byte-stable across runs and (via the shared dsin/dcos
+// trig) near-identical across hosts. The only per-host differences left are GPU
+// texture filtering / wrap / AA — exactly what the diff harness is meant to surface.
+//
+// Map via globalThis.__BSP_MAP (default 'box', the committed CC0 fixture). Other maps
+// are gitignored (copyrighted) and used for manual checks only.
+import {
+  start, Scene, Scene3D, Node3D, MeshBuilder, Material, Texture, meshFromBaked, Vec3, rgb, dsin, dcos, floorAt,
+} from '../src/index';
+import { BSP_BOX } from '../src/assets-bsp-box';
+
+/** @import { UpdateContext } from '../src/index' */
+
+// Map registry — only the committed CC0 box. To compare a real (gitignored) map locally,
+// add its import + entry here temporarily (revert before committing).
+const MAPS = { box: BSP_BOX };
+const active = /** @type {any} */ (globalThis).__BSP_MAP || 'box';
+const BSP = /** @type {any} */ (MAPS)[active] || BSP_BOX;
+
+/** Small-tile ground grid (one mesh) — guard-band-safe, matches bsp3d. @param {number} n @param {number} step @param {number} color */
+function gridGround(n, step, color) {
+  const b = new MeshBuilder();
+  const half = (n * step) / 2;
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const x0 = -half + i * step, z0 = -half + j * step, x1 = x0 + step, z1 = z0 + step;
+    b.quad(b.vertex(x0, 0, z1, color), b.vertex(x1, 0, z1, color), b.vertex(x1, 0, z0, color), b.vertex(x0, 0, z0, color));
+  }
+  return b.build();
+}
+/** Tessellated skybox (matches bsp3d), covering sky openings. @param {number} half @param {number} n @param {number} side @param {number} top @param {number} bottom */
+function tessBox(half, n, side, top, bottom) {
+  const b = new MeshBuilder();
+  const step = (2 * half) / n;
+  const faces = [[0, 1, side], [0, -1, side], [2, 1, side], [2, -1, side], [1, 1, top], [1, -1, bottom]];
+  for (const [ax, sign, col] of faces) {
+    const u = (ax + 1) % 3, v = (ax + 2) % 3;
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const idx = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([di, dj]) => {
+        const p = [0, 0, 0]; p[ax] = sign * half; p[u] = -half + (i + di) * step; p[v] = -half + (j + dj) * step;
+        return b.vertex(p[0], p[1], p[2], col);
+      });
+      b.quad(idx[0], idx[1], idx[2], idx[3]);
+    }
+  }
+  return b.build();
+}
+
+class CompareScene extends Scene {
+  /** @param {UpdateContext} ctx */
+  onEnter(ctx) {
+    const world = new Scene3D();
+    const farFog = Math.max(60, BSP.span * 2.2);
+    world.camera.setPerspective(64, 480 / 272, 0.08, farFog * 4);
+    world.fog = { color: BSP.skyColor, near: farFog * 0.6, far: farFog };
+
+    // Fixed camera at the spawn pose (deterministic via dsin/dcos), standing on the
+    // floor under the spawn (NOT the map's global-min vertex).
+    const floors = new Float32Array(BSP.floorSpans.buffer, BSP.floorSpans.byteOffset, BSP.floorSpans.byteLength >> 2);
+    const sx = BSP.spawn[0], sz = BSP.spawn[1], h = BSP.spawn[2];
+    const fy = floorAt(floors, sx, sz, BSP.spawnY, BSP.spawnY);
+    const fwdX = dsin(h), fwdZ = dcos(h);
+    const dist = Math.min(8.5, Math.max(3.5, BSP.span * 0.9));
+    let eye = new Vec3(sx - fwdX * dist, fy + 2.4, sz - fwdZ * dist);
+    let focus = new Vec3(sx + fwdX * 2.0, fy + 1.4, sz + fwdZ * 2.0);
+    const view = /** @type {any} */ (globalThis).__BSP_VIEW;
+    if (view === 'overhead') { // local diagnostic: top-down coverage
+      eye = new Vec3(0, fy + BSP.span * 1.8, 0.01);
+      focus = new Vec3(0, fy, 0);
+    } else if (view === 'hero') { // local diagnostic: elevated 3/4 survey of the spawn area
+      eye = new Vec3(sx - fwdX * 14, fy + 16, sz - fwdZ * 14);
+      focus = new Vec3(sx + fwdX * 16, fy + 1, sz + fwdZ * 16);
+    }
+    world.camera.lookAt(eye, focus, new Vec3(0, 1, 0));
+
+    // Camera-following ground + skybox, FIXED at the static camera (matches bsp3d): the
+    // skybox covers the map's dropped sky-texture openings so they read as sky, not void.
+    const sky = BSP.skyColor;
+    const skyTop = rgb(Math.min(255, ((sky >> 16) & 255) + 22), Math.min(255, ((sky >> 8) & 255) + 22), Math.min(255, (sky & 255) + 26));
+    world.add(new Node3D({ mesh: tessBox(Math.max(120, BSP.span * 3), 4, sky, skyTop, BSP.groundColor), position: new Vec3(eye.x, fy + 30, eye.z) }));
+    world.add(new Node3D({ mesh: gridGround(14, 6, BSP.groundColor), position: new Vec3(Math.round(eye.x / 6) * 6, fy - 0.05, Math.round(eye.z / 6) * 6) }));
+
+    // One Material per baked texture; sub-meshes are pre-sorted by texId.
+    const mats = BSP.textures.map((/** @type {any} */ t) => new Material({ texture: new Texture(t.pixels, t.width, t.height, t.psm) }));
+    for (const m of BSP.meshes()) {
+      const node = new Node3D({ mesh: meshFromBaked(m), material: m.texId >= 0 ? mats[m.texId] : undefined, isStatic: true });
+      node.bounds = { min: m.aabb.min, max: m.aabb.max };
+      world.add(node);
+    }
+    ctx.engine.scene3d = world;
+  }
+
+  // No update() — the scene is static; every frame emits the identical submit packet.
+}
+
+start(() => new CompareScene());

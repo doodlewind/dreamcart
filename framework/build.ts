@@ -27,7 +27,12 @@ if (entrypoints.length === 0) {
 // includes() check tree-shakes the assets exactly like the old base64 modules did.
 // Every game gets a pack (empty when it imports no baked assets) so each host has
 // a uniform artifact to load next to <name>.js.
-const store = existsSync(storePath) ? unpack(new Uint8Array(await Bun.file(storePath).arrayBuffer())) : [];
+// Merge the committed master store (assets.dcstore: gltf + CC0 box) with the gitignored
+// private store (assets-private.dcstore: copyrighted BSP maps baked locally) so a per-game
+// pack can pull blobs from either. The private store is simply absent in clean checkouts/CI.
+const privateStorePath = here + "src/assets-private.dcstore";
+const loadStore = async (p: string) => (existsSync(p) ? unpack(new Uint8Array(await Bun.file(p).arrayBuffer())) : []);
+const store = [...(await loadStore(storePath)), ...(await loadStore(privateStorePath))];
 // Match the QUOTED literal form (dc*("module:key") / '...') rather than the bare
 // key, so a key can never be a substring of another key and over-include its blob.
 // Keys never contain quotes, so the bounded match has no false positives or

@@ -7,6 +7,8 @@ export const Btn = {
   Right: 0x20,
   Down: 0x40,
   Left: 0x80,
+  LTrigger: 0x100, // PSP_CTRL_LTRIGGER
+  RTrigger: 0x200, // PSP_CTRL_RTRIGGER
   Triangle: 0x1000,
   Circle: 0x2000,
   Cross: 0x4000,

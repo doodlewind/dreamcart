@@ -16,6 +16,8 @@ use psp::sys::{
     self, CtrlMode, DepthFunc, DisplayPixelFormat, FrontFaceDirection, GuContextType, GuState,
     GuSyncBehavior, GuSyncMode, SceCtrlData, ShadingModel, TexturePixelFormat, ThreadAttributes,
 };
+#[cfg(feature = "capture")]
+use psp::sys::{DisplaySetBufSync, IoOpenFlags};
 use psp::vram_alloc::get_vram_allocator;
 use psp::{Align16, BUF_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 
@@ -168,6 +170,16 @@ unsafe fn run() {
     trace("run: register bridge");
     bridge::register(ctx, global);
 
+    // Capture builds tell the game to run its deterministic, input-free camera path
+    // (frame-indexed `capturePose`), so PPSSPPHeadless can dump a reproducible sequence.
+    #[cfg(feature = "capture")]
+    JS_SetPropertyStr(
+        ctx,
+        global,
+        b"__BSP_CAPTURE\0".as_ptr() as *const _,
+        JS_NewInt32(ctx, 1),
+    );
+
     // Expose the embedded asset pack as globalThis.__dcpak BEFORE eval (the baked
     // asset modules read it at module-eval time). Zero-copy: the ArrayBuffer views
     // the static GAME_DCPAK rodata directly (free_func = None — never freed); the
@@ -231,6 +243,17 @@ unsafe fn run() {
             trace_u32("frame buttons", pad.buttons.bits());
         }
 
+        // Capture builds drive the game's frame-indexed camera path by the SAME counter
+        // that names the dumped frame, so PSP pose N == file fN == the WebGL override N. The
+        // JS engine's own ctx.frame is a separate counter we must NOT depend on for this.
+        #[cfg(feature = "capture")]
+        JS_SetPropertyStr(
+            ctx,
+            global,
+            b"__capFrameOverride\0".as_ptr() as *const _,
+            JS_NewInt32(ctx, frame_count as i32),
+        );
+
         // Open this frame's display list; JS gfx.* calls enqueue into it.
         sys::sceGuStart(GuContextType::Direct, &mut LIST as *mut _ as *mut c_void);
 
@@ -249,7 +272,79 @@ unsafe fn run() {
         sys::sceGuSync(GuSyncMode::Finish, GuSyncBehavior::Wait);
         sys::sceDisplayWaitVblankStart();
         sys::sceGuSwapBuffers();
+
+        // Capture build only. Two reproducible-capture paths for the ground-truth loop,
+        // both no-ops everywhere but PPSSPPHeadless:
+        //   (1) single static frame (M1): emit the display framebuffer to the host via the
+        //       "emulator:" EMIT_SCREENSHOT=0x20 devctl -> __testfailure.bmp.
+        //   (2) camera-path sequence (M2): dump each frame in the capture window to a raw
+        //       file on the memstick (ms0:/dc_cap/fNNNN.raw) so a whole motion path can be
+        //       captured in one run and diffed frame-by-frame to surface flicker/jump.
+        // Settle a few frames first so boot / first-upload transients aren't captured.
+        #[cfg(feature = "capture")]
+        {
+            if frame_count >= 4 {
+                sys::sceIoDevctl(
+                    b"emulator:\0".as_ptr(),
+                    0x20,
+                    core::ptr::null_mut(),
+                    0,
+                    core::ptr::null_mut(),
+                    0,
+                );
+            }
+            cap_dump_frame(frame_count);
+        }
+
         frame_count = frame_count.wrapping_add(1);
+    }
+}
+
+/// Dump the just-presented display framebuffer to `ms0:/dc_cap/fNNNN.raw` (512-stride
+/// RGBA, as the GE wrote it) for the frames in the capture window. One headless run thus
+/// yields a deterministic image-per-pose sequence of the game's frame-indexed camera path.
+#[cfg(feature = "capture")]
+unsafe fn cap_dump_frame(frame_count: u32) {
+    const CAP_START: u32 = 8; // skip boot / first-upload transients
+    const CAP_N: u32 = 24; // frames captured along the path
+    if frame_count < CAP_START || frame_count >= CAP_START + CAP_N {
+        return;
+    }
+    let idx = frame_count - CAP_START;
+    if idx == 0 {
+        sys::sceIoMkdir(b"ms0:/dc_cap\0".as_ptr(), 0o777);
+    }
+    // "ms0:/dc_cap/fNNNN.raw\0" with the 4 digits (offsets 13..=16) patched from idx.
+    let mut name: [u8; 22] = *b"ms0:/dc_cap/f0000.raw\0";
+    let mut v = idx;
+    let mut i = 16usize;
+    loop {
+        name[i] = b'0' + (v % 10) as u8;
+        v /= 10;
+        if i == 13 {
+            break;
+        }
+        i -= 1;
+    }
+    // Resolve the current display buffer and read it straight from VRAM (uncached mirror,
+    // so we see the GE's fresh output rather than a stale cache line).
+    let mut top: *mut c_void = core::ptr::null_mut();
+    let mut bw: usize = 0;
+    let mut fmt = DisplayPixelFormat::Psm8888;
+    sys::sceDisplayGetFrameBuf(&mut top, &mut bw, &mut fmt, DisplaySetBufSync::Immediate);
+    let mut addr = top as u32;
+    if addr < 0x0400_0000 {
+        addr += 0x0400_0000;
+    }
+    addr |= 0x4000_0000;
+    let fd = sys::sceIoOpen(
+        name.as_ptr(),
+        IoOpenFlags::CREAT | IoOpenFlags::WR_ONLY | IoOpenFlags::TRUNC,
+        0o777,
+    );
+    if fd.0 >= 0 {
+        sys::sceIoWrite(fd, addr as *const c_void, 512 * 272 * 4);
+        sys::sceIoClose(fd);
     }
 }
 

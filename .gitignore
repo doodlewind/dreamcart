@@ -24,3 +24,13 @@ runtime/src/game/*.dcpak
 node_modules
 
 .DS_Store
+
+# GoldSrc/CS BSP maps: Valve/CS-copyright maps + WADs fetched at build time, and their
+# derivative baked modules, are NOT committed (only the CC0 box.bsp fixture + its module).
+assets/vendor/bsp/*.bsp
+assets/vendor/bsp/*.wad
+framework/src/assets-bsp-*.ts
+!framework/src/assets-bsp-box.ts
+# Copyrighted map dcpak blobs bake into the gitignored private store (box + gltf blobs
+# go into the committed assets.dcstore); build.ts merges both before per-game subsetting.
+framework/src/assets-private.dcstore

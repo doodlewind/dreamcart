@@ -11,20 +11,25 @@
     "web": "bun web/build-games.ts",
     "site": "bun web/deploy-build.ts",
     "deploy": "bun web/deploy-build.ts && bunx wrangler pages deploy web/site --project-name dreamcart",
-    "bake": "bun framework/bake/bake-font.ts && bun framework/bake/bake-sprites.ts && bun framework/bake/bake-gltf.ts && bun framework/bake/bake-scene.ts",
+    "bake": "bun framework/bake/bake-font.ts && bun framework/bake/bake-sprites.ts && bun framework/bake/bake-gltf.ts && bun framework/bake/bake-scene.ts && bun framework/bake/bake-bsp.ts box",
     "typecheck": "bunx tsc -p framework/tsconfig.json --noEmit && bunx tsc -p framework/games/tsconfig.json --noEmit",
     "bundle": "bun framework/build.ts",
-    "test": "bun framework/test/contract.ts && bun framework/test/controller.test.ts && bun framework/test/action.test.ts && bun framework/test/scene-desc.test.ts && bun framework/test/golden.ts",
+    "test": "bun framework/test/contract.ts && bun framework/test/controller.test.ts && bun framework/test/action.test.ts && bun framework/test/scene-desc.test.ts && bun framework/test/golden.ts && bun framework/test/bsp-parse.test.ts && bun framework/test/bsp-bake.test.ts && bun framework/test/bsp-walk.test.ts",
     "build": "bun run bake && bun run typecheck && bun run bundle && bun run web",
     "psp": "bun runtime/build.ts",
     "psp:trace": "bun scripts/build-psp-trace.ts",
     "psp:all": "bun scripts/build-psp-all.ts",
+    "bsp": "bun scripts/bsp-map.ts",
+    "bsp-loop": "bun framework/test/bsp-compare/run.ts",
+    "bsp-loop-seq": "bun framework/test/bsp-compare/seq-capture.ts",
+    "bsp-iterate": "bun scripts/bsp-iterate.ts",
     "3ds": "bun runtime-3ds/build.ts",
     "android": "bun android/sync-assets.ts && (cd android && ./gradlew :app:assembleDebug)",
     "android:install": "cd android && ./gradlew :app:installDebug && adb shell am start -n games.dreamcart/.MainActivity"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.4.0",
+    "playwright": "^1.61.0",
     "typescript": "^5.6.3",
     "upng-js": "^2.1.0"
   }

@@ -1,0 +1,5 @@
+# Generated comparison frames + diffs are host/GPU-dependent (and may render copyrighted
+# maps) — never committed. The tools (.ts/.html) and box golden (in goldens/) ARE committed.
+*.png
+*.score.json
+*.dc3d

@@ -14,14 +14,17 @@
   var BTN = {
     SELECT: 0x01, START: 0x08,
     UP: 0x10, RIGHT: 0x20, DOWN: 0x40, LEFT: 0x80,
+    LTRIGGER: 0x100, RTRIGGER: 0x200,
     TRIANGLE: 0x1000, CIRCLE: 0x2000, CROSS: 0x4000, SQUARE: 0x8000,
   };
 
-  // Keyboard -> button. Arrows/WASD = d-pad; Z/X/A/S = face; Enter = START.
+  // Keyboard -> button. Arrows/WASD = d-pad; Z/X/C/V = face; Q/L + E/R = L/R triggers;
+  // Enter = START.
   var KEYMAP = {
     ArrowUp: BTN.UP, ArrowRight: BTN.RIGHT, ArrowDown: BTN.DOWN, ArrowLeft: BTN.LEFT,
     KeyW: BTN.UP, KeyD: BTN.RIGHT, KeyS: BTN.DOWN, KeyA: BTN.LEFT,
     KeyZ: BTN.CROSS, KeyX: BTN.CIRCLE, KeyC: BTN.SQUARE, KeyV: BTN.TRIANGLE,
+    KeyQ: BTN.LTRIGGER, KeyL: BTN.LTRIGGER, KeyE: BTN.RTRIGGER, KeyR: BTN.RTRIGGER,
     Enter: BTN.START, Space: BTN.CROSS, ShiftRight: BTN.SELECT,
   };
 
@@ -375,8 +378,12 @@
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      // REPEAT (not CLAMP) to match the PSP GE's default wrap: world-space UVs
+      // (BSP/GoldSrc texel-unit UVs, the OSM facade/pavement tiles) run far outside
+      // [0,1] and must tile, not smear the edge texel across the whole face. Baked
+      // textures are power-of-two (<=256), so REPEAT is NPOT-safe in WebGL2.
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w | 0, h | 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(pixels, 0, (w | 0) * (h | 0) * 4));
       gl.bindTexture(gl.TEXTURE_2D, null);
       textures.push(tex);
@@ -736,7 +743,9 @@
     // Try to acquire WebGL2 BEFORE touching the DOM layout, so a missing context
     // leaves the existing 2D-only page byte-identical to today.
     try {
-      gl = c.getContext('webgl2', { antialias: false, depth: true, alpha: false });
+      // preserveDrawingBuffer: headless captures read the canvas through the compositor,
+      // which otherwise returns a cleared/last-composited buffer non-deterministically.
+      gl = c.getContext('webgl2', { antialias: false, depth: true, alpha: false, preserveDrawingBuffer: true });
     } catch (e) { gl = null; }
     if (!gl) return; // no WebGL2 -> leave g3d undefined; framework skips 3D
 

@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>bsp ground-truth headless</title>
+<!--
+  Headless single-frame renderer for the BSP ground-truth harness
+  (framework/test/bsp-compare/). Loads the SAME web runtime (engine.js, WebGL2 g3d
+  host) the playground uses, runs the static bsp-compare game, and exposes a stable
+  480x272 frame for Playwright/Chrome readback. ?map=box (default) selects the map.
+-->
+<style>html,body{margin:0;background:#000}#screen{width:480px;height:272px;image-rendering:pixelated}</style>
+<canvas id="screen" width="480" height="272"></canvas>
+<script src="engine.js"></script>
+<script src="games.generated.js"></script>
+<script>
+  (function () {
+    try {
+      PSPJS.mount(document.getElementById('screen'));
+      var q = new URLSearchParams(location.search);
+      window.__BSP_MAP = q.get('map') || 'box'; // bsp-compare reads globalThis.__BSP_MAP at load time
+      window.__BSP_VIEW = q.get('view') || '';   // '', 'overhead', or 'hero' (local diagnostics)
+      if (q.get('cap')) window.__BSP_CAPTURE = 1; // bsp3d capture mode: frame-indexed camera path
+      // ?pose=N pins capturePose to a single static pose for this load, so the page renders
+      // ONE deterministic frame and settles before the screenshot — no live-stepping race
+      // (one page load per pose; mirrors the reliable static bsp-compare path).
+      if (q.get('pose') !== null) window.__capFrameOverride = parseInt(q.get('pose'), 10) | 0;
+      var gameKey = q.get('game') || 'bsp-compare.js';
+      var heldBtn = parseInt(q.get('hold') || '0', 10) | 0; // hold a button mask each frame
+      var settle = parseInt(q.get('frames') || '8', 10) | 0;
+      var g = (window.GAMES || {})[gameKey];
+      if (!g) { window.__error = gameKey + ' not in GAMES'; return; }
+      var err = PSPJS.load(g.run, g.dcpak); // draws one frame immediately; g.dcpak -> __dcpak (baked blobs)
+      if (err) { window.__error = String(err && err.message || err); return; }
+      if (heldBtn) PSPJS.pressVirtual(heldBtn, true);
+      PSPJS.start();
+      var n = 0;
+      // When a pose is pinned (?pose=N), don't signal ready until the engine has actually
+      // rendered THAT pose (capturePose sets __renderedFrame) AND settled — so the
+      // screenshot can never race a pre-pose frame into the (preserved) drawing buffer.
+      var want = (q.get('pose') !== null) ? (parseInt(q.get('pose'), 10) | 0) : null;
+      (function spin() {
+        var posed = (want === null) || (window.__renderedFrame === want);
+        if (++n > settle && posed) { window.__ready = true; return; }
+        requestAnimationFrame(spin);
+      })();
+    } catch (e) { window.__error = String(e && e.message || e); }
+  })();
+</script>
