@@ -4,7 +4,6 @@
  * plus the live ThemePicker. `active` highlights the current route.
  * Headless markup via data-part; styled in base.ts.
  */
-import { useState } from "react";
 import { ThemePicker } from "./ThemePicker";
 
 export type NavKey = "engine" | "play" | "docs" | "changelog" | null;
@@ -19,26 +18,13 @@ const LINKS: { key: Exclude<NavKey, null>; label: string; href: string }[] = [
 ];
 
 export function Nav({ active = null }: { active?: NavKey }) {
-  const [open, setOpen] = useState(false);
   return (
-    <nav data-part="nav" data-open={open} aria-label="Primary">
+    <nav data-part="nav" aria-label="Primary">
       <a data-part="nav-brand" href="/">
         <span data-part="nav-brand-mark">DC</span>
         DreamCart
       </a>
       <div data-part="nav-spacer" />
-      <button
-        type="button"
-        data-part="button"
-        data-nav-toggle="true"
-        data-variant="ghost"
-        data-size="sm"
-        aria-label="Menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        ☰
-      </button>
       <div data-part="nav-links">
         {LINKS.map((l) => (
           <a
