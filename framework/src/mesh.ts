@@ -237,6 +237,11 @@ export class Mesh {
 
   // ---- primitives ----
 
+  /** 6 identical face colors for a uniform-color box/cube (Mesh.box/cube arg). */
+  static solid(c: Color): Color[] {
+    return [c, c, c, c, c, c];
+  }
+
   /** Axis-aligned cube centered at origin. `faceColors` = [+X,-X,+Y,-Y,+Z,-Z]. */
   static cube(size: number, faceColors: Color[]): Mesh {
     return Mesh.box(size, size, size, faceColors);

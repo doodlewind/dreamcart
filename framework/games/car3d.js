@@ -9,15 +9,15 @@
 // by per-frame matrices. Vehicle physics + chase-cam are deterministic JS.
 import {
   start, Scene, Scene3D, Node3D, Mesh, Material, Texture, meshFromBaked, mergeMeshes, Fps,
-  Mat4, Vec3, Quat, Colors, rgb, Btn, CharController, Collide,
+  Mat4, Vec3, Quat, Colors, rgb, Btn,
 } from '../src/index';
+import { CharController, Collide } from '../src/controller';
+import { ActionMap } from '../src/action';
 import { KENNEY_CAR } from '../src/assets-kenney-car';
 import { NATURE_PROPS } from '../src/assets-kenney-nature';
 
 /** @import { UpdateContext, Graphics, Node3D as N3D } from '../src/index' */
 
-/** @param {number} c @returns {number[]} */
-const solid = (c) => [c, c, c, c, c, c];
 
 const WHEEL_RADIUS = 0.3; // baked wheel hub sits at y=0.3 -> ~0.3 radius
 const MAX_STEER = 0.5; // rad
@@ -27,6 +27,7 @@ class CarScene extends Scene {
   /** @type {N3D} */ car = /** @type {any} */ (null);
   /** @type {{ node: N3D, front: boolean }[]} */ wheels = [];
   /** @type {CharController} */ ctrl = /** @type {any} */ (null);
+  /** @type {ActionMap} */ act = /** @type {any} */ (null);
   roll = 0;
   steer = 0;
   fps = new Fps();
@@ -53,7 +54,7 @@ class CarScene extends Scene {
     const rock = meshFromBaked(NATURE_PROPS.rock);
     const parts = [
       { mesh: Mesh.plane(150, 620, rgb(60, 92, 58)), model: Mat4.identity() },
-      { mesh: Mesh.box(9, 0.05, 600, solid(rgb(60, 60, 66))), model: Mat4.compose(new Vec3(0, 0.02, -260), id, new Vec3(1, 1, 1)) },
+      { mesh: Mesh.box(9, 0.05, 600, Mesh.solid(rgb(60, 60, 66))), model: Mat4.compose(new Vec3(0, 0.02, -260), id, new Vec3(1, 1, 1)) },
     ];
     for (let i = 0; i < 16; i++) {
       const z = -i * 34 - 12;
@@ -84,6 +85,11 @@ class CarScene extends Scene {
       { speed: 'continuous', accel: 14, decel: 7, maxSpeed: 26, steerScalesWithSpeed: 0.12, steerSpeedCap: 10, fwdSignZ: -1 },
       { mode: 'chase', dist: 7, lookahead: 6, eyeY: 3.4, lookY: 0.9 },
     );
+    this.act = new ActionMap(ctx.input, {
+      ACCEL: { buttons: [Btn.Cross] },
+      STEER: { axis: 'lx', axisButtons: [Btn.Left, Btn.Right] },
+      RESET: { buttons: [Btn.Start] },
+    });
     ctx.engine.scene3d = this.world;
   }
 
@@ -97,12 +103,12 @@ class CarScene extends Scene {
   /** @param {UpdateContext} ctx */
   update(ctx) {
     this.fps.sample();
-    const inp = ctx.input;
-    if (inp.pressed(Btn.Start)) this.reset();
+    const act = this.act;
+    if (act.pressed('RESET')) this.reset();
 
-    const steerInput = inp.axis().x;
+    const steerInput = act.axis('STEER');
     this.steer = steerInput * MAX_STEER;
-    this.ctrl.step({ throttle: inp.held(Btn.Cross) ? 1 : 0, steer: steerInput, pitch: 0, run: false }, ctx.dt);
+    this.ctrl.step({ throttle: act.held('ACCEL') ? 1 : 0, steer: steerInput, pitch: 0, run: false }, ctx.dt);
     Collide.clampBox(this.ctrl.s, -7.5, 7.5, -1e9, 1e9);
     const s = this.ctrl.s;
 

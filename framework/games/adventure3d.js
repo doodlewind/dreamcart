@@ -6,8 +6,10 @@
 // simple collision, and a skinned soldier character on the native PSP skin path.
 import {
   start, Scene, Scene3D, Node3D, Mesh, SkinnedMesh,
-  Vec3, Quat, Colors, rgb, Btn, HALF_PI, CharController, Collide,
+  Vec3, Quat, Colors, rgb, Btn, HALF_PI, Fps,
 } from '../src/index';
+import { CharController, Collide } from '../src/controller';
+import { ActionMap } from '../src/action';
 import { THREE_SOLDIER } from '../src/assets-three-soldier';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
@@ -25,10 +27,8 @@ class TacticalScene extends Scene {
   /** @type {{ minX: number, maxX: number, minZ: number, maxZ: number }[]} */
   blockers = [];
   /** @type {CharController} */ ctrl = /** @type {any} */ (null);
-  fps = 0;
-  _lastNow = 0;
-  _accUs = 0;
-  _frames = 0;
+  /** @type {ActionMap} */ act = /** @type {any} */ (null);
+  fps = new Fps();
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -47,6 +47,16 @@ class TacticalScene extends Scene {
       { mode: 'chase', dist: 7.2, lookahead: 2.4, eyeY: 3.4, lookY: 1.35 },
       { x: -11.5, z: 12.0, heading: -0.22 },
     );
+    // Named actions (data-driven input). Digital path is byte-identical to the old
+    // raw-Btn reads: STEER's invert + [Left,Right] pair yields Left=+1/Right=-1 (the
+    // arena's turn convention); analog steers the same way on a host that has a stick.
+    this.act = new ActionMap(ctx.input, {
+      FORWARD: { buttons: [Btn.Up, Btn.Cross] },
+      BACK: { buttons: [Btn.Down] },
+      RUN: { buttons: [Btn.Square] },
+      STEER: { axis: 'lx', axisButtons: [Btn.Left, Btn.Right], invert: true },
+      RESET: { buttons: [Btn.Start] },
+    });
 
     this.soldier = SkinnedMesh.fromBaked(THREE_SOLDIER);
     this.soldier.play(THREE_SOLDIER.clips.Walk);
@@ -135,38 +145,22 @@ class TacticalScene extends Scene {
     this.soldier.play(THREE_SOLDIER.clips.Walk);
   }
 
-  measureFps() {
-    const host = /** @type {any} */ (globalThis);
-    if (typeof host.now !== 'function') return;
-    const t = host.now();
-    if (this._lastNow) {
-      this._accUs += t - this._lastNow;
-      this._frames++;
-      if (this._accUs >= 1e6) {
-        this.fps = Math.round((this._frames * 1e6) / this._accUs);
-        this._accUs = 0;
-        this._frames = 0;
-      }
-    }
-    this._lastNow = t;
-  }
-
   /** @param {UpdateContext} ctx */
   update(ctx) {
-    this.measureFps();
-    const inp = ctx.input;
-    if (inp.pressed(Btn.Start)) this.reset();
+    this.fps.sample();
+    const act = this.act;
+    if (act.pressed('RESET')) this.reset();
 
-    const forward = inp.held(Btn.Up) || inp.held(Btn.Cross);
-    const back = inp.held(Btn.Down);
-    const run = inp.held(Btn.Square);
+    const forward = act.held('FORWARD');
+    const back = act.held('BACK');
+    const run = act.held('RUN');
     // Capture the pre-step position so slideAabb can revert into a blocker (it is
     // the moveTo "old"); then step, clamp the target to the arena, slide. This is
     // the exact clamp-then-X-then-Z order the bespoke moveTo() used.
     const px = this.ctrl.s.x, pz = this.ctrl.s.z;
     this.ctrl.step({
       throttle: forward ? 1 : back ? -1 : 0,
-      steer: (inp.held(Btn.Left) ? 1 : 0) - (inp.held(Btn.Right) ? 1 : 0),
+      steer: act.axis('STEER'),
       pitch: 0,
       run,
     }, ctx.dt);
@@ -191,7 +185,7 @@ class TacticalScene extends Scene {
     const drawn = total - this.world.culledCount;
     g.text('TACTICAL 3D', 8, 8, Colors.white, 1);
     g.text('arena ' + drawn + '/' + total, 8, 246, Colors.cyan, 1);
-    if (this.fps > 0) g.text(this.fps + ' FPS', 410, 8, Colors.yellow, 1);
+    if (this.fps.value > 0) g.text(this.fps.value + ' FPS', 410, 8, Colors.yellow, 1);
     g.text('Soldier.glb MIT', 8, 258, Colors.gray, 1);
   }
 }

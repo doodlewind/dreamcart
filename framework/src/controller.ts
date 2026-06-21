@@ -1,13 +1,12 @@
 // Shared character controller, camera rig and collision helpers — the reusable
-// core the 3D games used to each reinvent (heading/speed integration, chase/orbit/
-// fps/freefly cameras, AABB blocking, hitscan). A game supplies a MoveConfig + a
+// core the 3D games used to each reinvent (heading/speed integration, chase/fps/
+// freefly cameras, AABB blocking, hitscan). A game supplies a MoveConfig + a
 // CamRig and per-frame InputSample; kinematicStep advances a KinematicState and
 // camApply positions the camera. All math is dsin/dcos (deterministic) and in the
 // same operation order the hand-written games used, so migrating a game is a pure
 // refactor that keeps its golden byte-identical.
 import { Vec3, dsin, dcos } from './math';
 import type { Camera } from './scene3d';
-import { Input, Btn } from './input';
 
 export interface KinematicState {
   x: number; y: number; z: number;
@@ -103,14 +102,13 @@ export const Collide = {
   },
 };
 
-export type CamMode = 'chase' | 'orbit' | 'fps' | 'freefly';
+export type CamMode = 'chase' | 'fps' | 'freefly';
 export interface CamRig {
   mode: CamMode;
   // chase: distance behind + ABSOLUTE eye/look heights (NOT focusY+height — each
   // game's eye/look Y are independent constants, e.g. racing eyeY 3.2 lookY 0.9).
   dist?: number; lookahead?: number; eyeY?: number; lookY?: number;
   focusLocalX?: number; focusLocalZ?: number; // chase focus offset in the body's rotated local frame
-  radius?: number; heightRatio?: number; orbitAngle?: number; // orbit
   eyeHeight?: number; // fps
 }
 const UP = new Vec3(0, 1, 0);
@@ -124,10 +122,6 @@ export function camApply(cam: Camera, rig: CamRig, s: KinematicState, eye: Vec3,
   } else if (rig.mode === 'freefly') {
     eye.set(s.x, s.y, s.z);
     center.set(s.x + s.fwdX * 6, s.y + s.pitch * 6, s.z + s.fwdZ * 6);
-  } else if (rig.mode === 'orbit') {
-    const r = rig.radius ?? 1, a = rig.orbitAngle ?? 0;
-    eye.set(s.x + dsin(a) * r, s.y + r * (rig.heightRatio ?? 0.4), s.z + dcos(a) * r);
-    center.set(s.x, s.y, s.z);
   } else {
     const lcx = rig.focusLocalX ?? 0, lcz = rig.focusLocalZ ?? 0;
     const ccx = s.x + lcx * s.fwdZ + lcz * s.fwdX;
@@ -141,19 +135,9 @@ export function camApply(cam: Camera, rig: CamRig, s: KinematicState, eye: Vec3,
 
 export interface InputSample { throttle: number; steer: number; pitch: number; run: boolean; }
 
-/** Default sampler for walk/car-style games (forward on Up/Cross, steer on axis,
- *  run on Square). Freefly/outdoor games supply their own InputSample. */
-export function sampleDefault(inp: Input): InputSample {
-  const ax = inp.axis();
-  return {
-    throttle: inp.held(Btn.Up) || inp.held(Btn.Cross) ? 1 : inp.held(Btn.Down) ? -1 : -ax.y,
-    steer: ax.x,
-    pitch: 0,
-    run: inp.held(Btn.Square),
-  };
-}
-
-/** Bundles a state + config + rig with reusable camera scratch vectors. */
+/** Bundles a state + config + rig with reusable camera scratch vectors. Games
+ *  build their own per-frame InputSample (throttle/steer/pitch/run) — usually via
+ *  an ActionMap (framework/src/action.ts) — and pass it to step(). */
 export class CharController {
   s: KinematicState;
   private _eye = new Vec3();
@@ -166,9 +150,5 @@ export class CharController {
   }
   applyCam(cam: Camera): void {
     camApply(cam, this.rig, this.s, this._eye, this._center);
-  }
-  gait(): 'idle' | 'walk' | 'run' {
-    return this.s.speed === 0 ? 'idle'
-      : Math.abs(this.s.speed) > (this.cfg.walkSpeed ?? 1e9) + 0.01 ? 'run' : 'walk';
   }
 }

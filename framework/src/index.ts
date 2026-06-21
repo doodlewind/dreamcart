@@ -22,7 +22,6 @@ export * from './font';
 export * from './graphics';
 export * from './scene';
 export * from './engine';
-export * from './controller';
 export * from './dialogue';
 export * from './tilemap';
 export { FONT8X8 } from './assets-font';
@@ -36,3 +35,11 @@ export { unb64 } from './b64';
 // blobs into EVERY game's pack — even for 2D games. Games import the asset they
 // need DIRECTLY, e.g.
 //   import { KENNEY_CAR } from '../src/assets-kenney-car';
+//
+// For the SAME reason the 3D-only subsystems — controller.ts, action.ts,
+// scene-desc.ts — are NOT re-exported here either: a bare `export *` keeps them in
+// every game's bundle (Bun can't drop a star-export reachable from a 2D game's
+// index import), bloating the PSP EBOOT. The 3D games import them directly:
+//   import { CharController, Collide } from '../src/controller';
+//   import { ActionMap } from '../src/action';
+//   import { loadScene } from '../src/scene-desc';
