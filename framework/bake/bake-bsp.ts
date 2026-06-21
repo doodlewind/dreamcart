@@ -32,8 +32,9 @@ interface MapConf {
   sky: number;
   committed: boolean; // box: commit the module; c1a0: gitignored (Valve-derivative)
   tess?: number; // subdivide faces so no triangle edge exceeds this many metres (PSP GE
-  // guard-band safety for coarse fixtures viewed up close). Omitted for real maps (their
-  // geometry is already fine-grained) so their bake output is unchanged.
+  // guard-band safety: a single huge wall triangle projects far off-screen up close and the
+  // GE drops it). Set explicitly for coarse fixtures (box/zfight = 1.0); when UNSET (real
+  // maps) it defaults to an adaptive clamp(span*0.08, 2, 8) m — see below.
 }
 
 const ROOT = new URL('../../', import.meta.url).pathname;
@@ -190,6 +191,13 @@ for (const fo of visible) {
 }
 const cX = (minX + maxX) / 2, cZ = (minZ + maxZ) / 2;
 const span = Math.max(maxX - minX, maxZ - minZ) / 2 + 2;
+// Real maps (M.tess unset) get an ADAPTIVE guard-band tess that scales with map span: a
+// large map (de_dust2, span ~69) subdivides only its biggest faces (edge > ~8 m); a small
+// room subdivides finely (clamped to 2 m). Clamped [2, 8] m so byte growth stays bounded —
+// 8 m on dust2 was empirically the finest that adds NO extra decimation (the big walls/
+// floors split a level, all 156 sub-meshes + small detail kept, pack stays under budget).
+// Coarse fixtures keep their explicit per-map tess (box/zfight = 1.0). BSP_TESS env overrides.
+if (M.tess === undefined) M.tess = process.env.BSP_TESS ? Number(process.env.BSP_TESS) : Math.max(2.0, Math.min(8.0, span * 0.12));
 const NC = M.chunks * M.chunks;
 const NT = texturesOut.length || 1;
 const slot = (ci: number, tx: number) => ci * NT + tx;
