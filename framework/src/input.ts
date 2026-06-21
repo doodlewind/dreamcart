@@ -15,14 +15,33 @@ export const Btn = {
 
 export type Button = (typeof Btn)[keyof typeof Btn];
 
+/** Radial-ish deadzone for a single analog axis (|v| < 0.12 -> 0). */
+function deadzone(v: number): number {
+  return v > -0.12 && v < 0.12 ? 0 : v;
+}
+
 /** Edge-detecting input state, updated once per frame by the engine. */
 export class Input {
   cur = 0;
   prev = 0;
+  /** Analog stick, -1..1, 0 on hosts that don't provide it. See update(). */
+  analogX = 0;
+  analogY = 0;
 
-  update(mask: number): void {
+  /**
+   * Update from the per-frame word the host passes to frame(). The low 16 bits
+   * are the digital Btn bitmask (max Btn.Square=0x8000); a host MAY pack the
+   * analog stick into the free high 16 bits as two signed bytes
+   * (x = bits 16..23, y = bits 24..31, each lx-128 clamped to [-127,127]). The
+   * PSP host (runtime/src/main.rs) does this; digital-only hosts leave them 0, so
+   * cur/analog are byte-identical to the old behavior and goldens don't move.
+   */
+  update(packed: number): void {
     this.prev = this.cur;
-    this.cur = mask | 0;
+    this.cur = packed & 0xffff;
+    // Arithmetic shifts sign-extend the packed bytes; /127 -> ~[-1,1].
+    this.analogX = deadzone(((packed << 8) >> 24) / 127);
+    this.analogY = deadzone((packed >> 24) / 127);
   }
 
   held(b: number): boolean {
@@ -45,5 +64,16 @@ export class Input {
     if (this.held(Btn.Up)) y -= 1;
     if (this.held(Btn.Down)) y += 1;
     return { x, y };
+  }
+
+  /**
+   * Unified steering input: the analog stick past its deadzone, else the D-pad.
+   * Digital-only hosts (analog 0) fall straight back to dir(), so a game written
+   * against axis() behaves identically with or without an analog stick.
+   */
+  axis(): { x: number; y: number } {
+    return this.analogX !== 0 || this.analogY !== 0
+      ? { x: this.analogX, y: this.analogY }
+      : this.dir();
   }
 }

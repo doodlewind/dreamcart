@@ -9,7 +9,7 @@
 // by per-frame matrices. Vehicle physics + chase-cam are deterministic JS.
 import {
   start, Scene, Scene3D, Node3D, Mesh, Material, Texture, meshFromBaked, mergeMeshes, Fps,
-  Mat4, Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
+  Mat4, Vec3, Quat, Colors, rgb, Btn, CharController, Collide,
 } from '../src/index';
 import { KENNEY_CAR } from '../src/assets-kenney-car';
 import { NATURE_PROPS } from '../src/assets-kenney-nature';
@@ -18,8 +18,6 @@ import { NATURE_PROPS } from '../src/assets-kenney-nature';
 
 /** @param {number} c @returns {number[]} */
 const solid = (c) => [c, c, c, c, c, c];
-/** @param {number} v @param {number} a @param {number} b @returns {number} */
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 const WHEEL_RADIUS = 0.3; // baked wheel hub sits at y=0.3 -> ~0.3 radius
 const MAX_STEER = 0.5; // rad
@@ -28,10 +26,7 @@ class CarScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
   /** @type {N3D} */ car = /** @type {any} */ (null);
   /** @type {{ node: N3D, front: boolean }[]} */ wheels = [];
-  x = 0;
-  z = 0;
-  heading = 0;
-  speed = 0;
+  /** @type {CharController} */ ctrl = /** @type {any} */ (null);
   roll = 0;
   steer = 0;
   fps = new Fps();
@@ -82,15 +77,19 @@ class CarScene extends Scene {
       this.wheels.push({ node, front: off[2] > 0 }); // +z wheels are the front pair
     }
 
-    this.reset();
+    // Same vehicle physics + chase model as racing3d (shared controller), tuned to
+    // car3d's bounds (X ±7.5) and camera height (eyeY 3.4). Wheel roll/steer below
+    // stays game-specific, reading ctrl.s.speed / ctrl.s.heading.
+    this.ctrl = new CharController(
+      { speed: 'continuous', accel: 14, decel: 7, maxSpeed: 26, steerScalesWithSpeed: 0.12, steerSpeedCap: 10, fwdSignZ: -1 },
+      { mode: 'chase', dist: 7, lookahead: 6, eyeY: 3.4, lookY: 0.9 },
+    );
     ctx.engine.scene3d = this.world;
   }
 
   reset() {
-    this.x = 0;
-    this.z = 0;
-    this.heading = 0;
-    this.speed = 0;
+    const s = this.ctrl.s;
+    s.x = 0; s.z = 0; s.heading = 0; s.speed = 0;
     this.roll = 0;
     this.steer = 0;
   }
@@ -101,46 +100,33 @@ class CarScene extends Scene {
     const inp = ctx.input;
     if (inp.pressed(Btn.Start)) this.reset();
 
-    if (inp.held(Btn.Cross)) this.speed += 14 * ctx.dt;
-    else this.speed -= 7 * ctx.dt;
-    this.speed = clamp(this.speed, 0, 26);
-
-    // Steering authority scales with speed (bicycle model, as in racing3d).
-    const steerInput = inp.dir().x;
+    const steerInput = inp.axis().x;
     this.steer = steerInput * MAX_STEER;
-    this.heading += steerInput * Math.min(this.speed, 10) * 0.12 * ctx.dt;
-
-    const fwdX = dsin(this.heading);
-    const fwdZ = -dcos(this.heading);
-    this.x += fwdX * this.speed * ctx.dt;
-    this.z += fwdZ * this.speed * ctx.dt;
-    this.x = clamp(this.x, -7.5, 7.5);
+    this.ctrl.step({ throttle: inp.held(Btn.Cross) ? 1 : 0, steer: steerInput, pitch: 0, run: false }, ctx.dt);
+    Collide.clampBox(this.ctrl.s, -7.5, 7.5, -1e9, 1e9);
+    const s = this.ctrl.s;
 
     // Wheel roll: arc length / radius. Spin all four; steer the front pair.
-    this.roll += (this.speed / WHEEL_RADIUS) * ctx.dt;
+    this.roll += (s.speed / WHEEL_RADIUS) * ctx.dt;
     const rollQ = Quat.fromAxisAngle(new Vec3(1, 0, 0), this.roll);
     const steerQ = Quat.fromAxisAngle(new Vec3(0, 1, 0), this.steer);
     for (const w of this.wheels) {
       w.node.rotation = w.front ? steerQ.multiply(rollQ) : rollQ;
     }
 
-    this.car.position = new Vec3(this.x, 0, this.z);
-    this.car.rotation = Quat.fromEuler(0, this.heading, 0);
-
-    // Chase camera: behind + above, looking ahead of the car.
-    const eye = new Vec3(this.x - fwdX * 7, 3.4, this.z - fwdZ * 7);
-    const look = new Vec3(this.x + fwdX * 6, 0.9, this.z + fwdZ * 6);
-    this.world.camera.lookAt(eye, look, new Vec3(0, 1, 0));
+    this.car.position = new Vec3(s.x, 0, s.z);
+    this.car.rotation = Quat.fromEuler(0, s.heading, 0);
+    this.ctrl.applyCam(this.world.camera);
   }
 
   /** @param {Graphics} g */
   draw(g) {
-    const kmh = Math.round(this.speed * 7.2);
+    const kmh = Math.round(this.ctrl.s.speed * 7.2);
     g.text('CAR 3D', 8, 8, Colors.white, 2);
     if (this.fps.value > 0) g.text(this.fps.value + ' FPS', 410, 8, Colors.yellow, 1);
     g.text(kmh + ' KM/H', 8, 246, Colors.yellow, 2);
     g.rect(8, 234, 160, 6, rgb(40, 40, 40));
-    g.rect(8, 234, Math.round((this.speed / 26) * 160), 6, Colors.green);
+    g.rect(8, 234, Math.round((this.ctrl.s.speed / 26) * 160), 6, Colors.green);
   }
 }
 
