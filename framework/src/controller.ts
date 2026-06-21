@@ -1,6 +1,6 @@
 // Shared character controller, camera rig and collision helpers — the reusable
-// core the 3D games used to each reinvent (heading/speed integration, chase/orbit/
-// fps/freefly cameras, AABB blocking, hitscan). A game supplies a MoveConfig + a
+// core the 3D games used to each reinvent (heading/speed integration, chase/fps/
+// freefly cameras, AABB blocking, hitscan). A game supplies a MoveConfig + a
 // CamRig and per-frame InputSample; kinematicStep advances a KinematicState and
 // camApply positions the camera. All math is dsin/dcos (deterministic) and in the
 // same operation order the hand-written games used, so migrating a game is a pure
@@ -102,14 +102,13 @@ export const Collide = {
   },
 };
 
-export type CamMode = 'chase' | 'orbit' | 'fps' | 'freefly';
+export type CamMode = 'chase' | 'fps' | 'freefly';
 export interface CamRig {
   mode: CamMode;
   // chase: distance behind + ABSOLUTE eye/look heights (NOT focusY+height — each
   // game's eye/look Y are independent constants, e.g. racing eyeY 3.2 lookY 0.9).
   dist?: number; lookahead?: number; eyeY?: number; lookY?: number;
   focusLocalX?: number; focusLocalZ?: number; // chase focus offset in the body's rotated local frame
-  radius?: number; heightRatio?: number; orbitAngle?: number; // orbit
   eyeHeight?: number; // fps
 }
 const UP = new Vec3(0, 1, 0);
@@ -123,10 +122,6 @@ export function camApply(cam: Camera, rig: CamRig, s: KinematicState, eye: Vec3,
   } else if (rig.mode === 'freefly') {
     eye.set(s.x, s.y, s.z);
     center.set(s.x + s.fwdX * 6, s.y + s.pitch * 6, s.z + s.fwdZ * 6);
-  } else if (rig.mode === 'orbit') {
-    const r = rig.radius ?? 1, a = rig.orbitAngle ?? 0;
-    eye.set(s.x + dsin(a) * r, s.y + r * (rig.heightRatio ?? 0.4), s.z + dcos(a) * r);
-    center.set(s.x, s.y, s.z);
   } else {
     const lcx = rig.focusLocalX ?? 0, lcz = rig.focusLocalZ ?? 0;
     const ccx = s.x + lcx * s.fwdZ + lcz * s.fwdX;
