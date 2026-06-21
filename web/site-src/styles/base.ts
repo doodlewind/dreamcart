@@ -66,17 +66,10 @@ code, pre, kbd { font-family: var(--font-mono); }
 [data-part="nav-link"][data-icon="github"] { display: inline-flex; align-items: center; padding: 7px 9px; }
 [data-part="nav-link"][data-icon="github"] svg { display: block; }
 [data-part="nav-spacer"] { flex: 1; }
-[data-nav-toggle] { display: none; order: 3; }
 
 @media (max-width: 760px) {
-  [data-part="nav-links"] {
-    position: absolute; top: 58px; left: 0; right: 0; flex-direction: column;
-    align-items: stretch; gap: 0; padding: 8px; margin: 0;
-    background: var(--surface); border-bottom: 1px solid var(--border);
-  }
-  [data-part="nav"][data-open="false"] [data-part="nav-links"] { display: none; }
-  [data-part="nav-link"] { padding: 12px; border-radius: 8px; }
-  [data-nav-toggle] { display: inline-flex; }
+  [data-part="nav-links"] { flex-wrap: wrap; justify-content: flex-end; margin-left: 0; }
+  [data-part="nav-link"] { padding: 7px 8px; }
 }
 
 /* ── Theme picker ────────────────────────────────────────────────────────── */
