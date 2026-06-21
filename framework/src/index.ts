@@ -22,6 +22,7 @@ export * from './font';
 export * from './graphics';
 export * from './scene';
 export * from './engine';
+export * from './controller';
 export * from './dialogue';
 export * from './tilemap';
 export { FONT8X8 } from './assets-font';
