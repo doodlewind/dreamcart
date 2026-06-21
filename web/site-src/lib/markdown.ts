@@ -1,10 +1,12 @@
 /**
  * Build-time markdown -> HTML. Uses `marked` with slugged h2/h3 headings (anchor
- * links + a collected TOC). Code blocks render as token-themed <pre><code> (no
- * client JS / no syntax highlighter — keeps pages tiny; themes recolor via tokens).
- * Runs only in the Bun build (Node-ish), never shipped to the browser.
+ * links + a collected TOC). Code blocks are syntax-highlighted at BUILD TIME with
+ * highlight.js into class-based <span>s (hljs-keyword, hljs-string, …) — no client
+ * JS ships; the `.hljs-*` colors are token-driven in base.ts/themes.ts, so every
+ * theme recolors syntax to match. Runs only in the Bun build, never in the browser.
  */
 import { Marked } from "marked";
+import hljs from "highlight.js";
 import type { DocHeading } from "../pages/DocsPage";
 
 const slugify = (s: string) =>
@@ -31,8 +33,17 @@ export function renderMarkdown(md: string): {
   marked.use({
     renderer: {
       code({ text, lang }) {
-        const cls = lang ? ` class="language-${lang}"` : "";
-        return `<pre data-part="code"><code${cls}>${escapeHtml(text)}</code></pre>\n`;
+        // highlight.js escapes its own output; only fall back to manual escaping
+        // for unknown / no language. Strip a trailing newline marked passes through.
+        const language = (lang ?? "").trim().split(/\s+/)[0];
+        let inner: string;
+        if (language && hljs.getLanguage(language)) {
+          inner = hljs.highlight(text, { language, ignoreIllegals: true }).value;
+        } else {
+          inner = escapeHtml(text);
+        }
+        const cls = language ? `hljs language-${language}` : "hljs";
+        return `<pre data-part="code"><code class="${cls}">${inner}</code></pre>\n`;
       },
       heading({ tokens, depth }) {
         const text = this.parser.parseInline(tokens);

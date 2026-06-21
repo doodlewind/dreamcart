@@ -62,6 +62,9 @@ code, pre, kbd { font-family: var(--font-mono); }
 }
 [data-part="nav-link"]:hover { color: var(--fg); background: var(--accent-soft); text-decoration: none; }
 [data-part="nav-link"][aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+/* GitHub logo link: icon-only, vertically centered. */
+[data-part="nav-link"][data-icon="github"] { display: inline-flex; align-items: center; padding: 7px 9px; }
+[data-part="nav-link"][data-icon="github"] svg { display: block; }
 [data-part="nav-spacer"] { flex: 1; }
 [data-nav-toggle] { display: none; order: 3; }
 
@@ -301,6 +304,23 @@ pre, [data-part="code"] {
   background: var(--surface-2); color: var(--fg);
   border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; font-size: .9em;
 }
+
+/* ── Syntax highlighting — highlight.js classes mapped to syntax tokens, so every
+   theme recolors code to match (no client JS; colors come from themes.ts). ─────── */
+.hljs-comment, .hljs-quote { color: var(--code-comment); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag, .hljs-section,
+.hljs-meta .hljs-keyword { color: var(--code-keyword); font-weight: 600; }
+.hljs-string, .hljs-regexp, .hljs-meta .hljs-string, .hljs-template-tag,
+.hljs-addition { color: var(--code-string); }
+.hljs-number, .hljs-built_in, .hljs-bullet, .hljs-deletion { color: var(--code-number); }
+.hljs-title, .hljs-title.function_, .hljs-section .hljs-title { color: var(--code-function); }
+.hljs-type, .hljs-class .hljs-title, .hljs-title.class_, .hljs-attr, .hljs-attribute,
+.hljs-property, .hljs-name, .hljs-selector-class, .hljs-selector-id,
+.hljs-tag { color: var(--code-class); }
+.hljs-variable, .hljs-params, .hljs-symbol, .hljs-template-variable,
+.hljs-link, .hljs-meta { color: var(--code-variable); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
 [data-part="source-editor"] {
   width: 100%; min-height: 360px; resize: vertical;
   background: var(--code-bg); color: var(--code-fg); border: 1px solid var(--code-border);

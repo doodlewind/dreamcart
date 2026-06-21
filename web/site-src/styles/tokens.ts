@@ -54,6 +54,14 @@ export const TOKEN_NAMES = [
   "--code-bg", // code blocks / source modal / log
   "--code-fg", // code text
   "--code-border",
+  // ── Syntax highlighting (highlight.js classes; build-time) ───────────────
+  "--code-comment", // comments
+  "--code-keyword", // keywords / control flow
+  "--code-string", // strings / regexp
+  "--code-number", // numbers / booleans / literals
+  "--code-function", // function & method names
+  "--code-class", // types / classes / attrs / tags / properties
+  "--code-variable", // variables / params / symbols
   // ── Typography ───────────────────────────────────────────────────────────
   "--font-sans",
   "--font-mono",
