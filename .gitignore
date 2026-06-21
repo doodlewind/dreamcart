@@ -31,6 +31,7 @@ assets/vendor/bsp/*.bsp
 assets/vendor/bsp/*.wad
 framework/src/assets-bsp-*.ts
 !framework/src/assets-bsp-box.ts
+!framework/src/assets-bsp-zfight.ts
 # Copyrighted map dcpak blobs bake into the gitignored private store (box + gltf blobs
 # go into the committed assets.dcstore); build.ts merges both before per-game subsetting.
 framework/src/assets-private.dcstore

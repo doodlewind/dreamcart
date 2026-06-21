@@ -43,6 +43,14 @@ const MAPS: Record<string, MapConf> = {
     scale: 0.0254, chunks: 1, maxTextures: 8, maxTexSize: 64,
     ground: 0x3a3d42, sky: 0x10141e, committed: true,
   },
+  zfight: {
+    file: 'framework/test/fixtures/zfight.bsp',
+    name: 'CC0 z-fight / cull test scene',
+    title: 'BSP TEST - ZFIGHT',
+    attribution: 'Original CC0 BSP v30 fixture (DreamCart)',
+    scale: 0.0254, chunks: 1, maxTextures: 8, maxTexSize: 64,
+    ground: 0x3a3d42, sky: 0x10141e, committed: true,
+  },
   c1a0: {
     file: 'assets/vendor/bsp/c1a0.bsp',
     name: 'Half-Life c1a0 (Anomalous Materials)',

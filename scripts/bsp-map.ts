@@ -21,8 +21,12 @@ const vendor = root + 'assets/vendor/bsp/';
 const safe = map.replace(/[^a-z0-9]/gi, '-').toLowerCase(); // matches bake-bsp's outName stem
 const constName = 'BSP_' + map.toUpperCase().replace(/[^A-Z0-9]/g, '_'); // matches bake-bsp's export
 
-// 1. fetch the map (+ common CS WADs) if not already vendored. box is the committed fixture.
-if (map !== 'box') {
+// Committed CC0 fixtures under framework/test/fixtures/ (box room, zfight test scene) are
+// authored locally by make-*-bsp.ts, never fetched.
+const LOCAL_FIXTURES = new Set(['box', 'zfight']);
+
+// 1. fetch the map (+ common CS WADs) if not already vendored. Local CC0 fixtures skip fetch.
+if (!LOCAL_FIXTURES.has(map)) {
   if (!existsSync(vendor + map + '.bsp')) {
     console.log(`# fetching ${map}.bsp ...`);
     await $`bun framework/bake/fetch-bsp.ts ${map}`.cwd(root);
