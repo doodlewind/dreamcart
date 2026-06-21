@@ -131,7 +131,6 @@ function handBuilt(): Scene3D {
 interface SceneMeta {
   camera?: SceneDescriptor["camera"];
   fog?: SceneDescriptor["fog"];
-  lighting?: SceneDescriptor["lighting"];
   prototypes: SceneDescriptor["prototypes"];
   entities: { proto: string; tint?: number; isStatic?: boolean; id?: string; hasPos: boolean; hasRot: boolean; hasScale: boolean }[];
   instances: { proto: string; count: number; tint?: number; isStatic?: boolean; merge?: boolean; id?: string }[];
@@ -157,7 +156,7 @@ function serialize(key: string, d: SceneDescriptor): Blob[] {
   const colliders = d.colliders ?? [];
   const cf: number[] = [];
   for (const c of colliders) cf.push(c.min[0], c.min[1], c.min[2], c.max[0], c.max[1], c.max[2]);
-  const meta: SceneMeta = { camera: d.camera, fog: d.fog, lighting: d.lighting, prototypes: d.prototypes, entities, instances, colliderCount: colliders.length };
+  const meta: SceneMeta = { camera: d.camera, fog: d.fog, prototypes: d.prototypes, entities, instances, colliderCount: colliders.length };
   return [
     { key: key + ":scene.meta", dtype: DT_U8, data: new TextEncoder().encode(JSON.stringify(meta)) },
     { key: key + ":scene.xforms", dtype: DT_F32, data: rawBytes(new Float32Array(xforms)).slice() },

@@ -6,8 +6,10 @@
 // simple collision, and a skinned soldier character on the native PSP skin path.
 import {
   start, Scene, Scene3D, Node3D, Mesh, SkinnedMesh,
-  Vec3, Quat, Colors, rgb, Btn, HALF_PI, CharController, Collide, ActionMap,
+  Vec3, Quat, Colors, rgb, Btn, HALF_PI, Fps,
 } from '../src/index';
+import { CharController, Collide } from '../src/controller';
+import { ActionMap } from '../src/action';
 import { THREE_SOLDIER } from '../src/assets-three-soldier';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
@@ -26,10 +28,7 @@ class TacticalScene extends Scene {
   blockers = [];
   /** @type {CharController} */ ctrl = /** @type {any} */ (null);
   /** @type {ActionMap} */ act = /** @type {any} */ (null);
-  fps = 0;
-  _lastNow = 0;
-  _accUs = 0;
-  _frames = 0;
+  fps = new Fps();
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -146,25 +145,9 @@ class TacticalScene extends Scene {
     this.soldier.play(THREE_SOLDIER.clips.Walk);
   }
 
-  measureFps() {
-    const host = /** @type {any} */ (globalThis);
-    if (typeof host.now !== 'function') return;
-    const t = host.now();
-    if (this._lastNow) {
-      this._accUs += t - this._lastNow;
-      this._frames++;
-      if (this._accUs >= 1e6) {
-        this.fps = Math.round((this._frames * 1e6) / this._accUs);
-        this._accUs = 0;
-        this._frames = 0;
-      }
-    }
-    this._lastNow = t;
-  }
-
   /** @param {UpdateContext} ctx */
   update(ctx) {
-    this.measureFps();
+    this.fps.sample();
     const act = this.act;
     if (act.pressed('RESET')) this.reset();
 
@@ -202,7 +185,7 @@ class TacticalScene extends Scene {
     const drawn = total - this.world.culledCount;
     g.text('TACTICAL 3D', 8, 8, Colors.white, 1);
     g.text('arena ' + drawn + '/' + total, 8, 246, Colors.cyan, 1);
-    if (this.fps > 0) g.text(this.fps + ' FPS', 410, 8, Colors.yellow, 1);
+    if (this.fps.value > 0) g.text(this.fps.value + ' FPS', 410, 8, Colors.yellow, 1);
     g.text('Soldier.glb MIT', 8, 258, Colors.gray, 1);
   }
 }

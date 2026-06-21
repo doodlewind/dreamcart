@@ -70,7 +70,6 @@ export interface AABBDesc { min: [number, number, number]; max: [number, number,
 export interface SceneDescriptor {
   camera?: { fovDeg: number; aspect: number; near: number; far: number };
   fog?: { color: number; near: number; far: number };
-  lighting?: { ambient: number; lights: { color: number; dir: [number, number, number] }[] };
   prototypes: Record<string, MeshProto>;
   entities?: EntityDesc[];
   instances?: InstanceGroup[];
@@ -149,7 +148,9 @@ export function buildScene(d: SceneDescriptor): BuiltScene {
       if (g.id) nodes[g.id] = n;
     } else {
       for (const p of g.positions) {
-        scene.add({ mesh: proto, position: v3(p), tint: g.tint, isStatic: g.isStatic });
+        // Default to static like the merged path, so `merge` is purely a batching
+        // detail (a non-merged group is still static scenery unless told otherwise).
+        scene.add({ mesh: proto, position: v3(p), tint: g.tint, isStatic: g.isStatic ?? true });
       }
     }
   }
@@ -180,7 +181,6 @@ function protoOrThrow(d: SceneDescriptor, key: string): MeshProto {
 interface SceneMeta {
   camera?: SceneDescriptor['camera'];
   fog?: SceneDescriptor['fog'];
-  lighting?: SceneDescriptor['lighting'];
   prototypes: Record<string, MeshProto>;
   // entities: each carries only its non-numeric fields + which xform slots it uses.
   entities: { proto: string; tint?: number; isStatic?: boolean; id?: string;
@@ -233,7 +233,6 @@ export function loadScene(key: string): BuiltScene {
   return buildScene({
     camera: meta.camera,
     fog: meta.fog,
-    lighting: meta.lighting,
     prototypes: meta.prototypes,
     entities,
     instances,

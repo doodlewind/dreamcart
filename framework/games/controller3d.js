@@ -12,8 +12,9 @@
 // Fox: CC-BY-4.0 — model PixelMannen (CC0), rig/anim tomkranis, glTF Asobo/scurest.
 import {
   start, Scene, Scene3D, Mesh, SkinnedMesh, Fps,
-  Vec3, Quat, Colors, rgb, Btn, CharController, Collide,
+  Vec3, Quat, Colors, rgb, Btn,
 } from '../src/index';
+import { CharController, Collide } from '../src/controller';
 import { FOX } from '../src/assets-fox';
 
 /** @import { UpdateContext, Graphics, Node3D } from '../src/index' */
@@ -79,14 +80,14 @@ class ControllerDemo extends Scene {
 
   modeName() { return ['CAR', 'WALK', 'FLY', 'FPS'][this.modeIdx]; }
 
-  /** @param {number} i @returns {import('../src/index').MoveConfig} */
+  /** @param {number} i @returns {import('../src/controller').MoveConfig} */
   modeCfg(i) {
     if (i === 0) return { speed: 'continuous', accel: 8, decel: 12, maxSpeed: 13, steerScalesWithSpeed: 0.12, steerSpeedCap: 10, fwdSignZ: -1 };
     if (i === 1) return { speed: 'gated', walkSpeed: 2.0, runSpeed: 4.5, turnRate: 1.8, fwdSignZ: 1 };
     if (i === 2) return { alwaysForward: 7, turnRate: 1.5, pitchRate: 0.8, fwdSignZ: 1 };
     return { speed: 'gated', walkSpeed: 3, runSpeed: 6, backSpeed: 3, turnRate: 2.2, fwdSignZ: -1 }; // fps
   }
-  /** @param {number} i @returns {import('../src/index').CamRig} */
+  /** @param {number} i @returns {import('../src/controller').CamRig} */
   modeRig(i) {
     if (i === 0) return { mode: 'chase', dist: 8, lookahead: 6, eyeY: 3.4, lookY: 1.0 };
     if (i === 1) return { mode: 'chase', dist: this.foxR * 1.6, lookahead: 0, eyeY: this.foxCy + this.foxR * 0.4, lookY: this.foxCy, focusLocalX: this.foxCx, focusLocalZ: this.foxCz };

@@ -25,8 +25,6 @@ export interface Binding {
   axisButtons?: [number, number];
   /** Negate the resulting axis value (analog and digital alike). */
   invert?: boolean;
-  /** Per-action deadzone; the raw axis is already deadzoned by Input.update(). */
-  deadzone?: number;
 }
 export type ActionConfig = Record<string, Binding>;
 
@@ -62,7 +60,7 @@ export class ActionMap {
    * Analog value in [-1,1]: the bound stick axis past its deadzone, else the
    * digital axisButtons pair (positive - negative). With no analog input this is
    * exactly the old Input.axis() component, so the digital golden path is byte
-   * identical. invert flips the sign; an extra per-action deadzone may be applied.
+   * identical. invert flips the sign.
    *
    * Per-axis (NOT whole-vector) semantics, on purpose: the fallback to the digital
    * pair is gated only on THIS action's bound axis ('lx' -> analogX, 'ly' ->
@@ -86,7 +84,6 @@ export class ActionMap {
       if (this.inp.held(pos)) v += 1;
       if (this.inp.held(neg)) v -= 1;
     }
-    if (b.deadzone && v > -b.deadzone && v < b.deadzone) v = 0;
     return b.invert ? -v : v;
   }
 
