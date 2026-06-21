@@ -4,35 +4,31 @@
 // @controls CROSS walk; LEFT/RIGHT turn; SQUARE run; START reset
 // walk3d.js — the M5 milestone: a walking, hardware-skinned Fox. Builds on M4's
 // skinning core by advancing the AnimationPlayer (nlerp between baked frames) with
-// the clip phase tied to locomotion so the feet don't slide. Heading/speed/camera
-// are deterministic JS; the PSP GE skins + textures in hardware.
+// the clip phase tied to locomotion so the feet don't slide. Movement + chase
+// camera now run through the shared CharController (framework/src/controller.ts) —
+// the same gated-speed + heading integration + chase rig the other 3D games use,
+// configured here to reproduce the original framing byte-for-byte.
 //
 // Fox: CC-BY-4.0 — model PixelMannen (CC0), rig/anim tomkranis, glTF Asobo/scurest.
 import {
   start, Scene, Scene3D, Mesh, SkinnedMesh, Fps,
-  Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
+  Vec3, Quat, Colors, rgb, Btn,
 } from '../src/index';
+import { CharController, Collide } from '../src/controller';
+import { ActionMap } from '../src/action';
 import { FOX } from '../src/assets-fox';
 
 /** @import { UpdateContext, Graphics, Node3D } from '../src/index' */
-
-/** @param {number} v @param {number} a @param {number} b @returns {number} */
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 class WalkScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
   /** @type {Node3D} */ fox = /** @type {any} */ (null);
   /** @type {SkinnedMesh} */ skin = /** @type {any} */ (null);
-  x = 0;
-  z = 0;
-  heading = 0;
+  /** @type {CharController} */ ctrl = /** @type {any} */ (null);
+  /** @type {ActionMap} */ act = /** @type {any} */ (null);
   running = false;
   fps = new Fps();
   /** @type {any} */ engine = null;
-  foxCx = 0; // fox AABB centre (× scale, local space), for framing
-  foxCy = 0.5;
-  foxCz = 0;
-  foxR = 1.5; // fox bounding radius (× scale)
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -61,69 +57,74 @@ class WalkScene extends Scene {
       }
     }
     const s = FOX.scale;
-    this.foxCx = ((mn[0] + mx[0]) / 2) * s;
-    this.foxCy = ((mn[1] + mx[1]) / 2) * s;
-    this.foxCz = ((mn[2] + mx[2]) / 2) * s;
-    this.foxR = Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) * s;
+    const foxCx = ((mn[0] + mx[0]) / 2) * s;
+    const foxCy = ((mn[1] + mx[1]) / 2) * s;
+    const foxCz = ((mn[2] + mx[2]) / 2) * s;
+    const foxR = Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) * s;
 
+    // Gated walk/run + a chase rig framed identically to the old hand-written one:
+    // the local AABB centre is the focus (rotated by heading), eye sits foxR*1.6
+    // behind at height foxCy+foxR*0.4, look straight at the centre (lookahead 0).
+    this.ctrl = new CharController(
+      { speed: 'gated', walkSpeed: 2.0, runSpeed: 4.5, turnRate: 1.8, fwdSignZ: 1 },
+      {
+        mode: 'chase', dist: foxR * 1.6, lookahead: 0,
+        eyeY: foxCy + foxR * 0.4, lookY: foxCy,
+        focusLocalX: foxCx, focusLocalZ: foxCz,
+      },
+    );
+
+    this.act = new ActionMap(ctx.input, {
+      FORWARD: { buttons: [Btn.Cross, Btn.Square] },
+      RUN: { buttons: [Btn.Square] },
+      STEER: { axis: 'lx', axisButtons: [Btn.Left, Btn.Right], invert: true },
+      RESET: { buttons: [Btn.Start] },
+    });
     this.engine = ctx.engine;
     this.reset();
     ctx.engine.scene3d = this.world;
   }
 
   reset() {
-    this.x = 0;
-    this.z = 0;
-    this.heading = 0;
+    this.ctrl.s.x = 0;
+    this.ctrl.s.z = 0;
+    this.ctrl.s.heading = 0;
+    this.ctrl.s.speed = 0;
     this.skin.play(FOX.clips.Walk);
   }
 
   /** @param {UpdateContext} ctx */
   update(ctx) {
     this.fps.sample();
-    const inp = ctx.input;
-    if (inp.pressed(Btn.Start)) this.reset();
+    const act = this.act;
+    if (act.pressed('RESET')) this.reset();
 
-    if (inp.held(Btn.Left)) this.heading += 1.8 * ctx.dt;
-    if (inp.held(Btn.Right)) this.heading -= 1.8 * ctx.dt;
+    const run = act.held('RUN');
+    const moving = act.held('FORWARD');
+    // Forward on Cross/Square (gated speed); turn on Left(+)/Right(-) at 1.8 rad/s.
+    this.ctrl.step({
+      throttle: moving ? 1 : 0,
+      steer: act.axis('STEER'),
+      pitch: 0,
+      run,
+    }, ctx.dt);
+    Collide.clampBox(this.ctrl.s, -38, 38, -38, 38);
+    const s = this.ctrl.s;
 
-    const moving = inp.held(Btn.Cross) || inp.held(Btn.Square);
-    const run = inp.held(Btn.Square);
     // Switch clip when the gait changes (Walk <-> Run).
     if (run !== this.running) {
       this.running = run;
       this.skin.play(run ? FOX.clips.Run : FOX.clips.Walk);
     }
-    const speed = moving ? (run ? 4.5 : 2.0) : 0;
-
-    // Advance the clip phase only while moving, at a rate scaled with speed so
-    // the stride matches forward motion (no foot sliding). The Walk/Run clips are
-    // tuned at ~1× playback for their authored speeds.
-    const playRate = run ? speed / 4.5 : speed / 2.0;
+    // Advance the clip phase at a rate scaled with speed so the stride matches
+    // forward motion (no foot sliding). Walk/Run clips are tuned at 1× for their
+    // authored speeds (2.0 / 4.5).
+    const playRate = run ? s.speed / 4.5 : s.speed / 2.0;
     this.skin.player.advance(ctx.dt * playRate);
 
-    // Fox local forward is +Z; rotate by heading about Y and move along it.
-    const fwdX = dsin(this.heading);
-    const fwdZ = dcos(this.heading);
-    this.x += fwdX * speed * ctx.dt;
-    this.z += fwdZ * speed * ctx.dt;
-    this.x = clamp(this.x, -38, 38);
-    this.z = clamp(this.z, -38, 38);
-
-    this.fox.position = new Vec3(this.x, 0, this.z);
-    this.fox.rotation = Quat.fromEuler(0, this.heading, 0);
-
-    // Chase camera framed exactly like skin3d: look AT the fox's AABB centre
-    // from a fixed angle behind it, at the same distance (radius*1.6) and height
-    // (centre + radius*0.4) ratios skin3d's orbit uses. (skin3d orbits a still
-    // fox; here the same framing simply tracks the fox from behind as it walks.)
-    // The local AABB centre is rotated by heading so it tracks turns correctly.
-    const ccx = this.x + this.foxCx * fwdZ + this.foxCz * fwdX;
-    const ccz = this.z - this.foxCx * fwdX + this.foxCz * fwdZ;
-    const ccy = this.foxCy;
-    const d = this.foxR * 1.6;
-    const eye = new Vec3(ccx - fwdX * d, ccy + this.foxR * 0.4, ccz - fwdZ * d);
-    this.world.camera.lookAt(eye, new Vec3(ccx, ccy, ccz), new Vec3(0, 1, 0));
+    this.fox.position = new Vec3(s.x, 0, s.z);
+    this.fox.rotation = Quat.fromEuler(0, s.heading, 0);
+    this.ctrl.applyCam(this.world.camera);
   }
 
   /** @param {Graphics} g */

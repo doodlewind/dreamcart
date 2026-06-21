@@ -11,8 +11,10 @@
 import {
   start, Scene, Scene3D, Node3D, TexMeshBuilder, Texture, Material,
   Lighting, DirectionalLight, meshFromBaked,
-  Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
+  Vec3, Quat, Colors, rgb, Btn, dsin, dcos, Fps,
 } from '../src/index';
+import { CharController, Collide } from '../src/controller';
+import { ActionMap } from '../src/action';
 import { NATURE_PROPS } from '../src/assets-kenney-nature';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
@@ -36,18 +38,12 @@ const CELLS = 8; // quads per chunk edge
 
 class OutdoorScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
-  x = 0;
-  z = 40;
-  y = 6;
-  heading = Math.PI; // face -Z (into the field)
-  pitch = -0.15;
+  /** @type {CharController} */ ctrl = /** @type {any} */ (null);
+  /** @type {ActionMap} */ act = /** @type {any} */ (null);
   drawn = 0;
   // real-FPS measurement via the host `now()` (microseconds on PSP; absent
   // elsewhere -> stays 0). The engine's dt is a fixed timestep, not real time.
-  fps = 0;
-  _lastNow = 0;
-  _accUs = 0;
-  _frames = 0;
+  fps = new Fps();
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -69,6 +65,18 @@ class OutdoorScene extends Scene {
     this.buildTerrain(groundMat);
     this.scatterProps();
 
+    // Free-fly camera: always drift forward (gated 7, boost 16 on Cross via run),
+    // 1.1 turn, forward +Z. Pitch is clamped game-side (below); y ground-follows.
+    this.ctrl = new CharController(
+      { speed: 'gated', walkSpeed: 7, runSpeed: 16, turnRate: 1.1, fwdSignZ: 1 },
+      { mode: 'freefly' },
+      { x: 0, z: 40, y: 6, heading: Math.PI, pitch: -0.15 },
+    );
+    this.act = new ActionMap(ctx.input, {
+      STEER: { axis: 'lx', axisButtons: [Btn.Left, Btn.Right], invert: true },
+      BOOST: { buttons: [Btn.Cross] },
+      RESET: { buttons: [Btn.Start] },
+    });
     ctx.engine.scene3d = this.world;
   }
 
@@ -166,55 +174,33 @@ class OutdoorScene extends Scene {
   }
 
   reset() {
-    this.x = 0;
-    this.z = 40;
-    this.heading = Math.PI;
-    this.pitch = -0.15;
-  }
-
-  /** Sample real wall-clock FPS from the host `now()` (µs), smoothed over ~1s. */
-  measureFps() {
-    const host = /** @type {any} */ (globalThis);
-    if (typeof host.now !== 'function') return;
-    const t = host.now();
-    if (this._lastNow) {
-      this._accUs += t - this._lastNow;
-      this._frames++;
-      if (this._accUs >= 1e6) {
-        this.fps = Math.round((this._frames * 1e6) / this._accUs);
-        this._accUs = 0;
-        this._frames = 0;
-      }
-    }
-    this._lastNow = t;
+    const s = this.ctrl.s;
+    s.x = 0; s.z = 40; s.heading = Math.PI; s.pitch = -0.15; s.speed = 0;
   }
 
   /** @param {UpdateContext} ctx */
   update(ctx) {
-    this.measureFps();
+    this.fps.sample();
     const inp = ctx.input;
-    if (inp.pressed(Btn.Start)) this.reset();
-    if (inp.held(Btn.Left)) this.heading += 1.1 * ctx.dt;
-    if (inp.held(Btn.Right)) this.heading -= 1.1 * ctx.dt;
-    if (inp.held(Btn.Up)) this.pitch = clamp(this.pitch + 0.8 * ctx.dt, -0.8, 0.5);
-    if (inp.held(Btn.Down)) this.pitch = clamp(this.pitch - 0.8 * ctx.dt, -0.8, 0.5);
+    const act = this.act;
+    if (act.pressed('RESET')) this.reset();
+    const s = this.ctrl.s;
+    // Pitch is clamped to [-0.8,0.5] (the controller's freefly pitch is unclamped),
+    // so it stays game-side here (a plain Up/Down accumulator, not an axis action).
+    if (inp.held(Btn.Up)) s.pitch = clamp(s.pitch + 0.8 * ctx.dt, -0.8, 0.5);
+    if (inp.held(Btn.Down)) s.pitch = clamp(s.pitch - 0.8 * ctx.dt, -0.8, 0.5);
 
     // Always drift forward (a slow fly-through that exercises culling); boost on X.
-    const speed = inp.held(Btn.Cross) ? 16 : 7;
-    const fwdX = dsin(this.heading);
-    const fwdZ = dcos(this.heading);
-    this.x = clamp(this.x + fwdX * speed * ctx.dt, -56, 56);
-    this.z = clamp(this.z + fwdZ * speed * ctx.dt, -56, 56);
+    this.ctrl.step({
+      throttle: 1,
+      steer: act.axis('STEER'),
+      pitch: 0,
+      run: act.held('BOOST'),
+    }, ctx.dt);
+    Collide.clampBox(s, -56, 56, -56, 56);
     // Stay a fixed height above the ground under the camera.
-    this.y = height(this.x, this.z) + 5;
-
-    const eye = new Vec3(this.x, this.y, this.z);
-    const look = new Vec3(
-      this.x + fwdX * 6,
-      this.y + this.pitch * 6,
-      this.z + fwdZ * 6,
-    );
-    this.world.camera.lookAt(eye, look, new Vec3(0, 1, 0));
+    s.y = height(s.x, s.z) + 5;
+    this.ctrl.applyCam(this.world.camera);
   }
 
   /** @param {Graphics} g */
@@ -226,7 +212,7 @@ class OutdoorScene extends Scene {
     const total = this.world.root.children.length;
     const drawn = total - this.world.culledCount;
     g.text('OUTDOOR 3D', 8, 8, Colors.white, 1);
-    if (this.fps > 0) g.text(this.fps + ' FPS  ' + drawn + '/' + total, 8, 258, Colors.yellow, 1);
+    if (this.fps.value > 0) g.text(this.fps.value + ' FPS  ' + drawn + '/' + total, 8, 258, Colors.yellow, 1);
   }
 }
 

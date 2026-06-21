@@ -143,6 +143,17 @@ const SPECS: { name: string; frames: number; input?: (f: number) => number }[] =
   { name: "adventure3d", frames: 180, input: (f) => (f < 70 ? 0x10 : f < 120 ? 0x10 | 0x80 : 0x8000) | (f > 30 && f < 115 ? 0x4000 : 0) },
   // fps: turn right, walk forward, shoot a few times.
   { name: "fps3d", frames: 180, input: (f) => (f < 40 ? 0x20 : f < 110 ? 0x10 : 0x80) | (f % 24 === 0 ? 0x4000 : 0) },
+  // controller3d: cycle CAR->WALK->FLY->FPS via single-frame SELECT (0x01) pulses
+  // at 60/120/180, while pulsing CROSS (go/fire) and steering + pitching, so the
+  // golden exercises all four config/rig paths through the one kinematicStep.
+  {
+    name: "controller3d", frames: 240,
+    input: (f) =>
+      ((f === 60 || f === 120 || f === 180) ? 0x01 : 0) | // SELECT pulse -> next mode
+      (f % 20 < 14 ? 0x4000 : 0) |                        // CROSS go/fire (pulsed so FPS fires)
+      (f % 80 < 40 ? 0x20 : 0x80) |                       // steer Right then Left
+      (f % 30 < 15 ? 0x10 : 0x40),                        // UP/DOWN (fly pitch / fps move)
+  },
   // bsp: walk the BSP-imported box room (D-pad UP, then strafe, then run).
   { name: "bsp3d", frames: 90, input: (f) => (f < 30 ? 0x10 : f < 60 ? 0x10 | 0x20 : 0x8000 | 0x10) },
   // bsp-compare: static ground-truth pose (no input) — the committable structure golden

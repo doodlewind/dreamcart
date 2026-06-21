@@ -231,7 +231,14 @@ unsafe fn run() {
     let mut frame_count: u32 = 0;
     loop {
         sys::sceCtrlReadBufferPositive(&mut pad, 1);
-        let mask = pad.buttons.bits() as i32;
+        // Buttons live in the low 16 bits (max Btn.Square=0x8000); pack the analog
+        // stick into the free high 16 bits as two signed bytes (x=16..23, y=24..31,
+        // each lx/ly-128 clamped to [-127,127]). The JS reader (framework/src/
+        // input.ts Input.update) sign-extends and /127s them; digital-only hosts
+        // leave the high bits 0 so axis() falls back to the d-pad and goldens hold.
+        let bx = (pad.lx as i32 - 128).clamp(-127, 127);
+        let by = (pad.ly as i32 - 128).clamp(-127, 127);
+        let mask = (pad.buttons.bits() as i32 & 0xffff) | ((bx & 0xff) << 16) | ((by & 0xff) << 24);
         if trace_enabled() && frame_count < 4 {
             trace_u32("frame buttons", pad.buttons.bits());
         }

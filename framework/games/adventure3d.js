@@ -6,14 +6,13 @@
 // simple collision, and a skinned soldier character on the native PSP skin path.
 import {
   start, Scene, Scene3D, Node3D, Mesh, SkinnedMesh,
-  Vec3, Quat, Colors, rgb, Btn, dsin, dcos, PI, HALF_PI,
+  Vec3, Quat, Colors, rgb, Btn, HALF_PI, Fps,
 } from '../src/index';
+import { CharController, Collide } from '../src/controller';
+import { ActionMap } from '../src/action';
 import { THREE_SOLDIER } from '../src/assets-three-soldier';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
-
-/** @param {number} v @param {number} a @param {number} b @returns {number} */
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 const WALL = [rgb(104, 109, 111), rgb(82, 87, 90), rgb(138, 142, 140), rgb(55, 58, 60), rgb(92, 96, 98), rgb(72, 76, 78)];
 const FLOOR = [rgb(74, 74, 70), rgb(64, 64, 61), rgb(94, 91, 82), rgb(48, 48, 46), rgb(78, 76, 70), rgb(58, 58, 55)];
@@ -27,13 +26,9 @@ class TacticalScene extends Scene {
   /** @type {Node3D} */ actor = /** @type {any} */ (null);
   /** @type {{ minX: number, maxX: number, minZ: number, maxZ: number }[]} */
   blockers = [];
-  x = -11.5;
-  z = 12.0;
-  heading = -0.22;
-  fps = 0;
-  _lastNow = 0;
-  _accUs = 0;
-  _frames = 0;
+  /** @type {CharController} */ ctrl = /** @type {any} */ (null);
+  /** @type {ActionMap} */ act = /** @type {any} */ (null);
+  fps = new Fps();
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -44,11 +39,30 @@ class TacticalScene extends Scene {
 
     this.buildArena();
 
+    // Gated walk/run/back (3.0/6.4/-2.2) + 2.15 turn, forward +Z; chase rig at
+    // eyeY 3.4 / lookY 1.35, dist 7.2, lookahead 2.4. AABB slide vs blockers (r .38)
+    // + arena clamp ±17.4 below replace the bespoke blocked()/moveTo().
+    this.ctrl = new CharController(
+      { speed: 'gated', walkSpeed: 3.0, runSpeed: 6.4, backSpeed: 2.2, turnRate: 2.15, fwdSignZ: 1 },
+      { mode: 'chase', dist: 7.2, lookahead: 2.4, eyeY: 3.4, lookY: 1.35 },
+      { x: -11.5, z: 12.0, heading: -0.22 },
+    );
+    // Named actions (data-driven input). Digital path is byte-identical to the old
+    // raw-Btn reads: STEER's invert + [Left,Right] pair yields Left=+1/Right=-1 (the
+    // arena's turn convention); analog steers the same way on a host that has a stick.
+    this.act = new ActionMap(ctx.input, {
+      FORWARD: { buttons: [Btn.Up, Btn.Cross] },
+      BACK: { buttons: [Btn.Down] },
+      RUN: { buttons: [Btn.Square] },
+      STEER: { axis: 'lx', axisButtons: [Btn.Left, Btn.Right], invert: true },
+      RESET: { buttons: [Btn.Start] },
+    });
+
     this.soldier = SkinnedMesh.fromBaked(THREE_SOLDIER);
     this.soldier.play(THREE_SOLDIER.clips.Walk);
     this.actor = this.world.add({
-      position: new Vec3(this.x, 0, this.z),
-      rotation: Quat.fromEuler(0, this.heading, 0),
+      position: new Vec3(this.ctrl.s.x, 0, this.ctrl.s.z),
+      rotation: Quat.fromEuler(0, this.ctrl.s.heading, 0),
     });
     this.actor.add(new Node3D({
       skinned: this.soldier,
@@ -126,78 +140,43 @@ class TacticalScene extends Scene {
   }
 
   reset() {
-    this.x = -11.5;
-    this.z = 12.0;
-    this.heading = -0.22;
+    const s = this.ctrl.s;
+    s.x = -11.5; s.z = 12.0; s.heading = -0.22; s.speed = 0;
     this.soldier.play(THREE_SOLDIER.clips.Walk);
-  }
-
-  /** @param {number} nx @param {number} nz @returns {boolean} */
-  blocked(nx, nz) {
-    const r = 0.38;
-    for (const b of this.blockers) {
-      if (nx + r > b.minX && nx - r < b.maxX && nz + r > b.minZ && nz - r < b.maxZ) return true;
-    }
-    return false;
-  }
-
-  /** @param {number} nx @param {number} nz */
-  moveTo(nx, nz) {
-    nx = clamp(nx, -17.4, 17.4);
-    nz = clamp(nz, -17.4, 17.4);
-    if (!this.blocked(nx, this.z)) this.x = nx;
-    if (!this.blocked(this.x, nz)) this.z = nz;
-  }
-
-  measureFps() {
-    const host = /** @type {any} */ (globalThis);
-    if (typeof host.now !== 'function') return;
-    const t = host.now();
-    if (this._lastNow) {
-      this._accUs += t - this._lastNow;
-      this._frames++;
-      if (this._accUs >= 1e6) {
-        this.fps = Math.round((this._frames * 1e6) / this._accUs);
-        this._accUs = 0;
-        this._frames = 0;
-      }
-    }
-    this._lastNow = t;
   }
 
   /** @param {UpdateContext} ctx */
   update(ctx) {
-    this.measureFps();
-    const inp = ctx.input;
-    if (inp.pressed(Btn.Start)) this.reset();
-    if (inp.held(Btn.Left)) this.heading += 2.15 * ctx.dt;
-    if (inp.held(Btn.Right)) this.heading -= 2.15 * ctx.dt;
+    this.fps.sample();
+    const act = this.act;
+    if (act.pressed('RESET')) this.reset();
 
-    const forward = inp.held(Btn.Up) || inp.held(Btn.Cross);
-    const back = inp.held(Btn.Down);
-    const run = inp.held(Btn.Square);
-    const speed = forward ? (run ? 6.4 : 3.0) : back ? -2.2 : 0;
-    const fwdX = dsin(this.heading);
-    const fwdZ = dcos(this.heading);
-    const clip = speed === 0 ? THREE_SOLDIER.clips.Idle : run ? THREE_SOLDIER.clips.Run : THREE_SOLDIER.clips.Walk;
+    const forward = act.held('FORWARD');
+    const back = act.held('BACK');
+    const run = act.held('RUN');
+    // Capture the pre-step position so slideAabb can revert into a blocker (it is
+    // the moveTo "old"); then step, clamp the target to the arena, slide. This is
+    // the exact clamp-then-X-then-Z order the bespoke moveTo() used.
+    const px = this.ctrl.s.x, pz = this.ctrl.s.z;
+    this.ctrl.step({
+      throttle: forward ? 1 : back ? -1 : 0,
+      steer: act.axis('STEER'),
+      pitch: 0,
+      run,
+    }, ctx.dt);
+    Collide.clampBox(this.ctrl.s, -17.4, 17.4, -17.4, 17.4);
+    Collide.slideAabb(this.ctrl.s, px, pz, 0.38, this.blockers);
+    const s = this.ctrl.s;
+
+    // Clip + phase advance stay game-specific (Idle anim advances at 1×; Walk/Run
+    // at a fixed 1.0/1.4 model, not a speed ratio).
+    const clip = s.speed === 0 ? THREE_SOLDIER.clips.Idle : run ? THREE_SOLDIER.clips.Run : THREE_SOLDIER.clips.Walk;
     if (this.soldier.player.clip !== clip) this.soldier.play(clip);
-    if (speed !== 0) {
-      this.soldier.player.advance(ctx.dt * (run ? 1.4 : 1.0));
-      this.moveTo(this.x + fwdX * speed * ctx.dt, this.z + fwdZ * speed * ctx.dt);
-    } else {
-      this.soldier.player.advance(ctx.dt);
-    }
+    this.soldier.player.advance(s.speed !== 0 ? ctx.dt * (run ? 1.4 : 1.0) : ctx.dt);
 
-    this.actor.position = new Vec3(this.x, 0, this.z);
-    this.actor.rotation = Quat.fromEuler(0, this.heading, 0);
-
-    const focus = new Vec3(this.x, 1.35, this.z);
-    const eye = new Vec3(
-      this.x - fwdX * 7.2,
-      3.4,
-      this.z - fwdZ * 7.2,
-    );
-    this.world.camera.lookAt(eye, new Vec3(focus.x + fwdX * 2.4, focus.y, focus.z + fwdZ * 2.4), new Vec3(0, 1, 0));
+    this.actor.position = new Vec3(s.x, 0, s.z);
+    this.actor.rotation = Quat.fromEuler(0, s.heading, 0);
+    this.ctrl.applyCam(this.world.camera);
   }
 
   /** @param {Graphics} g */
@@ -206,7 +185,7 @@ class TacticalScene extends Scene {
     const drawn = total - this.world.culledCount;
     g.text('TACTICAL 3D', 8, 8, Colors.white, 1);
     g.text('arena ' + drawn + '/' + total, 8, 246, Colors.cyan, 1);
-    if (this.fps > 0) g.text(this.fps + ' FPS', 410, 8, Colors.yellow, 1);
+    if (this.fps.value > 0) g.text(this.fps.value + ' FPS', 410, 8, Colors.yellow, 1);
     g.text('Soldier.glb MIT', 8, 258, Colors.gray, 1);
   }
 }

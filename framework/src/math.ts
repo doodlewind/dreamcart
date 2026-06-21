@@ -67,6 +67,13 @@ export class Vec3 {
     this.y = y;
     this.z = z;
   }
+  /** Mutate in place (lets callers reuse a scratch vector; returns this). */
+  set(x: number, y: number, z: number): Vec3 {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+    return this;
+  }
   add(b: Vec3): Vec3 {
     return new Vec3(this.x + b.x, this.y + b.y, this.z + b.z);
   }
