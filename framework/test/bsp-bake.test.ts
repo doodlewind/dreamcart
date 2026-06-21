@@ -8,7 +8,11 @@
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { vertexStride, FMT_POS, FMT_COLOR, FMT_NORMAL, FMT_UV } from '../src/g3d';
-import { BSP_BOX as BSP } from '../src/assets-bsp-box';
+// Expose the committed dcpak store as __dcpak before the baked box module evals (it now
+// pulls its blobs from the pack by key); dynamic import since static imports hoist.
+const _store = readFileSync(new URL('../src/assets.dcstore', import.meta.url));
+(globalThis as any).__dcpak = _store.buffer.slice(_store.byteOffset, _store.byteOffset + _store.byteLength);
+const { BSP_BOX: BSP } = await import('../src/assets-bsp-box');
 
 let pass = 0, fail = 0;
 const ok = (cond: boolean, msg: string) => { if (cond) pass++; else { fail++; console.log('FAIL:', msg); } };

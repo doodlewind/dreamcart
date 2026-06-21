@@ -28,7 +28,7 @@
       var settle = parseInt(q.get('frames') || '8', 10) | 0;
       var g = (window.GAMES || {})[gameKey];
       if (!g) { window.__error = gameKey + ' not in GAMES'; return; }
-      var err = PSPJS.load(g.run); // draws one frame immediately
+      var err = PSPJS.load(g.run, g.dcpak); // draws one frame immediately; g.dcpak -> __dcpak (baked blobs)
       if (err) { window.__error = String(err && err.message || err); return; }
       if (heldBtn) PSPJS.pressVirtual(heldBtn, true);
       PSPJS.start();

@@ -5,7 +5,12 @@
 // Run: bun framework/test/bsp-walk.test.ts
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { walkStep, RADIUS } from '../src/bsp-walk';
-import { BSP_BOX as BSP } from '../src/assets-bsp-box';
+// The baked box module pulls its geometry/collision blobs from the dcpak pack at
+// module-eval time, so expose the committed master store as __dcpak BEFORE importing it
+// (mirrors what the PSP/web/3DS hosts do). Static imports hoist, hence the dynamic import.
+const _store = readFileSync(new URL('../src/assets.dcstore', import.meta.url));
+(globalThis as any).__dcpak = _store.buffer.slice(_store.byteOffset, _store.byteOffset + _store.byteLength);
+const { BSP_BOX: BSP } = await import('../src/assets-bsp-box');
 
 let pass = 0, fail = 0;
 const ok = (cond: boolean, msg: string) => { if (cond) pass++; else { fail++; console.log('FAIL:', msg); } };

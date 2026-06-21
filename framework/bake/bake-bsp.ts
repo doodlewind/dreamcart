@@ -7,7 +7,9 @@
 // compute real UVs from texinfo, fold a baked directional "sun" (or a face's
 // averaged lightmap) into the per-vertex COLOR (so the vertex-colour software oracle
 // renders meaningful relief AND the PSP modulates the texture over it), chunk by
-// (grid cell, texture) for culling + one bind per texture, and emit base64 sub-meshes
+// (grid cell, texture) for culling + one bind per texture, and emit sub-meshes whose
+// geometry/texture/collision blobs go to the dcpak store (assets.dcstore, see
+// docs/dcpak-format.md) referenced by key via dcU8/dcU16 — no base64 in the JS module —
 // + a textures[] array + a spawn (info_player_start) + wall collision AABBs.
 //
 // Run:  bun framework/bake/bake-bsp.ts box        (the committed CC0 fixture)
@@ -15,6 +17,7 @@
 import { TexMeshBuilder } from '../src/mesh';
 import { parseBsp, faceVertexIndices, vertexAt, uvAt, parseWad, resolveWadTextures, type Bsp } from './bsp';
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
+import { pack, unpack, rawBytes, DT_U8, DT_U16, type Blob } from './dcpak';
 
 interface MapConf {
   file: string; // path relative to repo root
@@ -200,16 +203,25 @@ if (spawnEnt && spawnEnt.origin) {
   spawnY = e[1];
 }
 
-const b64 = (u8: Uint8Array): string => Buffer.from(u8).toString('base64');
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const outName = `assets-bsp-${ACTIVE.replace(/[^a-z0-9]/g, '-')}${FULL ? '-full' : ''}`;
 const constName = 'BSP_' + ACTIVE.toUpperCase().replace(/[^A-Z0-9]/g, '_') + (FULL ? '_FULL' : '');
-interface MeshOut { texId: number; vertexCount: number; triCount: number; vertices: string; indices: string; aabb: { min: number[]; max: number[] }; }
+// dcpak key namespace for THIS module's blobs (unique per map + tier): the baked module
+// references its geometry/texture/collision blobs by key (dcU8/dcU16) instead of base64.
+const K = `bsp-${ACTIVE.replace(/[^a-z0-9]/g, '-')}${FULL ? '-full' : ''}`;
+interface MeshOut { texId: number; vertexCount: number; triCount: number; vKey: string; iKey: string; aabb: { min: number[]; max: number[] }; }
 
 // ───────────────────────── emit geometry (fan-triangulate, baked shade COLOR) ─────────────────────────
 // Skip faces with engine area < `minArea`; the caller raises minArea until the module
 // fits the PSP-boot budget (auto-decimation). Returns the module text + stats.
 function emit(minArea: number) {
+  // dcpak blobs for THIS decimation pass (emit is called repeatedly; only the final
+  // pass's store is flushed, so build it fresh here to avoid stale/duplicate keys).
+  const store: Blob[] = [];
+  const addBlob = (key: string, dtype: number, arr: ArrayBufferView): string => {
+    store.push({ key, dtype, data: rawBytes(arr).slice() }); // copy: builder buffers are reused
+    return key;
+  };
   const builders: TexMeshBuilder[] = [];
   for (let i = 0; i < NC * NT; i++) builders.push(new TexMeshBuilder({ uv: true, normal: true }));
   const bounds = builders.map(() => ({ min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }));
@@ -277,8 +289,9 @@ function emit(minArea: number) {
       fmt = mesh.format; stride = mesh.vertices.byteLength / vc;
       meshesOut.push({
         texId: tx, vertexCount: vc, triCount: mesh.indices.length / 3,
-        vertices: b64(new Uint8Array(mesh.vertices)),
-        indices: b64(new Uint8Array(mesh.indices.buffer, mesh.indices.byteOffset, mesh.indices.byteLength)),
+        // key by chunk×tex slot `s` (stable, independent of the later texId sort).
+        vKey: addBlob(`${K}:m${s}.vertices`, DT_U8, new Uint8Array(mesh.vertices)),
+        iKey: addBlob(`${K}:m${s}.indices`, DT_U16, mesh.indices),
         aabb: bounds[s],
       });
       totalV += vc; totalT += mesh.indices.length / 3;
@@ -289,11 +302,15 @@ function emit(minArea: number) {
   const meshLiteral = meshesOut.map((c) =>
     `  { texId: ${c.texId}, vertexCount: ${c.vertexCount}, triCount: ${c.triCount},\n` +
     `    aabb: { min: [${c.aabb.min.map(round).join(', ')}], max: [${c.aabb.max.map(round).join(', ')}] },\n` +
-    `    vertices: '${c.vertices}',\n    indices: '${c.indices}' },`).join('\n');
-  const texLiteral = texturesOut.map((t) =>
-    `  { width: ${t.width}, height: ${t.height}, psm: 3, pixels: unb64('${b64(t.pixels)}') },`).join('\n');
+    `    vertices: dcU8('${c.vKey}'),\n    indices: dcU16('${c.iKey}') },`).join('\n');
+  const texLiteral = texturesOut.map((t, j) =>
+    `  { width: ${t.width}, height: ${t.height}, psm: 3, pixels: dcU8('${addBlob(`${K}:tex${j}`, DT_U8, t.pixels)}') },`).join('\n');
   const aabbF32 = new Float32Array(solidAABBs);
   const floorF32 = new Float32Array(floorSpans);
+  // solidAABBs/floorSpans stay byte-views (bsp3d.js wraps them as Float32Array over .buffer),
+  // so emit as dcU8 — byte-identical to the old unb64() form, no consumer change.
+  const aabbKey = addBlob(`${K}:solidAABBs`, DT_U8, new Uint8Array(aabbF32.buffer));
+  const floorKey = addBlob(`${K}:floorSpans`, DT_U8, new Uint8Array(floorF32.buffer));
 
   const ts = `// AUTO-GENERATED by framework/bake/bake-bsp.ts — DO NOT EDIT.
 // Imported from a GoldSrc BSP v30 map: ${M.name}
@@ -303,11 +320,13 @@ function emit(minArea: number) {
 // Format ${fmt} (UV|COLOR|NORMAL|POS), stride ${stride}. texId indexes textures[];
 // per-vertex COLOR carries a baked directional/lightmap shade (the GE modulates the
 // texture over it; the vertex-colour software oracle uses it directly).
-import { unb64 } from './b64';
+// Binary blobs (geometry, textures, collision) live in the .dcpak pack (see
+// docs/dcpak-format.md); dcU8/dcU16 pull them as typed arrays by key — no base64.
+import { dcU8, dcU16 } from './dcpak';
 import type { BakedMesh } from './mesh';
 
 export interface BspMesh extends BakedMesh { texId: number; }
-interface RawMesh { texId: number; vertexCount: number; triCount: number; aabb: { min: number[]; max: number[] }; vertices: string; indices: string; }
+interface RawMesh { texId: number; vertexCount: number; triCount: number; aabb: { min: number[]; max: number[] }; vertices: Uint8Array; indices: Uint16Array; }
 
 const FORMAT = ${fmt};
 const STRIDE = ${stride};
@@ -316,10 +335,8 @@ ${meshLiteral}
 ];
 
 function decode(c: RawMesh): BspMesh {
-  const vertices = unb64(c.vertices);
-  const ib = unb64(c.indices);
-  const indices = new Uint16Array(ib.buffer, ib.byteOffset, ib.byteLength / 2);
-  return { texId: c.texId, format: FORMAT, stride: STRIDE, vertexCount: c.vertexCount, weightCount: 0, vertices, indices, triCount: c.triCount,
+  return { texId: c.texId, format: FORMAT, stride: STRIDE, vertexCount: c.vertexCount, weightCount: 0,
+    vertices: c.vertices, indices: c.indices, triCount: c.triCount,
     aabb: { min: [c.aabb.min[0], c.aabb.min[1], c.aabb.min[2]], max: [c.aabb.max[0], c.aabb.max[1], c.aabb.max[2]] } };
 }
 
@@ -335,9 +352,9 @@ export const ${constName} = {
   groundColor: 0x${M.ground.toString(16).padStart(6, '0')},
   skyColor: 0x${M.sky.toString(16).padStart(6, '0')},
   /** Wall collision rectangles [minX, minZ, maxX, maxZ] × N (XZ centred). */
-  solidAABBs: unb64('${b64(new Uint8Array(aabbF32.buffer))}'),
+  solidAABBs: dcU8('${aabbKey}'),
   /** Floor-height spans [minX, minZ, maxX, maxZ, y] × N (XZ centred) for stand-on-floor tracking. */
-  floorSpans: unb64('${b64(new Uint8Array(floorF32.buffer))}'),
+  floorSpans: dcU8('${floorKey}'),
   /** Per-miptex textures (PSM_8888, REPEAT); meshes index this by texId. */
   textures: [
 ${texLiteral}
@@ -345,22 +362,39 @@ ${texLiteral}
   meshes(): BspMesh[] { return RAW_MESHES.map(decode); },
 };
 `;
-  return { ts, meshesOut, totalV, totalT, walls: solidAABBs.length / 4, floors: floorSpans.length / 5 };
+  const bytes = store.reduce((n, b) => n + b.data.byteLength, 0);
+  return { ts, store, bytes, meshesOut, totalV, totalT, walls: solidAABBs.length / 4, floors: floorSpans.length / 5 };
 }
 
 // Auto-decimate: raise the min-face-area threshold until the module fits the budget.
 // The --full web tier has no budget (web has no PSP main-RAM/module limit) -> no decimation.
+// Budget on the dcpak BLOB bytes (the .ts module is now tiny — just keys — so the pack
+// is what occupies the EBOOT rodata / PSP RAM, replacing the old base64-source budget).
 const BUDGET = FULL ? Infinity : 1.18 * 1024 * 1024;
 let minArea = 0.1;
 let out = emit(minArea);
 let tries = 0;
-while (out.ts.length > BUDGET && tries < 16) {
+while (out.bytes > BUDGET && tries < 16) {
   minArea *= 1.6; tries++;
   out = emit(minArea);
-  console.log(`  decimate: minArea=${round(minArea)} m² -> ${(out.ts.length / 1024 / 1024).toFixed(2)} MB`);
+  console.log(`  decimate: minArea=${round(minArea)} m² -> ${(out.bytes / 1024 / 1024).toFixed(2)} MB pack`);
 }
-if (out.ts.length > BUDGET) throw new Error(`could not fit ${ACTIVE} under ${(BUDGET / 1024 / 1024).toFixed(2)} MB (try more chunks / fewer textures)`);
+if (out.bytes > BUDGET) throw new Error(`could not fit ${ACTIVE} under ${(BUDGET / 1024 / 1024).toFixed(2)} MB pack (try more chunks / fewer textures)`);
 
 writeFileSync(outDir + outName + '.ts', out.ts);
-console.log(`[${ACTIVE}] wrote framework/src/${outName}.ts  (${(out.ts.length / 1024).toFixed(1)} KB, ${out.meshesOut.length} sub-meshes, ${out.totalV} verts, ${out.totalT} tris, ${texturesOut.length} tex)`);
+
+// Flush this map's blobs into the dcpak store. CC0 box -> the COMMITTED master store
+// (assets.dcstore, alongside the gltf blobs); copyrighted maps -> a gitignored private
+// store, so copyrighted bytes are structurally never committed. build.ts merges both
+// stores before subsetting per game. Drop this namespace's prior blobs first (re-bake).
+const storeName = M.committed ? 'assets.dcstore' : 'assets-private.dcstore';
+const storePath = outDir + storeName;
+const prior: Blob[] = existsSync(storePath)
+  ? unpack(new Uint8Array(readFileSync(storePath))).filter((b) => !b.key.startsWith(`${K}:`))
+  : [];
+const merged = pack([...prior, ...out.store]);
+writeFileSync(storePath, merged);
+
+console.log(`[${ACTIVE}] wrote framework/src/${outName}.ts  (${(out.ts.length / 1024).toFixed(1)} KB module + ${(out.bytes / 1024).toFixed(1)} KB pack, ${out.meshesOut.length} sub-meshes, ${out.totalV} verts, ${out.totalT} tris, ${texturesOut.length} tex)`);
+console.log(`  -> merged ${out.store.length} blob(s) into framework/src/${storeName} (${(merged.length / 1024).toFixed(1)} KB total)`);
 console.log(`  spawn=[${round(spawn[0])}, ${round(spawn[1])}] floorY=${round(floorY)} span=${round(span)} walls=${out.walls} floors=${out.floors} minArea=${round(minArea)} m²${M.committed ? '' : '  (NOT committed — gitignore)'}`);
