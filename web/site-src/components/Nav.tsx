@@ -1,10 +1,9 @@
 /**
  * Nav — the top navigation present on every page. Links: Engine (/#engine),
- * Playground (/play/), Docs (/docs/), Changelog (/changelog/), GitHub (external),
- * plus the live ThemePicker. `active` highlights the current route.
- * Headless markup via data-part; styled in base.ts.
+ * Playground (/play/), Docs (/docs/), Changelog (/changelog/), GitHub (external).
+ * `active` highlights the current route. Headless markup via data-part; styled in
+ * base.ts.
  */
-import { ThemePicker } from "./ThemePicker";
 
 export type NavKey = "engine" | "play" | "docs" | "changelog" | null;
 
@@ -21,7 +20,7 @@ export function Nav({ active = null }: { active?: NavKey }) {
   return (
     <nav data-part="nav" aria-label="Primary">
       <a data-part="nav-brand" href="/">
-        <span data-part="nav-brand-mark">DC</span>
+        <span data-part="nav-brand-mark" aria-hidden="true" />
         DreamCart
       </a>
       <div data-part="nav-spacer" />
@@ -53,7 +52,6 @@ export function Nav({ active = null }: { active?: NavKey }) {
           </svg>
         </a>
       </div>
-      <ThemePicker />
     </nav>
   );
 }

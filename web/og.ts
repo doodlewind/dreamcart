@@ -14,21 +14,26 @@ const outDir = new URL("./static/", import.meta.url).pathname;
 const ogDir = outDir + "og/";
 await Bun.$`mkdir -p ${ogDir}`.quiet();
 
-// Cartridge-theme palette (matches web/site-src/styles/themes.ts).
-const BG = "#0a0e0c";
-const FG = "#e6f5ec";
-const MUTED = "#84a594";
-const ACCENT = "#39ff88";
-const ACCENT2 = "#46d0ff";
+// Dream Night palette — the default brand theme (matches web/site-src/styles/themes.ts).
+const BG = "#13121d";
+const FG = "#f1eef8";
+const MUTED = "#a39db9";
+const ACCENT = "#e9b24c"; // brand gold
+const ACCENT2 = "#46c7c4"; // teal grid
 
 const SLOGAN = "Self-contained game cartridges for tiny worlds";
+
+// The DreamCart cartridge logo bitmap, embedded into the brand lockup on each card.
+const CART_DATA_URL =
+  "data:image/png;base64," +
+  Buffer.from(await Bun.file(outDir + "logo.png").arrayBuffer()).toString("base64");
 
 const CARDS = [
   { name: "default", eyebrow: "Isomorphic game runtime", title: "DreamCart" },
   { name: "home", eyebrow: "Isomorphic game runtime", title: "DreamCart" },
   { name: "play", eyebrow: "Playground", title: "Run a cartridge in your browser" },
   { name: "docs", eyebrow: "Documentation", title: "Architecture &amp; lib API" },
-  { name: "changelog", eyebrow: "Changelog", title: "New capabilities, every week" },
+  { name: "changelog", eyebrow: "Changelog", title: "New capabilities, as they ship" },
 ];
 
 const card = (eyebrow: string, title: string) => /* html */ `<!doctype html><html><head><meta charset="utf-8">
@@ -49,9 +54,9 @@ const card = (eyebrow: string, title: string) => /* html */ `<!doctype html><htm
     background-image: linear-gradient(${FG}0a 1px, transparent 1px), linear-gradient(90deg, ${FG}0a 1px, transparent 1px);
     background-size: 48px 48px; mask-image: radial-gradient(circle at 50% 40%, #000 30%, transparent 75%); }
   .brand { display: flex; align-items: center; gap: 18px; position: relative; z-index: 1; }
-  .chip { width: 64px; height: 64px; border-radius: 16px; background: ${ACCENT}; color: ${BG};
-    display: flex; align-items: center; justify-content: center; font-family: ui-monospace, monospace;
-    font-weight: 700; font-size: 30px; box-shadow: 0 0 40px ${ACCENT}66; }
+  .chip { width: 92px; height: 90px; display: flex; align-items: center; justify-content: center;
+    filter: drop-shadow(0 14px 26px #00000088) drop-shadow(0 0 30px ${ACCENT}33); }
+  .chip img { width: 100%; height: 100%; object-fit: contain; }
   .brand-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 34px; letter-spacing: -0.01em; }
   .main { position: relative; z-index: 1; }
   .eyebrow { color: ${ACCENT}; font-weight: 600; font-size: 24px; letter-spacing: 0.18em; text-transform: uppercase; }
@@ -66,7 +71,7 @@ const card = (eyebrow: string, title: string) => /* html */ `<!doctype html><htm
 </style></head>
 <body>
   <div class="grid"></div>
-  <div class="brand"><div class="chip">DC</div><div class="brand-name">DreamCart</div></div>
+  <div class="brand"><div class="chip"><img src="${CART_DATA_URL}"/></div><div class="brand-name">DreamCart</div></div>
   <div class="main">
     <div class="eyebrow">${eyebrow}</div>
     <div class="title">${title}</div>

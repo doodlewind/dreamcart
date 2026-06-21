@@ -52,7 +52,7 @@ export function HomePage() {
       <section data-part="hero">
         <div className="container">
           <div className="hero-cart">
-            <span className="hero-cart-chip" aria-hidden="true">DC</span>
+            <img className="hero-cart-chip" src="/logo.png" alt="" aria-hidden="true" />
             <span className="hero-cart-word">DreamCart</span>
           </div>
           <p className="eyebrow">Isomorphic game runtime</p>
@@ -63,7 +63,7 @@ export function HomePage() {
           </h1>
           <p className="lede">
             Write a game once in plain JavaScript and run it unchanged on a Sony
-            PSP, the Web, a Nintendo 3DS, and a dual-screen Android handheld —
+            PSP, the Web, a Nintendo 3DS, and an Android handheld —
             powered by QuickJS on hardware with as little as 32&nbsp;MB of RAM.
           </p>
           <div style={{ display: "flex", gap: 12, marginTop: 28, flexWrap: "wrap" }}>

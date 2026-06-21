@@ -1,12 +1,13 @@
 # Changelog
 
-Weekly summaries of new capabilities shipping in DreamCart — the isomorphic game
+Dated summaries of new capabilities shipping in DreamCart — the isomorphic game
 runtime where one `.js` cartridge runs unchanged on PSP, Web, 3DS, and Android.
-Newest first. PR numbers link to the [GitHub repository](https://github.com/doodlewind/dreamcart).
+Each entry is a development push (every couple of days), newest first. PR numbers
+link to the [GitHub repository](https://github.com/doodlewind/dreamcart).
 
-## Week of 2026-06-19 — Engine subsystems and world import
+## 2026-06-19 — Engine subsystems and world import
 
-A big week: the shared gameplay layer grew up (a reusable character controller, an
+A big push: the shared gameplay layer grew up (a reusable character controller, an
 ActionMap, and fully data-driven scenes), the asset pipeline moved off base64 to a
 real binary container, and the runtime learned to import real GoldSrc/Half-Life BSP
 levels into walkable scenes.
@@ -44,7 +45,7 @@ levels into walkable scenes.
   plus a normalized PSP SDK and rust-psp submodule cleanup ([#9](https://github.com/doodlewind/dreamcart/pull/9),
   [#10](https://github.com/doodlewind/dreamcart/pull/10), [#11](https://github.com/doodlewind/dreamcart/pull/11)).
 
-## Week of 2026-06-17 — Advanced 3D and the PSP performance unlock
+## 2026-06-17 — Advanced 3D and the PSP performance unlock
 
 The runtime went from drawing flat triangles to a full hardware-accelerated 3D stack —
 textures, lighting, and glTF skinning — and then made it actually fast on a PSP by
@@ -84,9 +85,9 @@ moving the per-frame hot path out of interpreted JS and into native Rust.
 - **PSP performance field guide** documenting the allocator, native offload, and
   profiling workflow.
 
-## Week of 2026-06-15 — Isomorphic 3D and dual-screen Android
+## 2026-06-15 — Isomorphic 3D and dual-screen Android
 
-The foundation week: the project became DreamCart, gained a shared 3D layer that runs
+The foundation push: the project became DreamCart, gained a shared 3D layer that runs
 the same game logic across every platform, and added a dual-screen Android handheld.
 
 ### 3D

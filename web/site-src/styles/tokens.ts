@@ -73,13 +73,11 @@ export const TOKEN_NAMES = [
 
 export type TokenName = (typeof TOKEN_NAMES)[number];
 
-export const THEME_IDS = ["cartridge", "psp-silver", "dmg", "light"] as const;
+// The site ships a single theme: dream-night (the brand logo's palette).
+export const THEME_IDS = ["dream-night"] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
-export const DEFAULT_THEME: ThemeId = "cartridge";
+export const DEFAULT_THEME: ThemeId = "dream-night";
 
 export const THEME_LABELS: Record<ThemeId, string> = {
-  cartridge: "Cartridge",
-  "psp-silver": "PSP Silver",
-  dmg: "Game Boy DMG",
-  light: "Light",
+  "dream-night": "Dream Night",
 };

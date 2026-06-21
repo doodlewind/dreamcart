@@ -266,12 +266,12 @@ export async function buildSite(): Promise<void> {
     const file = join(contentDir, "changelog.md");
     const md = (await Bun.file(file).exists()) ? await Bun.file(file).text() : "# Changelog\n";
     const { html, headings } = renderMarkdown(md);
-    const data: ChangelogPageData = { bodyHtml: html, weeks: headings.filter((h) => h.depth === 2) };
+    const data: ChangelogPageData = { bodyHtml: html, entries: headings.filter((h) => h.depth === 2) };
     await writeHtml({
       dir: "changelog",
       title: "Changelog — DreamCart",
       ogTitle: "DreamCart Changelog",
-      description: "Weekly summaries of new DreamCart capabilities — the isomorphic game runtime for PSP, Web, 3DS and Android.",
+      description: "Dated summaries of new DreamCart capabilities — the isomorphic game runtime for PSP, Web, 3DS and Android.",
       cssHref: CSS,
       bundleHref: await buildEntry("changelog.tsx", "changelog"),
       ogImage: "/og/changelog.png",
