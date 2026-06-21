@@ -15,6 +15,8 @@ import {
   SCREEN_H,
   SPRITES,
 } from '../src/index';
+import { SoundBank } from '../src/audio';
+import { voiceTable } from '../src/assets-audio';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
 
@@ -43,9 +45,17 @@ class GameScene extends Scene {
   over = false;
   flapAnim = 0; // frames remaining of "wing up" pose
 
+  /** @type {SoundBank} */
+  snd = /** @type {any} */ (null);
+
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
     this.lastRng = ctx.rng; // stash before reset(), which calls randGapY()
+    // hello-audio: map flappy's three game events onto built-in voices, share one
+    // SoundBank via engine.audio (the engine flushes it once per frame).
+    this.snd = new SoundBank({ sfx: { flap: 'flap', score: 'score', hit: 'hit' } });
+    if (typeof snd !== 'undefined' && snd) snd.defineVoices(voiceTable());
+    ctx.engine.audio = this.snd;
     this.reset();
   }
 
@@ -91,6 +101,7 @@ class GameScene extends Scene {
     if (ctx.input.pressed(Btn.Cross) || ctx.input.pressed(Btn.Up)) {
       this.vel = FLAP_V;
       this.flapAnim = 8;
+      this.snd.play('flap');
     }
     if (this.flapAnim > 0) this.flapAnim--;
 
@@ -118,6 +129,7 @@ class GameScene extends Scene {
       if (!p.scored && p.x + PIPE_W < BIRD_X) {
         p.scored = true;
         this.score++;
+        this.snd.play('score');
         if (this.score > this.best) this.best = this.score;
       }
 
@@ -153,6 +165,7 @@ class GameScene extends Scene {
   }
 
   die() {
+    if (!this.over) this.snd.play('hit');
     this.over = true;
   }
 
@@ -198,6 +211,9 @@ class GameScene extends Scene {
     g.text(String(this.score), 16, 12, Colors.white, 3);
     g.text('BEST ' + this.best, 16, 44, rgb(255, 240, 180), 2);
 
+    // AUDIO HUD (bottom-left): last event name, a VU bar, and the active count.
+    drawAudioHud(g, this.snd);
+
     // Game-over overlay.
     if (this.over) {
       const cx = SCREEN_W / 2;
@@ -216,6 +232,23 @@ class GameScene extends Scene {
   }
 
   blinkT = 0;
+}
+
+/**
+ * Tiny on-screen AUDIO HUD: the last event name, a deterministic VU bar, and the
+ * active voice count. Reads only SoundBank's host-independent scalars, so the
+ * golden pixels are byte-exact whether or not a host `snd` is present.
+ * @param {Graphics} g
+ * @param {SoundBank} snd
+ */
+function drawAudioHud(g, snd) {
+  const x = 8;
+  const y = SCREEN_H - 20;
+  g.text('SND ' + (snd.lastEvent || '-') + ' x' + snd.active, x, y, Colors.white, 1);
+  // VU bar: 0..255 mapped to a 60px bar.
+  const w = Math.floor((snd.vu * 60) / 255);
+  g.rect(x, y + 10, 60, 4, rgb(40, 40, 50));
+  if (w > 0) g.rect(x, y + 10, w, 4, Colors.green);
 }
 
 // Root scene is the game itself; restart is handled in-scene.

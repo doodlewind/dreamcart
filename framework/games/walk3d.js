@@ -17,6 +17,8 @@ import {
 import { CharController, Collide } from '../src/controller';
 import { ActionMap } from '../src/action';
 import { FOX } from '../src/assets-fox';
+import { SoundBank } from '../src/audio';
+import { voiceTable } from '../src/assets-audio';
 
 /** @import { UpdateContext, Graphics, Node3D } from '../src/index' */
 
@@ -29,6 +31,7 @@ class WalkScene extends Scene {
   running = false;
   fps = new Fps();
   /** @type {any} */ engine = null;
+  /** @type {SoundBank} */ snd = /** @type {any} */ (null);
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -81,6 +84,13 @@ class WalkScene extends Scene {
       RESET: { buttons: [Btn.Start] },
     });
     this.engine = ctx.engine;
+    // Shared footstep glue: bind the clip player so each loop wrap fires a step
+    // (deterministic; no HUD here, so the golden pixels are unchanged — only the
+    // net-new .snd.json event stream records the footsteps).
+    this.snd = new SoundBank({ steps: { voice: 'footstep' } });
+    if (typeof snd !== 'undefined' && snd) snd.defineVoices(voiceTable());
+    this.snd.bindSteps(this.skin);
+    ctx.engine.audio = this.snd;
     this.reset();
     ctx.engine.scene3d = this.world;
   }

@@ -91,7 +91,7 @@ if (problems === 0) console.log(`PASS  ${rawConstants} raw-game button constant(
 // differ in the last ULP between QuickJS (PSP/3DS) and the browser engine, which
 // would break the byte-exact draw-list goldens. math.ts ships its own dsin/dcos.
 const TRIG = /\bMath\.(sin|cos|tan|asin|acos|atan|atan2|hypot)\b/;
-const detFiles = ["math", "g3d", "scene3d", "mesh", "anim", "skin", "material", "light", "controller", "action"];
+const detFiles = ["math", "g3d", "scene3d", "mesh", "anim", "skin", "material", "light", "controller", "action", "audio"];
 let trigProblems = 0;
 for (const f of detFiles) {
   const p = root + `framework/src/${f}.ts`;
@@ -139,5 +139,115 @@ for (const rel of host3dFiles) {
   }
 }
 console.log(`PASS  3D wire constants defined in g3d.ts (${Object.keys(canonical3d).length}) — ${wired} host(s) wired so far`);
+
+// (3) The AUDIO wire constants (DCAU magic/version/ops) are defined in
+// framework/src/audio.ts and must be byte-identical in the native synth
+// (runtime/src/audio.rs), exactly like the DC3D_* parity check above. Hosts are
+// parsed only once wired (contain DCAU_MAGIC).
+const SND_NAMES = ["DCAU_MAGIC", "DCAU_VERSION", "SND_OP_TRIGGER", "SND_OP_SET_LOOP", "SND_OP_MASTER"];
+const sndConstRe = new RegExp(`\\b(${SND_NAMES.join("|")})\\b[^\\n]*?(0x[0-9a-fA-F_]+)`, "g");
+const parseSnd = (text: string): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const m of text.matchAll(new RegExp(sndConstRe.source, "g"))) out[m[1]] = parseInt(m[2].replace(/_/g, ""), 16);
+  return out;
+};
+const audioSrc = await Bun.file(root + "framework/src/audio.ts").text();
+const canonicalSnd = parseSnd(audioSrc);
+const sndHostFiles = ["runtime/src/audio.rs", "web/engine.js"];
+let sndWired = 0;
+for (const rel of sndHostFiles) {
+  const file = Bun.file(root + rel);
+  if (!(await file.exists())) continue;
+  const src = await file.text();
+  if (!src.includes("DCAU_MAGIC")) { console.log(`NOTE  ${rel}: audio wire constants not yet wired (skipped)`); continue; }
+  sndWired++;
+  const map = parseSnd(src);
+  for (const n of SND_NAMES) {
+    if (canonicalSnd[n] === undefined) continue;
+    if (map[n] === undefined) { console.log(`FAIL  ${rel}: missing audio const ${n}`); problems++; }
+    else if (map[n] !== canonicalSnd[n]) { console.log(`FAIL  ${rel}: ${n} = 0x${map[n].toString(16)} != audio.ts 0x${canonicalSnd[n].toString(16)}`); problems++; }
+  }
+}
+console.log(`PASS  audio wire constants defined in audio.ts (${Object.keys(canonicalSnd).length}) — ${sndWired} host(s) wired so far`);
+
+// (4) The BAKED voice-table format (DCAV magic/version + the 24-byte record size)
+// is the canonical SHAPE the synth indexes voices by. It must be byte-identical in
+// framework/bake/sound-defs.ts (the bake), runtime/src/audio.rs (the synth) and
+// web/engine.js (the WebAudio preview), or a record-layout bump would silently
+// mis-parse across hosts (review finding #5). These consts mix decimal (VOICE_BYTES
+// = 24, DCAV_VERSION = 1) and hex (DCAV_MAGIC = 0x56414344), and Rust uses typed
+// suffixes (`: u16 = 0x0001`), so the parser accepts BOTH literal forms and (like
+// the 3D check) lets the last occurrence win so a Rust `const` beats its doc comment.
+const DCAV_NAMES = ["DCAV_MAGIC", "DCAV_VERSION", "VOICE_BYTES"];
+// Anchor the literal on the `=` assignment so a Rust type suffix's digits (the
+// "16" in `: u16 = 0x0001`) can't be mistaken for the value. Matches both
+// `= 0x56414344` (hex) and `= 24` (decimal); underscores stripped before parse.
+const dcavRe = new RegExp(`\\b(${DCAV_NAMES.join("|")})\\b[^\\n=]*=\\s*(0x[0-9a-fA-F_]+|\\d+)`, "g");
+const parseDcav = (text: string): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const m of text.matchAll(new RegExp(dcavRe.source, "g"))) {
+    const lit = m[2].replace(/_/g, "");
+    out[m[1]] = lit.startsWith("0x") ? parseInt(lit, 16) : parseInt(lit, 10);
+  }
+  return out;
+};
+// sound-defs.ts is canonical (it authors the bake); audio.rs + web/engine.js mirror.
+const dcavSrc = await Bun.file(root + "framework/bake/sound-defs.ts").text();
+const canonicalDcav = parseDcav(dcavSrc);
+const dcavHostFiles = ["runtime/src/audio.rs", "web/engine.js"];
+let dcavWired = 0;
+for (const rel of dcavHostFiles) {
+  const file = Bun.file(root + rel);
+  if (!(await file.exists())) continue;
+  const src = await file.text();
+  if (!src.includes("DCAV_MAGIC")) { console.log(`NOTE  ${rel}: baked voice-table consts not yet wired (skipped)`); continue; }
+  dcavWired++;
+  const map = parseDcav(src);
+  for (const n of DCAV_NAMES) {
+    if (canonicalDcav[n] === undefined) continue;
+    if (map[n] === undefined) { console.log(`FAIL  ${rel}: missing voice-table const ${n}`); problems++; }
+    else if (map[n] !== canonicalDcav[n]) { console.log(`FAIL  ${rel}: ${n} = ${map[n]} != sound-defs.ts ${canonicalDcav[n]}`); problems++; }
+  }
+}
+console.log(`PASS  baked voice-table format consts defined in sound-defs.ts (${Object.keys(canonicalDcav).length}) — ${dcavWired} host(s) wired so far`);
+
+// (5) Native sine-LUT correctness mirror: runtime/src/audio.rs build_sine_lut() is
+// not compiled in the headless loop, so mirror its EXACT integer math here (BigInt
+// == the Rust i64 ops) and assert the quarter-wave is sane — endpoints exact,
+// monotonic, and within a couple LSB of true sine (review finding #2: the original
+// 3-term Taylor overflowed i64 and overshot pi/2, wrapping the i16 peak negative).
+{
+  const Q30 = 1n << 30n;
+  const HALF_PI_Q30 = 1686629713n; // MUST equal audio.rs HALF_PI_Q30
+  const N = 256;
+  const lut = (i: number): number => {
+    const x = (BigInt(i) * HALF_PI_Q30) / BigInt(N);
+    const x2 = (x * x) >> 30n;
+    let poly = Q30 - x2 / 42n;
+    poly = Q30 - ((x2 * poly) >> 30n) / 20n;
+    poly = Q30 - ((x2 * poly) >> 30n) / 6n;
+    const sin = (x * poly) >> 30n;
+    let q15 = (sin * 32767n) >> 30n;
+    if (q15 > 32767n) q15 = 32767n; else if (q15 < -32767n) q15 = -32767n;
+    if (i === 0) return 0;            // forced-exact endpoints in audio.rs
+    if (i === N) return 32767;
+    return Number(q15);
+  };
+  let lutProblems = 0;
+  if (lut(0) !== 0) { console.log(`FAIL  sine LUT[0] = ${lut(0)} != 0`); lutProblems++; }
+  if (lut(N) !== 32767) { console.log(`FAIL  sine LUT[256] = ${lut(N)} != 32767`); lutProblems++; }
+  let prev = -1, maxErr = 0;
+  for (let i = 0; i <= N; i++) {
+    const v = lut(i);
+    if (v < prev) { console.log(`FAIL  sine LUT not monotonic at i=${i} (${v} < ${prev})`); lutProblems++; }
+    prev = v;
+    if (v > 32767 || v < -32767) { console.log(`FAIL  sine LUT[${i}] = ${v} out of i16 peak range`); lutProblems++; }
+    const truth = Math.round(32767 * Math.sin((i / N) * Math.PI / 2));
+    maxErr = Math.max(maxErr, Math.abs(v - truth));
+  }
+  if (maxErr > 8) { console.log(`FAIL  sine LUT max error ${maxErr} LSB exceeds 8`); lutProblems++; }
+  problems += lutProblems;
+  if (lutProblems === 0) console.log(`PASS  native sine LUT mirror: endpoints exact, monotonic, max err ${maxErr} LSB`);
+}
 
 process.exit(problems ? 1 : 0);
