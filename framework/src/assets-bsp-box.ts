@@ -2,7 +2,7 @@
 // Imported from a GoldSrc BSP v30 map: BSP import test room
 // Original CC0 BSP v30 fixture (DreamCart)
 //
-// 1 sub-meshes · 24 verts · 12 tris · 1 textures (minArea 0.1 m²).
+// 1 sub-meshes · 4608 verts · 1536 tris · 1 textures (minArea 0.1 m²).
 // Format 15 (UV|COLOR|NORMAL|POS), stride 36. texId indexes textures[];
 // per-vertex COLOR carries a baked directional/lightmap shade (the GE modulates the
 // texture over it; the vertex-colour software oracle uses it directly).
@@ -17,7 +17,7 @@ interface RawMesh { texId: number; vertexCount: number; triCount: number; aabb: 
 const FORMAT = 15;
 const STRIDE = 36;
 const RAW_MESHES: RawMesh[] = [
-  { texId: 0, vertexCount: 24, triCount: 12,
+  { texId: 0, vertexCount: 4608, triCount: 1536,
     aabb: { min: [-3.251, 0, -3.251], max: [3.251, 4.064, 3.251] },
     vertices: dcU8('bsp-box:m0.vertices'),
     indices: dcU16('bsp-box:m0.indices') },

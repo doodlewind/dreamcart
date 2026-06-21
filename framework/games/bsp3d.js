@@ -107,6 +107,11 @@ class BspScene extends Scene {
     const skyTop = rgb(Math.min(255, ((sky >> 16) & 255) + 22), Math.min(255, ((sky >> 8) & 255) + 22), Math.min(255, (sky & 255) + 26));
     this.sky = this.world.add(new Node3D({ mesh: tessBox(Math.max(120, this.span * 3), 4, sky, skyTop, BSP.groundColor), position: new Vec3(0, this.floorY + 30, 0) }));
     this.ground = this.world.add(new Node3D({ mesh: gridGround(GTILES, GSTEP, BSP.groundColor), position: new Vec3(0, this.floorY - 0.05, 0) }));
+    // Capture mode isolates MAP rendering: the camera-following skybox + fallback ground are
+    // unbounded chase-cam void-fillers (no bounds -> drawn every frame in the PSP native
+    // dynamic loop, enclosing the eye). A first-person capture stands inside the real baked
+    // walls and needs neither, so hide them — else they pollute the PSP-vs-software diff.
+    if (CAPTURE) { this.sky.visible = false; this.ground.visible = false; }
 
     // The baked map: static, bounded (=> culled) sub-meshes.
     for (const m of BSP.meshes()) {

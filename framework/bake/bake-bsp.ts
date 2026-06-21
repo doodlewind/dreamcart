@@ -31,6 +31,9 @@ interface MapConf {
   ground: number; // RRGGBB
   sky: number;
   committed: boolean; // box: commit the module; c1a0: gitignored (Valve-derivative)
+  tess?: number; // subdivide faces so no triangle edge exceeds this many metres (PSP GE
+  // guard-band safety for coarse fixtures viewed up close). Omitted for real maps (their
+  // geometry is already fine-grained) so their bake output is unchanged.
 }
 
 const ROOT = new URL('../../', import.meta.url).pathname;
@@ -41,7 +44,7 @@ const MAPS: Record<string, MapConf> = {
     title: 'BSP TEST - BOX ROOM',
     attribution: 'Original CC0 BSP v30 fixture (DreamCart)',
     scale: 0.0254, chunks: 1, maxTextures: 8, maxTexSize: 64,
-    ground: 0x3a3d42, sky: 0x10141e, committed: true,
+    ground: 0x3a3d42, sky: 0x10141e, committed: true, tess: 1.0,
   },
   zfight: {
     file: 'framework/test/fixtures/zfight.bsp',
@@ -49,7 +52,7 @@ const MAPS: Record<string, MapConf> = {
     title: 'BSP TEST - ZFIGHT',
     attribution: 'Original CC0 BSP v30 fixture (DreamCart)',
     scale: 0.0254, chunks: 1, maxTextures: 8, maxTexSize: 64,
-    ground: 0x3a3d42, sky: 0x10141e, committed: true,
+    ground: 0x3a3d42, sky: 0x10141e, committed: true, tess: 1.0,
   },
   c1a0: {
     file: 'assets/vendor/bsp/c1a0.bsp',
@@ -219,6 +222,26 @@ const constName = 'BSP_' + ACTIVE.toUpperCase().replace(/[^A-Z0-9]/g, '_') + (FU
 const K = `bsp-${ACTIVE.replace(/[^a-z0-9]/g, '-')}${FULL ? '-full' : ''}`;
 interface MeshOut { texId: number; vertexCount: number; triCount: number; vKey: string; iKey: string; aabb: { min: number[]; max: number[] }; }
 
+// Face subdivision (PSP GE guard-band safety): coarse fixtures (M.tess set) split any
+// triangle whose longest edge exceeds `tess` metres into 4, recursively, so no single
+// triangle projects far enough off-screen to be dropped/clipped up close. Real maps leave
+// M.tess unset (TESS = Infinity) -> identical bake output as before.
+const TESS = M.tess ?? Infinity;
+interface RV { x: number; y: number; z: number; u: number; v: number; }
+const triEdge = (p: RV, q: RV) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+const triMid = (p: RV, q: RV): RV => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, z: (p.z + q.z) / 2, u: (p.u + q.u) / 2, v: (p.v + q.v) / 2 });
+function emitTri(b: TexMeshBuilder, vidx: (p: RV) => number, tess: number, A: RV, B: RV, C: RV): void {
+  if (Math.max(triEdge(A, B), triEdge(B, C), triEdge(C, A)) > tess) {
+    const ab = triMid(A, B), bc = triMid(B, C), ca = triMid(C, A);
+    emitTri(b, vidx, tess, A, ab, ca);
+    emitTri(b, vidx, tess, ab, B, bc);
+    emitTri(b, vidx, tess, ca, bc, C);
+    emitTri(b, vidx, tess, ab, bc, ca);
+  } else {
+    b.tri(vidx(A), vidx(B), vidx(C));
+  }
+}
+
 // ───────────────────────── emit geometry (fan-triangulate, baked shade COLOR) ─────────────────────────
 // Skip faces with engine area < `minArea`; the caller raises minArea until the module
 // fits the PSP-boot budget (auto-decimation). Returns the module text + stats.
@@ -261,16 +284,20 @@ function emit(minArea: number) {
 
     const s = slot(chunkIndex(ev[0][0], ev[0][2]), texId);
     const b = builders[s], bd = bounds[s];
-    const idx: number[] = [];
-    for (let i = 0; i < ev.length; i++) {
-      const e = ev[i];
+    // Ring vertices (position + UV); color + normal are per-face constants (planar face).
+    const rv: RV[] = ev.map((e, i) => {
       const x = e[0] - cX, y = e[1], z = e[2] - cZ;
       if (x < bd.min[0]) bd.min[0] = x; if (y < bd.min[1]) bd.min[1] = y; if (z < bd.min[2]) bd.min[2] = z;
       if (x > bd.max[0]) bd.max[0] = x; if (y > bd.max[1]) bd.max[1] = y; if (z > bd.max[2]) bd.max[2] = z;
       const uv = uvAt(ti, hv[i], tex.width, tex.height);
-      idx.push(b.vertex(x, y, z, color, uv[0], uv[1], nx, ny, nz));
-    }
-    for (let i = 1; i + 1 < idx.length; i++) b.tri(idx[0], idx[i], idx[i + 1]);
+      return { x, y, z, u: uv[0], v: uv[1] };
+    });
+    // Fan-triangulate, then subdivide any triangle whose longest edge exceeds TESS metres.
+    // A whole room wall is one huge triangle that projects far off-screen up close and the
+    // PSP GE drops/clips it (guard band) — subdividing keeps every triangle screen-bounded.
+    // Only the coarse CC0 fixtures set M.tess; real maps (TESS = Infinity) are unchanged.
+    const vidx = (p: RV) => b.vertex(p.x, p.y, p.z, color, p.u, p.v, nx, ny, nz);
+    for (let i = 1; i + 1 < rv.length; i++) emitTri(b, vidx, TESS, rv[0], rv[i], rv[i + 1]);
 
     if (Math.abs(ny) < 0.35) {
       let aMinX = Infinity, aMinZ = Infinity, aMaxX = -Infinity, aMaxZ = -Infinity, lo = Infinity, hi = -Infinity;
