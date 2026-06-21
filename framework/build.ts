@@ -47,8 +47,29 @@ const store = existsSync(storePath) ? unpack(new Uint8Array(await Bun.file(store
 // key, so a key can never be a substring of another key and over-include its blob.
 // Keys never contain quotes, so the bounded match has no false positives or
 // negatives under Bun's non-minified output (which preserves the literals verbatim).
-const presentIn = (bundle: string, key: string): boolean =>
-  bundle.includes(`"${key}"`) || bundle.includes(`'${key}'`);
+const quoted = (bundle: string, lit: string): boolean =>
+  bundle.includes(`"${lit}"`) || bundle.includes(`'${lit}'`);
+// A baked scene is loaded by its BASE key — loadScene("racing3d") — and the three
+// blob keys ("racing3d:scene.meta"/".xforms"/".colliders") are built by runtime
+// concatenation, so they never appear as literals in the bundle. Treat a scene
+// blob as present when this bundle contains the LITERAL loadScene() call for its
+// base key. Matching the full call shape (not base-quoted + a bare "loadScene"
+// substring anywhere) means a game that merely quotes a string equal to a scene
+// base key while importing loadScene for an unrelated scene can never pull in
+// foreign scene blobs. Both quote styles are matched (Bun emits "..."; source may
+// be '...'). (Asset blobs keep the exact-literal rule below; only the ":scene.*"
+// family is base-matched.)
+const SCENE_SUFFIX = /:scene\.(meta|xforms|colliders)$/;
+const loadsScene = (bundle: string, base: string): boolean =>
+  bundle.includes(`loadScene("${base}"`) || bundle.includes(`loadScene('${base}'`);
+const presentIn = (bundle: string, key: string): boolean => {
+  const m = key.match(SCENE_SUFFIX);
+  if (m) {
+    const base = key.slice(0, key.length - m[0].length);
+    return loadsScene(bundle, base);
+  }
+  return quoted(bundle, key);
+};
 for (const entry of entrypoints) {
   const name = entry.slice(gamesDir.length, -3); // strip dir + ".js"
   const bundle = await Bun.file(outDir + name + ".js").text();

@@ -91,7 +91,7 @@ if (problems === 0) console.log(`PASS  ${rawConstants} raw-game button constant(
 // differ in the last ULP between QuickJS (PSP/3DS) and the browser engine, which
 // would break the byte-exact draw-list goldens. math.ts ships its own dsin/dcos.
 const TRIG = /\bMath\.(sin|cos|tan|asin|acos|atan|atan2|hypot)\b/;
-const detFiles = ["math", "g3d", "scene3d", "mesh", "anim", "skin", "material", "light", "controller"];
+const detFiles = ["math", "g3d", "scene3d", "mesh", "anim", "skin", "material", "light", "controller", "action"];
 let trigProblems = 0;
 for (const f of detFiles) {
   const p = root + `framework/src/${f}.ts`;
