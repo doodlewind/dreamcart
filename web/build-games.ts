@@ -23,7 +23,10 @@ function parseMeta(src: string): { title?: string; order?: number; controls?: st
 }
 
 export async function buildGames(): Promise<number> {
-  const files = readdirSync(runDir).filter((f) => f.endsWith(".js")).sort();
+  // bsp-compare is a ground-truth render-comparison test scene (framework/test/
+  // bsp-compare), not a public game — keep it out of the Playground manifest.
+  const TEST_ONLY = new Set(["bsp-compare.js"]);
+  const files = readdirSync(runDir).filter((f) => f.endsWith(".js") && !TEST_ONLY.has(f)).sort();
   const games: Record<string, unknown> = {};
   for (const f of files) {
     const name = f.replace(/\.js$/, "");
