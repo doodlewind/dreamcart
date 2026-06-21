@@ -26,7 +26,7 @@ in shared JS and a native engine per platform (see
 |---|---|
 | 🎮 **Playground** | <https://dreamcart.games/play/> — run any game in a themeable handheld console, in your browser |
 | 📖 **Docs** | <https://dreamcart.games/docs/> — architecture + lib API reference |
-| 🗓 **Changelog** | <https://dreamcart.games/changelog/> — weekly capability summaries |
+| 🗓 **Changelog** | <https://dreamcart.games/changelog/> — capability summaries by date |
 | 🏠 **Home** | <https://dreamcart.games/> |
 
 | Platform | Host | Graphics (2D / 3D) | Status |

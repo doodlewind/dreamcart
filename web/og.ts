@@ -33,7 +33,7 @@ const CARDS = [
   { name: "home", eyebrow: "Isomorphic game runtime", title: "DreamCart" },
   { name: "play", eyebrow: "Playground", title: "Run a cartridge in your browser" },
   { name: "docs", eyebrow: "Documentation", title: "Architecture &amp; lib API" },
-  { name: "changelog", eyebrow: "Changelog", title: "New capabilities, every week" },
+  { name: "changelog", eyebrow: "Changelog", title: "New capabilities, as they ship" },
 ];
 
 const card = (eyebrow: string, title: string) => /* html */ `<!doctype html><html><head><meta charset="utf-8">
