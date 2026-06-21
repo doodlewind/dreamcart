@@ -48,7 +48,9 @@
     play: function (file) {
       var g = GAMES[file];
       if (!g) { try { AndroidBridge.log('no such game: ' + file); } catch (e) {} return; }
-      var err = PSPJS.load(g.run);
+      // g.dcpak is the game's binary asset pack (base64 in the manifest); engine.js
+      // decodes it to __dcpak before eval. Empty/absent for asset-free games.
+      var err = PSPJS.load(g.run, g.dcpak);
       if (!err) PSPJS.start();
       try { AndroidBridge.current(file); } catch (e) {}
     },

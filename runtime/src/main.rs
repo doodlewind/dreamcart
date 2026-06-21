@@ -36,7 +36,29 @@ static mut LIST: Align16<[u32; 0x40000]> = Align16([0; 0x40000]);
 // The game source, selected at build time by `PSPJS_GAME` (see build.rs) and
 // NUL-terminated there for JS_Eval (which wants input[len] == '\0').
 static GAME_JS: &str = include_str!(concat!(env!("OUT_DIR"), "/game.js"));
+// The game's binary asset pack (see docs/dcpak-format.md), embedded by build.rs.
+// Empty for games with no baked assets (and raw demos). Exposed to JS as the
+// global ArrayBuffer `__dcpak` (zero-copy over this static slice) before eval, so
+// the baked asset modules read their typed-array blobs from it instead of
+// base64-decoding megabyte string literals at boot.
+static GAME_DCPAK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/game.dcpak"));
 static PSPJS_TRACE: &str = env!("PSPJS_TRACE");
+
+// The libquickjs-sys wrapper (src/lib.rs) re-exports JS_GetArrayBuffer but not
+// JS_NewArrayBuffer, which the linked QuickJS C library does provide (quickjs.h).
+// Declare it here so we can wrap the static GAME_DCPAK rodata into an ArrayBuffer
+// zero-copy: free_func = None means QuickJS never frees it (it is .rodata, not
+// heap), and the JS reader only slices read-only copies out of it.
+extern "C" {
+    fn JS_NewArrayBuffer(
+        ctx: *mut JSContext,
+        buf: *mut u8,
+        len: usize,
+        free_func: Option<unsafe extern "C" fn(*mut JSRuntime, *mut c_void, *mut c_void)>,
+        opaque: *mut c_void,
+        is_shared: i32,
+    ) -> JSValue;
+}
 
 fn psp_main() {
     unsafe { boot() }
@@ -157,6 +179,27 @@ unsafe fn run() {
         b"__BSP_CAPTURE\0".as_ptr() as *const _,
         JS_NewInt32(ctx, 1),
     );
+
+    // Expose the embedded asset pack as globalThis.__dcpak BEFORE eval (the baked
+    // asset modules read it at module-eval time). Zero-copy: the ArrayBuffer views
+    // the static GAME_DCPAK rodata directly (free_func = None — never freed); the
+    // JS reader (framework/src/dcpak.ts) only slices read-only copies out of it.
+    // INVARIANT: __dcpak is immutable. Unlike the copy-based Web/3DS hosts, this
+    // buffer aliases .rodata, so a JS write through it (e.g. `new Uint8Array(
+    // globalThis.__dcpak)[0] = x`) would fault/corrupt on real hardware. First-party
+    // baked modules never write it; do not expose __dcpak as a writable surface.
+    if !GAME_DCPAK.is_empty() {
+        trace_usize("run: dcpak bytes", GAME_DCPAK.len());
+        let ab = JS_NewArrayBuffer(
+            ctx,
+            GAME_DCPAK.as_ptr() as *mut u8,
+            GAME_DCPAK.len() as _,
+            None,
+            core::ptr::null_mut(),
+            0,
+        );
+        JS_SetPropertyStr(ctx, global, b"__dcpak\0".as_ptr() as *const _, ab);
+    }
 
     trace("run: JS_Eval begin");
     let res = JS_Eval(

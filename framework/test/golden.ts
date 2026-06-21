@@ -96,6 +96,13 @@ async function runGame(
   (globalThis as any).g3d = raster;
   (globalThis as any).log = () => {};
   (globalThis as any).frame = undefined;
+  // Expose the game's binary asset pack as __dcpak before eval (the host contract:
+  // baked asset modules read it synchronously at module-eval time). Mirrors what
+  // the PSP/3DS/Web hosts do; here we read the <name>.dcpak next to the bundle.
+  const pakPath = file.replace(/\.js$/, ".dcpak");
+  (globalThis as any).__dcpak = existsSync(pakPath)
+    ? (await Bun.file(pakPath).arrayBuffer())
+    : undefined;
   const realRandom = Math.random;
   if (seedRandom !== undefined) Math.random = mulberry32(seedRandom);
   try {
@@ -107,6 +114,7 @@ async function runGame(
   } finally {
     Math.random = realRandom;
     delete (globalThis as any).g3d;
+    delete (globalThis as any).__dcpak;
   }
   return { buf, raster };
 }

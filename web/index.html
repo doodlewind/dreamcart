@@ -129,7 +129,9 @@
     // raw JS games run the (editable) editor text; framework games run the
     // prebuilt bundle while the editor shows their authored JS source.
     var js = g.kind === 'fw' ? g.run : code.value;
-    var err = PSPJS.load(js);
+    // Framework bundles carry a binary asset pack (base64 in the manifest); raw
+    // games have none. PSPJS.load exposes it as __dcpak before eval.
+    var err = PSPJS.load(js, g.kind === 'fw' ? g.dcpak : undefined);
     if (!err) PSPJS.start();
   }
   function loadGame(k) {
