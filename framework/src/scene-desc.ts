@@ -29,7 +29,7 @@
 // node (matching racing3d's per-cone nodes, which keep the cone a single shared
 // upload drawn at many model matrices).
 import { Mesh, mergeMeshes } from './mesh';
-import { Scene3D, Node3D } from './scene3d';
+import { Scene3D, Node3D, type AABB } from './scene3d';
 import { Vec3, Quat, Mat4 } from './math';
 import { dcU8, dcF32 } from './dcpak';
 
@@ -76,7 +76,9 @@ export interface InstanceGroup {
   id?: string; // when merged, the id of the resulting single node
 }
 
-export interface AABBDesc { min: [number, number, number]; max: [number, number, number]; }
+// The descriptor-layer name for a world-space AABB; identical to scene3d's AABB
+// (the single canonical shape — kept as an alias so the two layers can't drift).
+export type AABBDesc = AABB;
 
 export interface SceneDescriptor {
   camera?: { fovDeg: number; aspect: number; near: number; far: number };

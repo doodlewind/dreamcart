@@ -51,8 +51,9 @@ export function blocked(aabbs: Float32Array, nx: number, nz: number): boolean {
   return false;
 }
 
-/** Axis-separated move (slide along walls), clamped to the map span. */
-export function moveTo(st: WalkState, aabbs: Float32Array, span: number, nx: number, nz: number): void {
+/** Axis-separated move (slide along walls), clamped to the map span. Internal to
+ *  walkStep — not part of the public API (callers use walkStep). */
+function moveTo(st: WalkState, aabbs: Float32Array, span: number, nx: number, nz: number): void {
   const lim = span;
   if (nx > lim) nx = lim; else if (nx < -lim) nx = -lim;
   if (nz > lim) nz = lim; else if (nz < -lim) nz = -lim;
