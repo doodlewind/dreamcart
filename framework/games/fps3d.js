@@ -7,13 +7,13 @@
 // "logic is one shared copy" proof); the room is one static mesh animated only by
 // the camera matrix. The crosshair + ammo/score are a 2D HUD over the 3D pass.
 import {
-  start, Scene, Scene3D, Mesh, Vec3, Colors, rgb, Btn, CharController, Collide,
+  start, Scene, Scene3D, Mesh, Vec3, Colors, rgb, Btn,
 } from '../src/index';
+import { CharController, Collide } from '../src/controller';
+import { ActionMap } from '../src/action';
 
 /** @import { UpdateContext, Graphics, Node3D } from '../src/index' */
 
-/** @param {number} c @returns {number[]} */
-const solid = (c) => [c, c, c, c, c, c];
 const HALF = 9; // movable half-extent inside the 10-half room (0.5 player radius + margin)
 
 const TARGET_POS = [
@@ -25,6 +25,7 @@ class FpsScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
   /** @type {{ node: Node3D, c: Vec3, alive: boolean }[]} */ targets = [];
   /** @type {CharController} */ ctrl = /** @type {any} */ (null);
+  /** @type {ActionMap} */ act = /** @type {any} */ (null);
   ammo = 0;
   score = 0;
 
@@ -43,7 +44,7 @@ class FpsScene extends Scene {
     this.world.add({ mesh: room, position: new Vec3(0, 3, 0) });
 
     // Shootable targets (a shared cube mesh).
-    const tgt = Mesh.box(1, 1, 1, solid(rgb(230, 210, 70)));
+    const tgt = Mesh.box(1, 1, 1, Mesh.solid(rgb(230, 210, 70)));
     this.targets = TARGET_POS.map((c) => ({
       node: this.world.add({ mesh: tgt, position: c }),
       c,
@@ -56,6 +57,16 @@ class FpsScene extends Scene {
       { speed: 'gated', walkSpeed: 4, backSpeed: 4, turnRate: 1.6, fwdSignZ: -1 },
       { mode: 'fps', eyeHeight: 1.6 },
     );
+    // Per-axis actions: TURN reads lx (else Left/Right), MOVE reads ly (else
+    // Up/Down). On the digital golden path this is exactly the old inp.axis().x /
+    // -inp.axis().y; on an analog host each axis falls back independently (vs
+    // Input.axis()'s whole-vector suppression) — an analog-only nuance.
+    this.act = new ActionMap(ctx.input, {
+      TURN: { axis: 'lx', axisButtons: [Btn.Left, Btn.Right] },
+      MOVE: { axis: 'ly', axisButtons: [Btn.Up, Btn.Down] },
+      FIRE: { buttons: [Btn.Cross] },
+      RESET: { buttons: [Btn.Start] },
+    });
     this.reset();
     ctx.engine.scene3d = this.world;
   }
@@ -73,18 +84,17 @@ class FpsScene extends Scene {
 
   /** @param {UpdateContext} ctx */
   update(ctx) {
-    const inp = ctx.input;
-    if (inp.pressed(Btn.Start)) this.reset();
+    const act = this.act;
+    if (act.pressed('RESET')) this.reset();
 
-    // Left/Right turn, Up/Down walk along the facing direction (Up = forward).
-    const ax = inp.axis();
-    this.ctrl.step({ throttle: -ax.y, steer: ax.x, pitch: 0, run: false }, ctx.dt);
+    // TURN (Left/Right) + MOVE (Up=forward) along the facing direction.
+    this.ctrl.step({ throttle: -act.axis('MOVE'), steer: act.axis('TURN'), pitch: 0, run: false }, ctx.dt);
     Collide.clampBox(this.ctrl.s, -HALF, HALF, -HALF, HALF);
     const s = this.ctrl.s;
     this.ctrl.applyCam(this.world.camera);
 
     // Hitscan: ray from the eye along the facing direction; kill nearest target.
-    if (inp.pressed(Btn.Cross) && this.ammo > 0) {
+    if (act.pressed('FIRE') && this.ammo > 0) {
       this.ammo--;
       let bestT = Infinity;
       let best = null;

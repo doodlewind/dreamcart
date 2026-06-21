@@ -21,21 +21,6 @@ if (entrypoints.length === 0) {
   process.exit(0);
 }
 
-const result = await Bun.build({
-  entrypoints,
-  outdir: outDir,
-  format: "iife", // self-contained, sets globalThis.frame at run time
-  target: "browser", // leaves bare globals (gfx/log) as global refs
-  naming: "[name].js",
-  minify: false,
-});
-
-if (!result.success) {
-  for (const m of result.logs) console.error(m);
-  process.exit(1);
-}
-console.log("bundled", entrypoints.length, "framework game(s) -> runtime/src/game/");
-
 // Per-game asset pack: subset the binary master store (assets.dcstore) into a
 // <name>.dcpak holding only the blobs whose key string survives into the bundle.
 // Bun (minify:false) keeps the dc*('module:path') key literals verbatim, so an
@@ -70,11 +55,29 @@ const presentIn = (bundle: string, key: string): boolean => {
   }
   return quoted(bundle, key);
 };
+// Build each game in ISOLATION (one Bun.build per entrypoint) so Bun tree-shakes
+// each independently. A single multi-entrypoint build shares one module graph and
+// leaks the 3D controller/action/scene-desc modules into EVERY bundle (even 2D
+// games that never import them) — wasted bytes the PSP EBOOT pays for. Per-entry
+// builds keep each game to only what it uses.
 for (const entry of entrypoints) {
   const name = entry.slice(gamesDir.length, -3); // strip dir + ".js"
+  const result = await Bun.build({
+    entrypoints: [entry],
+    outdir: outDir,
+    format: "iife", // self-contained, sets globalThis.frame at run time
+    target: "browser", // leaves bare globals (gfx/log) as global refs
+    naming: "[name].js",
+    minify: false,
+  });
+  if (!result.success) {
+    for (const m of result.logs) console.error(m);
+    process.exit(1);
+  }
   const bundle = await Bun.file(outDir + name + ".js").text();
   const pak = subset(store, (key) => presentIn(bundle, key));
   await Bun.write(outDir + name + ".dcpak", pak);
   const used = store.filter((b) => presentIn(bundle, b.key)).length;
   if (used > 0) console.log(`  ${name}.dcpak: ${used} blob(s), ${(pak.length / 1024).toFixed(1)} KB`);
 }
+console.log("bundled", entrypoints.length, "framework game(s) -> runtime/src/game/");

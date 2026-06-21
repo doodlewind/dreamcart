@@ -11,8 +11,10 @@
 import {
   start, Scene, Scene3D, Node3D, TexMeshBuilder, Texture, Material,
   Lighting, DirectionalLight, meshFromBaked,
-  Vec3, Quat, Colors, rgb, Btn, dsin, dcos, CharController, Collide,
+  Vec3, Quat, Colors, rgb, Btn, dsin, dcos, Fps,
 } from '../src/index';
+import { CharController, Collide } from '../src/controller';
+import { ActionMap } from '../src/action';
 import { NATURE_PROPS } from '../src/assets-kenney-nature';
 
 /** @import { UpdateContext, Graphics } from '../src/index' */
@@ -37,13 +39,11 @@ const CELLS = 8; // quads per chunk edge
 class OutdoorScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
   /** @type {CharController} */ ctrl = /** @type {any} */ (null);
+  /** @type {ActionMap} */ act = /** @type {any} */ (null);
   drawn = 0;
   // real-FPS measurement via the host `now()` (microseconds on PSP; absent
   // elsewhere -> stays 0). The engine's dt is a fixed timestep, not real time.
-  fps = 0;
-  _lastNow = 0;
-  _accUs = 0;
-  _frames = 0;
+  fps = new Fps();
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -72,6 +72,11 @@ class OutdoorScene extends Scene {
       { mode: 'freefly' },
       { x: 0, z: 40, y: 6, heading: Math.PI, pitch: -0.15 },
     );
+    this.act = new ActionMap(ctx.input, {
+      STEER: { axis: 'lx', axisButtons: [Btn.Left, Btn.Right], invert: true },
+      BOOST: { buttons: [Btn.Cross] },
+      RESET: { buttons: [Btn.Start] },
+    });
     ctx.engine.scene3d = this.world;
   }
 
@@ -173,40 +178,24 @@ class OutdoorScene extends Scene {
     s.x = 0; s.z = 40; s.heading = Math.PI; s.pitch = -0.15; s.speed = 0;
   }
 
-  /** Sample real wall-clock FPS from the host `now()` (µs), smoothed over ~1s. */
-  measureFps() {
-    const host = /** @type {any} */ (globalThis);
-    if (typeof host.now !== 'function') return;
-    const t = host.now();
-    if (this._lastNow) {
-      this._accUs += t - this._lastNow;
-      this._frames++;
-      if (this._accUs >= 1e6) {
-        this.fps = Math.round((this._frames * 1e6) / this._accUs);
-        this._accUs = 0;
-        this._frames = 0;
-      }
-    }
-    this._lastNow = t;
-  }
-
   /** @param {UpdateContext} ctx */
   update(ctx) {
-    this.measureFps();
+    this.fps.sample();
     const inp = ctx.input;
-    if (inp.pressed(Btn.Start)) this.reset();
+    const act = this.act;
+    if (act.pressed('RESET')) this.reset();
     const s = this.ctrl.s;
     // Pitch is clamped to [-0.8,0.5] (the controller's freefly pitch is unclamped),
-    // so it stays game-side here, writing into the shared KinematicState.
+    // so it stays game-side here (a plain Up/Down accumulator, not an axis action).
     if (inp.held(Btn.Up)) s.pitch = clamp(s.pitch + 0.8 * ctx.dt, -0.8, 0.5);
     if (inp.held(Btn.Down)) s.pitch = clamp(s.pitch - 0.8 * ctx.dt, -0.8, 0.5);
 
     // Always drift forward (a slow fly-through that exercises culling); boost on X.
     this.ctrl.step({
       throttle: 1,
-      steer: (inp.held(Btn.Left) ? 1 : 0) - (inp.held(Btn.Right) ? 1 : 0),
+      steer: act.axis('STEER'),
       pitch: 0,
-      run: inp.held(Btn.Cross),
+      run: act.held('BOOST'),
     }, ctx.dt);
     Collide.clampBox(s, -56, 56, -56, 56);
     // Stay a fixed height above the ground under the camera.
@@ -223,7 +212,7 @@ class OutdoorScene extends Scene {
     const total = this.world.root.children.length;
     const drawn = total - this.world.culledCount;
     g.text('OUTDOOR 3D', 8, 8, Colors.white, 1);
-    if (this.fps > 0) g.text(this.fps + ' FPS  ' + drawn + '/' + total, 8, 258, Colors.yellow, 1);
+    if (this.fps.value > 0) g.text(this.fps.value + ' FPS  ' + drawn + '/' + total, 8, 258, Colors.yellow, 1);
   }
 }
 

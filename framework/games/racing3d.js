@@ -10,13 +10,14 @@
 // racing3d.scene.ts) in the exact same add order, so the .dc3d draw list is
 // byte-identical to the old hand-written onEnter.
 import {
-  start, Scene, Mesh, Vec3, Quat, Colors, rgb, Btn, ActionMap, CharController, Collide, loadScene,
+  start, Scene, Mesh, Vec3, Quat, Colors, rgb, Btn,
 } from '../src/index';
+import { ActionMap } from '../src/action';
+import { CharController, Collide } from '../src/controller';
+import { loadScene } from '../src/scene-desc';
 
 /** @import { UpdateContext, Graphics, Node3D, Scene3D } from '../src/index' */
 
-/** @param {number} c @returns {number[]} */
-const solid = (c) => [c, c, c, c, c, c];
 
 class RacingScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
@@ -34,7 +35,7 @@ class RacingScene extends Scene {
     // The car (a single box) chased by the camera — added AFTER the scene so the
     // add order stays ground, road, cones..., car, and so we keep its live node
     // reference to drive it each frame.
-    this.car = this.world.add({ mesh: Mesh.box(1.3, 0.7, 2.4, solid(rgb(210, 50, 50))) });
+    this.car = this.world.add({ mesh: Mesh.box(1.3, 0.7, 2.4, Mesh.solid(rgb(210, 50, 50))) });
 
     // Vehicle physics + chase cam now run through the shared controller: continuous
     // accel (14) / decel (7) up to 26, bicycle steering authority (×speed, capped 10,

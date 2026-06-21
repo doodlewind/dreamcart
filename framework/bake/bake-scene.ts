@@ -1,7 +1,7 @@
 // Bake data-driven scenes (framework/scenes/*.scene.ts) into the binary master
 // store framework/src/assets.dcstore, so a game can loadScene(key) instead of
 // hand-building its onEnter. Each descriptor becomes three keyed blobs:
-//   "<key>:scene.meta"      DT_U8   UTF-8 JSON: camera/fog/lighting/prototypes +
+//   "<key>:scene.meta"      DT_U8   UTF-8 JSON: camera/fog/prototypes +
 //                                   the STRUCTURAL shape of entities/instances
 //                                   (proto/tint/flags/counts) — no numeric xforms.
 //   "<key>:scene.xforms"    DT_F32  every transform triple, in EXACT add order
@@ -26,7 +26,6 @@ const storePath = here + '../src/assets.dcstore';
 interface SceneMeta {
   camera?: SceneDescriptor['camera'];
   fog?: SceneDescriptor['fog'];
-  lighting?: SceneDescriptor['lighting'];
   prototypes: Record<string, MeshProto>;
   entities: { proto: string; tint?: number; isStatic?: boolean; id?: string;
               hasPos: boolean; hasRot: boolean; hasScale: boolean }[];
@@ -61,7 +60,7 @@ function serialize(key: string, d: SceneDescriptor): Blob[] {
   for (const c of colliders) cf.push(c.min[0], c.min[1], c.min[2], c.max[0], c.max[1], c.max[2]);
 
   const meta: SceneMeta = {
-    camera: d.camera, fog: d.fog, lighting: d.lighting,
+    camera: d.camera, fog: d.fog,
     prototypes: d.prototypes, entities, instances, colliderCount: colliders.length,
   };
 

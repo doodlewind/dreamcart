@@ -12,8 +12,10 @@
 // Fox: CC-BY-4.0 — model PixelMannen (CC0), rig/anim tomkranis, glTF Asobo/scurest.
 import {
   start, Scene, Scene3D, Mesh, SkinnedMesh, Fps,
-  Vec3, Quat, Colors, rgb, Btn, CharController, Collide,
+  Vec3, Quat, Colors, rgb, Btn,
 } from '../src/index';
+import { CharController, Collide } from '../src/controller';
+import { ActionMap } from '../src/action';
 import { FOX } from '../src/assets-fox';
 
 /** @import { UpdateContext, Graphics, Node3D } from '../src/index' */
@@ -23,6 +25,7 @@ class WalkScene extends Scene {
   /** @type {Node3D} */ fox = /** @type {any} */ (null);
   /** @type {SkinnedMesh} */ skin = /** @type {any} */ (null);
   /** @type {CharController} */ ctrl = /** @type {any} */ (null);
+  /** @type {ActionMap} */ act = /** @type {any} */ (null);
   running = false;
   fps = new Fps();
   /** @type {any} */ engine = null;
@@ -71,6 +74,12 @@ class WalkScene extends Scene {
       },
     );
 
+    this.act = new ActionMap(ctx.input, {
+      FORWARD: { buttons: [Btn.Cross, Btn.Square] },
+      RUN: { buttons: [Btn.Square] },
+      STEER: { axis: 'lx', axisButtons: [Btn.Left, Btn.Right], invert: true },
+      RESET: { buttons: [Btn.Start] },
+    });
     this.engine = ctx.engine;
     this.reset();
     ctx.engine.scene3d = this.world;
@@ -87,15 +96,15 @@ class WalkScene extends Scene {
   /** @param {UpdateContext} ctx */
   update(ctx) {
     this.fps.sample();
-    const inp = ctx.input;
-    if (inp.pressed(Btn.Start)) this.reset();
+    const act = this.act;
+    if (act.pressed('RESET')) this.reset();
 
-    const run = inp.held(Btn.Square);
-    const moving = inp.held(Btn.Cross) || inp.held(Btn.Square);
+    const run = act.held('RUN');
+    const moving = act.held('FORWARD');
     // Forward on Cross/Square (gated speed); turn on Left(+)/Right(-) at 1.8 rad/s.
     this.ctrl.step({
       throttle: moving ? 1 : 0,
-      steer: (inp.held(Btn.Left) ? 1 : 0) - (inp.held(Btn.Right) ? 1 : 0),
+      steer: act.axis('STEER'),
       pitch: 0,
       run,
     }, ctx.dt);

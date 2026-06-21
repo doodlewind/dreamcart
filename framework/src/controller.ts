@@ -7,7 +7,6 @@
 // refactor that keeps its golden byte-identical.
 import { Vec3, dsin, dcos } from './math';
 import type { Camera } from './scene3d';
-import { Input, Btn } from './input';
 
 export interface KinematicState {
   x: number; y: number; z: number;
@@ -141,19 +140,9 @@ export function camApply(cam: Camera, rig: CamRig, s: KinematicState, eye: Vec3,
 
 export interface InputSample { throttle: number; steer: number; pitch: number; run: boolean; }
 
-/** Default sampler for walk/car-style games (forward on Up/Cross, steer on axis,
- *  run on Square). Freefly/outdoor games supply their own InputSample. */
-export function sampleDefault(inp: Input): InputSample {
-  const ax = inp.axis();
-  return {
-    throttle: inp.held(Btn.Up) || inp.held(Btn.Cross) ? 1 : inp.held(Btn.Down) ? -1 : -ax.y,
-    steer: ax.x,
-    pitch: 0,
-    run: inp.held(Btn.Square),
-  };
-}
-
-/** Bundles a state + config + rig with reusable camera scratch vectors. */
+/** Bundles a state + config + rig with reusable camera scratch vectors. Games
+ *  build their own per-frame InputSample (throttle/steer/pitch/run) — usually via
+ *  an ActionMap (framework/src/action.ts) — and pass it to step(). */
 export class CharController {
   s: KinematicState;
   private _eye = new Vec3();
@@ -166,9 +155,5 @@ export class CharController {
   }
   applyCam(cam: Camera): void {
     camApply(cam, this.rig, this.s, this._eye, this._center);
-  }
-  gait(): 'idle' | 'walk' | 'run' {
-    return this.s.speed === 0 ? 'idle'
-      : Math.abs(this.s.speed) > (this.cfg.walkSpeed ?? 1e9) + 0.01 ? 'run' : 'walk';
   }
 }
