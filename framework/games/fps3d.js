@@ -7,44 +7,14 @@
 // "logic is one shared copy" proof); the room is one static mesh animated only by
 // the camera matrix. The crosshair + ammo/score are a 2D HUD over the 3D pass.
 import {
-  start, Scene, Scene3D, Mesh, Vec3, Quat, Colors, rgb, Btn, dsin, dcos,
+  start, Scene, Scene3D, Mesh, Vec3, Colors, rgb, Btn, CharController, Collide,
 } from '../src/index';
 
 /** @import { UpdateContext, Graphics, Node3D } from '../src/index' */
 
 /** @param {number} c @returns {number[]} */
 const solid = (c) => [c, c, c, c, c, c];
-/** @param {number} v @param {number} a @param {number} b @returns {number} */
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const HALF = 9; // movable half-extent inside the 10-half room (0.5 player radius + margin)
-
-// Ray vs axis-aligned box centered at c with half-extents h. Returns hit t>0 or -1.
-/**
- * @param {number} ox @param {number} oy @param {number} oz
- * @param {number} dx @param {number} dy @param {number} dz
- * @param {number} cx @param {number} cy @param {number} cz
- * @param {number} hx @param {number} hy @param {number} hz
- * @returns {number}
- */
-function rayAabb(ox, oy, oz, dx, dy, dz, cx, cy, cz, hx, hy, hz) {
-  let tmin = -Infinity;
-  let tmax = Infinity;
-  /** @param {number} o @param {number} d @param {number} c @param {number} h @returns {boolean} */
-  const slab = (o, d, c, h) => {
-    if (Math.abs(d) < 1e-9) return o >= c - h && o <= c + h;
-    let t1 = (c - h - o) / d;
-    let t2 = (c + h - o) / d;
-    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
-    if (t1 > tmin) tmin = t1;
-    if (t2 < tmax) tmax = t2;
-    return true;
-  };
-  if (!slab(ox, dx, cx, hx)) return -1;
-  if (!slab(oy, dy, cy, hy)) return -1;
-  if (!slab(oz, dz, cz, hz)) return -1;
-  if (tmax < tmin || tmax < 0) return -1;
-  return tmin > 0 ? tmin : tmax;
-}
 
 const TARGET_POS = [
   new Vec3(-6, 1, -6), new Vec3(6, 1, -6),
@@ -54,9 +24,7 @@ const TARGET_POS = [
 class FpsScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
   /** @type {{ node: Node3D, c: Vec3, alive: boolean }[]} */ targets = [];
-  px = 0;
-  pz = 0;
-  yaw = 0;
+  /** @type {CharController} */ ctrl = /** @type {any} */ (null);
   ammo = 0;
   score = 0;
 
@@ -82,14 +50,19 @@ class FpsScene extends Scene {
       alive: true,
     }));
 
+    // Turret-style controller: yaw turn (1.6), gated forward/back (4), forward = -Z,
+    // first-person camera at eye height 1.6. AABB room clamp + ray hitscan use Collide.
+    this.ctrl = new CharController(
+      { speed: 'gated', walkSpeed: 4, backSpeed: 4, turnRate: 1.6, fwdSignZ: -1 },
+      { mode: 'fps', eyeHeight: 1.6 },
+    );
     this.reset();
     ctx.engine.scene3d = this.world;
   }
 
   reset() {
-    this.px = 0;
-    this.pz = 0;
-    this.yaw = 0;
+    const s = this.ctrl.s;
+    s.x = 0; s.z = 0; s.heading = 0; s.speed = 0;
     this.ammo = 12;
     this.score = 0;
     for (const t of this.targets) {
@@ -103,17 +76,12 @@ class FpsScene extends Scene {
     const inp = ctx.input;
     if (inp.pressed(Btn.Start)) this.reset();
 
-    // Left/Right turn, Up/Down walk along the facing direction.
-    const d = inp.dir();
-    this.yaw += d.x * 1.6 * ctx.dt;
-    const fwdX = dsin(this.yaw);
-    const fwdZ = -dcos(this.yaw);
-    const move = -d.y; // Up = forward
-    this.px = clamp(this.px + fwdX * move * 4 * ctx.dt, -HALF, HALF);
-    this.pz = clamp(this.pz + fwdZ * move * 4 * ctx.dt, -HALF, HALF);
-
-    const eye = new Vec3(this.px, 1.6, this.pz);
-    this.world.camera.lookAt(eye, eye.add(new Vec3(fwdX, 0, fwdZ)), new Vec3(0, 1, 0));
+    // Left/Right turn, Up/Down walk along the facing direction (Up = forward).
+    const ax = inp.axis();
+    this.ctrl.step({ throttle: -ax.y, steer: ax.x, pitch: 0, run: false }, ctx.dt);
+    Collide.clampBox(this.ctrl.s, -HALF, HALF, -HALF, HALF);
+    const s = this.ctrl.s;
+    this.ctrl.applyCam(this.world.camera);
 
     // Hitscan: ray from the eye along the facing direction; kill nearest target.
     if (inp.pressed(Btn.Cross) && this.ammo > 0) {
@@ -122,7 +90,7 @@ class FpsScene extends Scene {
       let best = null;
       for (const t of this.targets) {
         if (!t.alive) continue;
-        const hit = rayAabb(eye.x, eye.y, eye.z, fwdX, 0, fwdZ, t.c.x, t.c.y, t.c.z, 0.6, 0.6, 0.6);
+        const hit = Collide.rayAabb(s.x, 1.6, s.z, s.fwdX, 0, s.fwdZ, t.c.x, t.c.y, t.c.z, 0.6, 0.6, 0.6);
         if (hit > 0 && hit < bestT) { bestT = hit; best = t; }
       }
       if (best) {
