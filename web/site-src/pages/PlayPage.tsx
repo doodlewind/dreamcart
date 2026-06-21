@@ -198,7 +198,7 @@ export function PlayPage() {
         <h1 className="play-title">Run a cartridge</h1>
         <p className="lede">
           The same game <code>.js</code> that runs on a PSP, a 3DS and Android —
-          running here in a themeable handheld. Pick a cartridge, then drive it with
+          running here in an on-screen handheld. Pick a cartridge, then drive it with
           the on-screen pad or your keyboard.
         </p>
       </section>

@@ -22,7 +22,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 :root { color-scheme: dark; }
-[data-theme="light"], [data-theme="psp-silver"], [data-theme="dmg"] { color-scheme: light; }
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -49,11 +48,11 @@ code, pre, kbd { font-family: var(--font-mono); }
   color: var(--fg); white-space: nowrap;
 }
 [data-part="nav-brand"]:hover { text-decoration: none; }
+/* Brand mark = the DreamCart cartridge logo bitmap. */
 [data-part="nav-brand-mark"] {
-  width: 26px; height: 20px; border-radius: 3px;
-  background: var(--accent); color: var(--accent-fg);
-  display: grid; place-items: center; font-size: 11px; font-weight: 800;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 60%, #000);
+  width: 30px; height: 30px; flex: none;
+  background: center / contain no-repeat url("/logo.png");
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.45));
 }
 [data-part="nav-links"] { display: flex; align-items: center; gap: 4px; margin-left: 8px; }
 [data-part="nav-link"] {
@@ -70,37 +69,6 @@ code, pre, kbd { font-family: var(--font-mono); }
 @media (max-width: 760px) {
   [data-part="nav-links"] { flex-wrap: wrap; justify-content: flex-end; margin-left: 0; }
   [data-part="nav-link"] { padding: 7px 8px; }
-}
-
-/* ── Theme picker ────────────────────────────────────────────────────────── */
-[data-part="theme-picker"] { position: relative; }
-[data-part="theme-picker-button"] {
-  display: inline-flex; align-items: center; gap: 8px;
-  height: 34px; padding: 0 10px; border-radius: var(--btn-radius);
-  background: var(--btn-face); color: var(--btn-fg);
-  border: 1px solid var(--btn-border); font-size: 13px; font-weight: 500; cursor: pointer;
-}
-[data-part="theme-picker-button"]:hover { background: var(--btn-face-hover); }
-[data-part="theme-swatch"] {
-  width: 14px; height: 14px; border-radius: 4px;
-  background: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 20%, transparent);
-}
-[data-part="theme-menu"] {
-  position: absolute; right: 0; top: 42px; z-index: 60;
-  min-width: 190px; padding: 6px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-  box-shadow: var(--shadow-2);
-}
-[data-part="theme-option"] {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 9px 10px; border-radius: 8px; border: 0; cursor: pointer;
-  background: transparent; color: var(--fg); font-size: 14px; text-align: left;
-}
-[data-part="theme-option"]:hover { background: var(--accent-soft); }
-[data-part="theme-option"][aria-checked="true"] { color: var(--accent); font-weight: 600; }
-[data-part="theme-option-swatch"] {
-  width: 26px; height: 18px; border-radius: 4px; flex: none;
-  border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
 }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
@@ -190,17 +158,20 @@ code, pre, kbd { font-family: var(--font-mono); }
   mask-image: linear-gradient(180deg, #000, transparent 85%);
 }
 .hero-cart {
-  margin-bottom: 26px; display: inline-flex; align-items: center; gap: 12px;
-  padding: 10px 16px 10px 12px; border-radius: 12px;
-  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-1);
+  margin-bottom: 22px; display: inline-flex; align-items: center; gap: 20px;
 }
+/* The big first-screen logo — a raster cartridge, lifted off the dark page with a
+   soft drop-shadow plus a faint gold glow (matches the brand accent). */
 .hero-cart .hero-cart-chip {
-  width: 40px; height: 30px; border-radius: 5px; flex: none;
-  background: var(--accent); color: var(--accent-fg);
-  display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 14px;
-  box-shadow: inset 0 -6px 0 color-mix(in srgb, var(--accent) 55%, #000), inset 0 0 0 2px color-mix(in srgb, var(--accent) 65%, #000);
+  height: 132px; width: auto; flex: none; display: block;
+  filter: drop-shadow(0 22px 34px rgba(0,0,0,0.6)) drop-shadow(0 6px 16px rgba(233,178,76,0.16));
 }
-.hero-cart-word { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -.01em; }
+.hero-cart-word { font-family: var(--font-display); font-weight: 700; font-size: 40px; letter-spacing: -.01em; }
+@media (max-width: 560px) {
+  .hero-cart { gap: 14px; }
+  .hero-cart .hero-cart-chip { height: 96px; }
+  .hero-cart-word { font-size: 30px; }
+}
 .hero-stats { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 40px; }
 .hero-stat { min-width: 84px; }
 .hero-stat b { display: block; font-family: var(--font-display); font-size: 26px; color: var(--fg); line-height: 1.1; }

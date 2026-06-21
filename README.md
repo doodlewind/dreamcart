@@ -1,5 +1,9 @@
-# DreamCart
-**Self-contained game cartridges for tiny worlds.**
+<p align="center">
+  <img src="web/static/logo.png" alt="DreamCart" width="150" />
+</p>
+
+<h1 align="center">DreamCart</h1>
+<p align="center"><b>Self-contained game cartridges for tiny worlds.</b></p>
 
 DreamCart is an **isomorphic** JavaScript game runtime — the *same* game `.js` runs
 unchanged on Sony **PSP**, the **Web**, Nintendo **3DS**, and a dual-screen
@@ -32,7 +36,10 @@ in shared JS and a native engine per platform (see
 | 3DS | C (libctru) + QuickJS | citro2d / citro3d | ✅ runs (Azahar/hardware) |
 | Android (dual-screen) | Kotlin + WebView (web engine) | Canvas2D / WebGL2 | ✅ runs (3DS-style handheld; top=game, bottom=native UI) — see [`android/`](android/) |
 
-![Snake running on PPSSPP](docs/snake.png)
+| Flappy (`flappy.js`) | Tactical 3D (`adventure3d.js`) |
+|:---:|:---:|
+| ![Flappy — a Flappy-Bird clone on the 2D contract](docs/flappy.png) | ![Tactical 3D — skinned soldier in an arena on the g3d contract](docs/tactical3d.png) |
+| 2D framework game | 3D framework game (hardware-skinned glTF) |
 
 ## Games
 There are two kinds of games, by naming convention:
