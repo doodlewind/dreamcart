@@ -14,7 +14,7 @@ const stride = vertexStride(room.format);
 
 assert(room.format === (FMT_POS | FMT_COLOR), 'interiorBox should use POS|COLOR');
 assert(stride === 16, 'interiorBox should keep the v1 stride');
-assert(room.vertexCount === 20480, `unexpected interiorBox vertex count: ${room.vertexCount}`);
+assert(room.vertexCount === 5494, `unexpected interiorBox vertex count: ${room.vertexCount}`);
 assert(room.indices.length === 30720, `unexpected interiorBox index count: ${room.indices.length}`);
 
 const dv = new DataView(room.vertices);
@@ -37,5 +37,10 @@ for (let i = 0; i + 2 < room.indices.length; i += 3) {
   );
 }
 assert(maxSpan <= 0.50001, `interiorBox triangles are too large: ${maxSpan}`);
+
+const floor = Mesh.gridPlane(4, 4, 0x808080, 0.5);
+assert(floor.format === (FMT_POS | FMT_COLOR), 'gridPlane should use POS|COLOR');
+assert(floor.vertexCount === 81, `unexpected gridPlane vertex count: ${floor.vertexCount}`);
+assert(floor.indices.length === 384, `unexpected gridPlane index count: ${floor.indices.length}`);
 
 console.log('PASS  mesh.test');

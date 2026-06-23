@@ -304,26 +304,28 @@ export class Mesh {
       const sv = Math.max(1, Math.ceil(dist(a, d0) / size));
       const ux = c0[0] - a[0], uy = c0[1] - a[1], uz = c0[2] - a[2];
       const vx = d0[0] - a[0], vy = d0[1] - a[1], vz = d0[2] - a[2];
-      const point = (u: number, v: number) => [
-        a[0] + ux * u + vx * v,
-        a[1] + uy * u + vy * v,
-        a[2] + uz * u + vz * v,
-      ];
+      const grid: number[] = [];
+      function emitVertex(u: number, v: number): number {
+        return b.vertex(
+          a[0] + ux * u + vx * v,
+          a[1] + uy * u + vy * v,
+          a[2] + uz * u + vz * v,
+          color,
+        );
+      }
+      for (let y = 0; y <= sv; y++) {
+        for (let x = 0; x <= su; x++) {
+          grid.push(emitVertex(x / su, y / sv));
+        }
+      }
       for (let y = 0; y < sv; y++) {
-        const v0 = y / sv;
-        const v1 = (y + 1) / sv;
         for (let x = 0; x < su; x++) {
-          const u0 = x / su;
-          const u1 = (x + 1) / su;
-          const p0 = point(u0, v0);
-          const p1 = point(u1, v0);
-          const p2 = point(u1, v1);
-          const p3 = point(u0, v1);
-          const i0 = b.vertex(p0[0], p0[1], p0[2], color);
-          const i1 = b.vertex(p1[0], p1[1], p1[2], color);
-          const i2 = b.vertex(p2[0], p2[1], p2[2], color);
-          const i3 = b.vertex(p3[0], p3[1], p3[2], color);
-          b.quad(i0, i1, i2, i3);
+          b.quad(
+            grid[y * (su + 1) + x],
+            grid[y * (su + 1) + x + 1],
+            grid[(y + 1) * (su + 1) + x + 1],
+            grid[(y + 1) * (su + 1) + x],
+          );
         }
       }
     };
@@ -379,6 +381,35 @@ export class Mesh {
     const i2 = b.vertex(hx, 0, -hz, color);
     const i3 = b.vertex(-hx, 0, -hz, color);
     b.quad(i0, i1, i2, i3);
+    return b.build();
+  }
+
+  /** Subdivided horizontal plane on Y=0, preserving Mesh.plane's winding. */
+  static gridPlane(w: number, d: number, color: Color, cell = 0.5): Mesh {
+    const hx = w / 2;
+    const hz = d / 2;
+    const size = cell > 0 ? cell : 0.5;
+    const su = Math.max(1, Math.ceil(w / size));
+    const sv = Math.max(1, Math.ceil(d / size));
+    const b = new MeshBuilder();
+    const grid: number[] = [];
+    for (let z = 0; z <= sv; z++) {
+      const pz = hz - d * (z / sv);
+      for (let x = 0; x <= su; x++) {
+        const px = -hx + w * (x / su);
+        grid.push(b.vertex(px, 0, pz, color));
+      }
+    }
+    for (let z = 0; z < sv; z++) {
+      for (let x = 0; x < su; x++) {
+        b.quad(
+          grid[z * (su + 1) + x],
+          grid[z * (su + 1) + x + 1],
+          grid[(z + 1) * (su + 1) + x + 1],
+          grid[(z + 1) * (su + 1) + x],
+        );
+      }
+    }
     return b.build();
   }
 }

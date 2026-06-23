@@ -33,10 +33,18 @@ import { Scene3D, Node3D, type AABB } from './scene3d';
 import { Vec3, Quat, Mat4 } from './math';
 import { dcU8, dcF32 } from './dcpak';
 
-// A box prototype: w/h/d + the 6 face colors (RRGGBB), exactly Mesh.box's args.
+export type BoxMeshDesc = {
+  size: [number, number, number];
+  colors: number[];
+  /** Subdivide faces to this max cell size; used for PSP/PPSSPP near-plane-safe large boxes. */
+  cell?: number;
+};
+
+// A box prototype: w/h/d + the 6 face colors (RRGGBB), exactly Mesh.box's args
+// unless `cell` requests near-plane-safe face subdivision.
 export type MeshProto =
-  | { kind: 'box'; size: [number, number, number]; colors: number[] }
-  | { kind: 'plane'; size: [number, number]; color: number }
+  | ({ kind: 'box' } & BoxMeshDesc)
+  | { kind: 'plane'; size: [number, number]; color: number; cell?: number }
   | { kind: 'baked'; key: string };
 
 // One placed node. It references a shared mesh PROTOTYPE by key, OR carries its own
@@ -51,7 +59,7 @@ export type MeshProto =
 // BYTE-EXACT SCOPE note). When `matrix` is set, position/rotation/scale are ignored.
 export interface EntityDesc {
   proto?: string;
-  box?: { size: [number, number, number]; colors: number[] };
+  box?: BoxMeshDesc;
   position?: [number, number, number];
   rotation?: [number, number, number]; // euler radians (XYZ), -> Quat.fromEuler
   scale?: [number, number, number];
@@ -108,11 +116,22 @@ export function registerBaked(key: string, make: () => Mesh): void {
 }
 
 function makeMesh(p: MeshProto): Mesh {
-  if (p.kind === 'box') return Mesh.box(p.size[0], p.size[1], p.size[2], p.colors);
-  if (p.kind === 'plane') return Mesh.plane(p.size[0], p.size[1], p.color);
+  if (p.kind === 'box') return makeBoxMesh(p);
+  if (p.kind === 'plane') {
+    return p.cell !== undefined
+      ? Mesh.gridPlane(p.size[0], p.size[1], p.color, p.cell)
+      : Mesh.plane(p.size[0], p.size[1], p.color);
+  }
   const make = bakedResolvers[p.key];
   if (!make) throw new Error('scene-desc: no baked resolver for ' + p.key);
   return make();
+}
+
+function makeBoxMesh(box: BoxMeshDesc): Mesh {
+  const [w, h, d] = box.size;
+  return box.cell !== undefined
+    ? Mesh.interiorBox(w, h, d, box.colors, box.cell)
+    : Mesh.box(w, h, d, box.colors);
 }
 
 const v3 = (a?: [number, number, number]): Vec3 => new Vec3(a?.[0] ?? 0, a?.[1] ?? 0, a?.[2] ?? 0);
@@ -140,8 +159,8 @@ export function buildScene(d: SceneDescriptor): BuiltScene {
 
   for (const e of d.entities ?? []) {
     // Inline box geometry -> its OWN Mesh (one upload per node, like a hand-written
-    // Mesh.box per addBox); else a shared prototype mesh referenced by key.
-    const m = e.box ? Mesh.box(e.box.size[0], e.box.size[1], e.box.size[2], e.box.colors) : mesh(e.proto!);
+    // Mesh.box/interiorBox per addBox); else a shared prototype mesh referenced by key.
+    const m = e.box ? makeBoxMesh(e.box) : mesh(e.proto!);
     const n = scene.add({
       mesh: m,
       position: v3(e.position),
@@ -203,7 +222,7 @@ interface SceneMeta {
   // entities: each carries only its non-numeric fields + which xform slots it uses.
   // `box` (inline geometry) stays in the meta (size/colors are author constants that
   // JSON round-trips exactly); `hasMatrix` marks a 16-float matrix in the xforms blob.
-  entities: { proto?: string; box?: { size: [number, number, number]; colors: number[] };
+  entities: { proto?: string; box?: BoxMeshDesc;
               bounds?: AABBDesc; tint?: number; isStatic?: boolean; id?: string;
               hasPos: boolean; hasRot: boolean; hasScale: boolean; hasMatrix?: boolean }[];
   instances: { proto: string; count: number; tint?: number; isStatic?: boolean;

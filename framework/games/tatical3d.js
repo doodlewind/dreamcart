@@ -2,7 +2,7 @@
 // @title Tactical 3D
 // @order 16
 // @controls UP/CROSS walk; SQUARE run; LEFT/RIGHT turn; DOWN back; START reset
-// adventure3d.js — a compact tactical walking demo: static arena map, cover,
+// tatical3d.js — a compact tactical walking demo: static arena map, cover,
 // simple collision, and a skinned soldier character on the native PSP skin path.
 import {
   start, Scene, Node3D, SkinnedMesh,
@@ -28,11 +28,11 @@ class TacticalScene extends Scene {
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
     // Static arena (floor, walls, cover, crates, metal/target boxes + camera + fog)
-    // from the baked descriptor (framework/scenes/adventure3d.scene.ts). buildScene
-    // adds the boxes in the exact same order the old buildArena() did, and rotated
-    // crates carry a precomputed local matrix, so the .dc3d draw list is byte-
-    // identical. The full literal key keeps build.ts from tree-shaking the blobs.
-    const built = loadScene('adventure3d');
+    // from the baked descriptor (framework/scenes/tatical3d.scene.ts). buildScene
+    // preserves the old buildArena() placement order, while the floor/walls use
+    // PSP-safe subdivision in the descriptor. The full literal key keeps build.ts
+    // from tree-shaking the blobs.
+    const built = loadScene('tatical3d');
     this.world = built.scene;
     // Harvest the arena's solid AABBs (the old buildArena() blockers, in order) into
     // the flat {minX,maxX,minZ,maxZ} form slideAabb expects (y is unused for the 2D

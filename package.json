@@ -17,6 +17,7 @@
     "bundle": "bun framework/build.ts",
     "test": "bun framework/test/contract.ts && bun framework/test/controller.test.ts && bun framework/test/action.test.ts && bun framework/test/scene-desc.test.ts && bun framework/test/golden.ts && bun framework/test/bsp-parse.test.ts && bun framework/test/bsp-bake.test.ts && bun framework/test/bsp-walk.test.ts && bun framework/test/bsp-gen.test.ts && bun framework/test/mesh.test.ts",
     "test:fps3d-ppsspp": "bun framework/test/fps3d-ppsspp.ts",
+    "test:tatical3d-ppsspp": "bun framework/test/tatical3d-ppsspp.ts",
     "build": "bun run bake && bun run typecheck && bun run bundle && bun run web",
     "psp": "bun runtime/build.ts",
     "psp:trace": "bun scripts/build-psp-trace.ts",

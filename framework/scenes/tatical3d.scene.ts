@@ -1,15 +1,16 @@
-// Data-driven arena for adventure3d ("Tactical 3D"), byte-exact with the game's
-// original buildArena(). Every box is its OWN Mesh (inline `box` geometry, one
-// upload per node) — adventure3d has ~18 boxes of DIFFERENT sizes plus 8 crates,
-// each hand-built with its own Mesh.box(), so a shared prototype would change the
-// upload/draw list. Add order is identical to buildArena() (the .dc3d golden):
-//   1. floor (no collider)
+// Data-driven arena for tatical3d ("Tactical 3D"). The floor is a subdivided
+// plane, and every box is its OWN Mesh (inline `box` geometry, one upload per
+// node) — tatical3d has ~18 boxes of DIFFERENT sizes plus 8 crates, each
+// hand-built with its own mesh. Large arena boxes request face subdivision so
+// PSP/PPSSPP does not drop a large triangle that straddles the camera/near plane.
+// Add order stays identical to buildArena():
+//   1. floor plane (no collider)
 //   2. 4 perimeter walls
 //   3. 7 cover walls
 //   4. 3 crate GROUPS (each crate its own node, ROTATED -> carries a precomputed
 //      16-float local matrix so the bake->loadScene round trip stays byte-exact)
 //   5. 4 metal/target boxes
-// The soldier actor is NOT in the descriptor: adventure3d adds it AFTER loadScene
+// The soldier actor is NOT in the descriptor: tatical3d adds it AFTER loadScene
 // (it must stay dynamic + keep the live node reference).
 //
 // Colliders are the EXACT blocker AABBs buildArena() pushed, IN ORDER: walls/cover
@@ -28,16 +29,18 @@ const TARGET = [rgb(168, 62, 45), rgb(114, 45, 38), rgb(205, 96, 60), rgb(70, 32
 
 const entities: EntityDesc[] = [];
 const colliders: AABBDesc[] = [];
+const FLOOR_CELL = 0.5;
+const WALL_CELL = 0.5;
 
 // addBox(x,y,z, w,h,d, colors, solid=true): one inline-box entity (translation-only,
 // already byte-exact via the f32 xforms blob), plus a collider unless solid=false.
 function addBox(
   x: number, y: number, z: number,
   w: number, h: number, d: number,
-  colors: number[], solid = true,
+  colors: number[], solid = true, cell?: number,
 ): void {
   entities.push({
-    box: { size: [w, h, d], colors },
+    box: { size: [w, h, d], colors, ...(cell !== undefined ? { cell } : {}) },
     position: [x, y, z],
     bounds: { min: [-w / 2, -h / 2, -d / 2], max: [w / 2, h / 2, d / 2] },
     isStatic: true,
@@ -70,19 +73,24 @@ function addCrates(x: number, y: number, z: number, yaw: number, count: number):
 }
 
 // --- buildArena(), verbatim add order ---------------------------------------
-addBox(0, -0.08, 0, 38, 0.16, 38, FLOOR, false);
-addBox(0, 1.55, -18.6, 38.8, 3.1, 0.85, WALL);
-addBox(0, 1.55, 18.6, 38.8, 3.1, 0.85, WALL);
-addBox(-18.6, 1.55, 0, 0.85, 3.1, 38.8, WALL);
-addBox(18.6, 1.55, 0, 0.85, 3.1, 38.8, WALL);
+entities.push({
+  proto: 'floor',
+  position: [0, 0, 0],
+  bounds: { min: [-19, 0, -19], max: [19, 0, 19] },
+  isStatic: true,
+});
+addBox(0, 1.55, -18.6, 38.8, 3.1, 0.85, WALL, true, WALL_CELL);
+addBox(0, 1.55, 18.6, 38.8, 3.1, 0.85, WALL, true, WALL_CELL);
+addBox(-18.6, 1.55, 0, 0.85, 3.1, 38.8, WALL, true, WALL_CELL);
+addBox(18.6, 1.55, 0, 0.85, 3.1, 38.8, WALL, true, WALL_CELL);
 
-addBox(-10.8, 1.25, -5.8, 14.8, 2.5, 0.7, WALL);
-addBox(9.8, 1.25, -5.8, 12.8, 2.5, 0.7, WALL);
-addBox(-6.2, 1.25, 7.0, 0.7, 2.5, 16.0, WALL);
-addBox(7.2, 1.25, 5.8, 0.7, 2.5, 13.6, WALL);
-addBox(0.5, 1.25, 7.8, 6.7, 2.5, 0.7, WALL);
-addBox(-12.5, 1.25, 3.2, 5.0, 2.5, 0.7, WALL);
-addBox(13.4, 1.25, -0.8, 0.7, 2.5, 8.6, WALL);
+addBox(-10.8, 1.25, -5.8, 14.8, 2.5, 0.7, WALL, true, WALL_CELL);
+addBox(9.8, 1.25, -5.8, 12.8, 2.5, 0.7, WALL, true, WALL_CELL);
+addBox(-6.2, 1.25, 7.0, 0.7, 2.5, 16.0, WALL, true, WALL_CELL);
+addBox(7.2, 1.25, 5.8, 0.7, 2.5, 13.6, WALL, true, WALL_CELL);
+addBox(0.5, 1.25, 7.8, 6.7, 2.5, 0.7, WALL, true, WALL_CELL);
+addBox(-12.5, 1.25, 3.2, 5.0, 2.5, 0.7, WALL, true, WALL_CELL);
+addBox(13.4, 1.25, -0.8, 0.7, 2.5, 8.6, WALL, true, WALL_CELL);
 
 addCrates(-2.4, 0.55, 1.1, 0.15, 3);
 addCrates(11.8, 0.55, 10.4, -0.45, 3);
@@ -92,10 +100,12 @@ addBox(5.8, 0.55, -12.1, 1.2, 1.1, 1.2, TARGET);
 addBox(14.2, 0.75, 4.8, 1.5, 1.5, 3.5, METAL);
 addBox(-9.8, 0.35, 13.4, 4.2, 0.7, 1.2, TARGET);
 
-export const adventure3dScene: SceneDescriptor = {
-  camera: { fovDeg: 62, aspect: 480 / 272, near: 0.08, far: 92 },
+export const tatical3dScene: SceneDescriptor = {
+  camera: { fovDeg: 62, aspect: 480 / 272, near: 0.01, far: 92 },
   fog: { color: rgb(27, 31, 34), near: 34, far: 62 },
-  prototypes: {}, // every box is inline geometry; no shared prototypes
+  prototypes: {
+    floor: { kind: 'plane', size: [38, 38], color: FLOOR[2], cell: FLOOR_CELL },
+  },
   entities,
   colliders,
 };
