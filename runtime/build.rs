@@ -15,6 +15,7 @@ fn main() {
     // bundles are gitignored and require `bun framework/build.ts` first).
     let game = env::var("PSPJS_GAME").unwrap_or_else(|_| "raw-snake.js".to_string());
     let trace = env::var("PSPJS_TRACE").unwrap_or_default();
+    let capture_input = env::var("PSPJS_CAPTURE_INPUT").unwrap_or_default();
 
     let game_dir = Path::new("src/game");
     let src = game_dir.join(&game);
@@ -37,8 +38,10 @@ fn main() {
     // Rebuild when the selection changes or any game file is edited.
     println!("cargo:rustc-env=PSPJS_GAME={}", game);
     println!("cargo:rustc-env=PSPJS_TRACE={}", trace);
+    println!("cargo:rustc-env=PSPJS_CAPTURE_INPUT={}", capture_input);
     println!("cargo:rerun-if-env-changed=PSPJS_GAME");
     println!("cargo:rerun-if-env-changed=PSPJS_TRACE");
+    println!("cargo:rerun-if-env-changed=PSPJS_CAPTURE_INPUT");
     if let Ok(entries) = fs::read_dir(game_dir) {
         for e in entries.flatten() {
             println!("cargo:rerun-if-changed={}", e.path().display());

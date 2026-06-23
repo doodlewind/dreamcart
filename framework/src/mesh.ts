@@ -284,6 +284,60 @@ export class Mesh {
   }
 
   /**
+   * Axis-aligned box for first-person interiors. PSP/PPSSPP can drop a large
+   * triangle that straddles the camera/near plane; subdividing each face keeps
+   * the visible room surfaces in front of the eye as independent small triangles.
+   */
+  static interiorBox(w: number, h: number, d: number, faceColors: Color[], cell = 0.5): Mesh {
+    const hx = w / 2;
+    const hy = h / 2;
+    const hz = d / 2;
+    const b = new MeshBuilder();
+    const size = cell > 0 ? cell : 0.5;
+    const dist = (a: number[], c: number[]) => Math.sqrt(
+      (a[0] - c[0]) * (a[0] - c[0])
+      + (a[1] - c[1]) * (a[1] - c[1])
+      + (a[2] - c[2]) * (a[2] - c[2]),
+    );
+    const emitFace = (a: number[], c0: number[], d0: number[], color: Color) => {
+      const su = Math.max(1, Math.ceil(dist(a, c0) / size));
+      const sv = Math.max(1, Math.ceil(dist(a, d0) / size));
+      const ux = c0[0] - a[0], uy = c0[1] - a[1], uz = c0[2] - a[2];
+      const vx = d0[0] - a[0], vy = d0[1] - a[1], vz = d0[2] - a[2];
+      const point = (u: number, v: number) => [
+        a[0] + ux * u + vx * v,
+        a[1] + uy * u + vy * v,
+        a[2] + uz * u + vz * v,
+      ];
+      for (let y = 0; y < sv; y++) {
+        const v0 = y / sv;
+        const v1 = (y + 1) / sv;
+        for (let x = 0; x < su; x++) {
+          const u0 = x / su;
+          const u1 = (x + 1) / su;
+          const p0 = point(u0, v0);
+          const p1 = point(u1, v0);
+          const p2 = point(u1, v1);
+          const p3 = point(u0, v1);
+          const i0 = b.vertex(p0[0], p0[1], p0[2], color);
+          const i1 = b.vertex(p1[0], p1[1], p1[2], color);
+          const i2 = b.vertex(p2[0], p2[1], p2[2], color);
+          const i3 = b.vertex(p3[0], p3[1], p3[2], color);
+          b.quad(i0, i1, i2, i3);
+        }
+      }
+    };
+    // Same face order and winding as Mesh.box: +X,-X,+Y,-Y,+Z,-Z.
+    emitFace([hx, -hy, hz], [hx, -hy, -hz], [hx, hy, hz], faceColors[0]);
+    emitFace([-hx, -hy, -hz], [-hx, -hy, hz], [-hx, hy, -hz], faceColors[1]);
+    emitFace([-hx, hy, hz], [hx, hy, hz], [-hx, hy, -hz], faceColors[2]);
+    emitFace([-hx, -hy, -hz], [hx, -hy, -hz], [-hx, -hy, hz], faceColors[3]);
+    emitFace([-hx, -hy, hz], [hx, -hy, hz], [-hx, hy, hz], faceColors[4]);
+    emitFace([hx, -hy, -hz], [-hx, -hy, -hz], [hx, hy, -hz], faceColors[5]);
+    return b.build();
+  }
+
+  /**
    * Axis-aligned textured + lit cube centered at origin. Every face gets full
    * 0..1 UVs (so a whole texture maps onto each face) and an outward normal, so
    * it exercises FMT_UV + FMT_NORMAL (the M1 texture/light path). `tint` is the

@@ -725,6 +725,7 @@
     };
   }
   function pressVirtual(bit, down) { if (down) held |= bit; else held &= ~bit; }
+  function setButtons(mask) { held = mask & 0xffff; }
 
   // Build a WebGL2 canvas stacked UNDER the Canvas2D HUD canvas, same 480x272
   // backing store and same CSS box, so the GL 3D layer shows through wherever the
@@ -806,6 +807,7 @@
     mount: mount, load: load, start: start, stop: stop,
     setPaused: setPaused, step: step,
     pressVirtual: pressVirtual,
+    setButtons: setButtons,
     getButtons: function () { return held; },
     onLog: function (cb) { logSink = cb; },
     onFps: function (cb) { fpsSink = cb; },

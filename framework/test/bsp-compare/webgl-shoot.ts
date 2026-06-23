@@ -28,7 +28,8 @@ try {
   const page = await browser.newPage({ viewport: { width: 480, height: 272 }, deviceScaleFactor: 1 });
   const errs: string[] = [];
   page.on('pageerror', (e: Error) => errs.push(String(e.message || e)));
-  const extra = `&game=${process.env.BSP_GAME || 'bsp-compare.js'}&hold=${process.env.BSP_HOLD || 0}&frames=${process.env.BSP_FRAMES || 8}`;
+  const script = process.env.BSP_SCRIPT ? `&script=${encodeURIComponent(process.env.BSP_SCRIPT)}` : '';
+  const extra = `&game=${process.env.BSP_GAME || 'bsp-compare.js'}&hold=${process.env.BSP_HOLD || 0}&frames=${process.env.BSP_FRAMES || 8}${script}`;
   await page.goto(`http://127.0.0.1:${PORT}/headless.html?map=${map}&view=${process.env.BSP_VIEW || ''}${extra}`, { waitUntil: 'load', timeout: 20000 });
   await page.waitForFunction('window.__ready || window.__error', null, { timeout: 25000 });
   const pageErr = await page.evaluate('window.__error');
