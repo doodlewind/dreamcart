@@ -252,6 +252,19 @@ function countDrawNodes(scene: Scene3D): number {
   ok(threw, "buildScene throws for an unregistered baked prototype");
 }
 
+// ---- (b'') inline box.cell selects near-plane-safe subdivision ---------------
+{
+  const d: SceneDescriptor = {
+    prototypes: {},
+    entities: [
+      { box: { size: [2, 2, 2], colors: solid(rgb(40, 80, 120)), cell: 0.5 } },
+    ],
+  };
+  const built = buildScene(d);
+  const mesh = (built.scene.root.children[0] as any).mesh as Mesh;
+  ok(mesh.vertexCount > Mesh.box(2, 2, 2, solid(rgb(40, 80, 120))).vertexCount, "inline box.cell builds a subdivided near-plane-safe box mesh");
+}
+
 // ---- (c) the rotation/scale boundary: NOT byte-safe via f32 round trip -------
 // This is the explicit fence on the (a) guarantee. The divergence is VALUE-
 // dependent (many angles happen to be f32-stable), so the honest claim is "not

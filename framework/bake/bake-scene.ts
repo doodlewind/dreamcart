@@ -16,7 +16,7 @@
 //   bun framework/bake/bake-scene.ts
 import { readdirSync, existsSync } from 'node:fs';
 import { pack, unpack, rawBytes, DT_U8, DT_F32, type Blob } from './dcpak';
-import type { SceneDescriptor, MeshProto, AABBDesc } from '../src/scene-desc';
+import type { SceneDescriptor, MeshProto, AABBDesc, BoxMeshDesc } from '../src/scene-desc';
 
 const here = new URL('.', import.meta.url).pathname;
 const scenesDir = here + '../scenes/';
@@ -27,7 +27,7 @@ interface SceneMeta {
   camera?: SceneDescriptor['camera'];
   fog?: SceneDescriptor['fog'];
   prototypes: Record<string, MeshProto>;
-  entities: { proto?: string; box?: { size: [number, number, number]; colors: number[] };
+  entities: { proto?: string; box?: BoxMeshDesc;
               bounds?: AABBDesc;
               tint?: number; isStatic?: boolean; id?: string;
               hasPos: boolean; hasRot: boolean; hasScale: boolean; hasMatrix?: boolean }[];
@@ -84,8 +84,9 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-// Load the existing store and drop any scene blobs we're about to regenerate, so
-// re-running is idempotent and the glTF blobs are preserved untouched.
+// Load the existing store and drop all scene blobs before regenerating every
+// framework/scenes/*.scene.ts file. This keeps scene renames from leaving stale
+// "<old-key>:scene.*" blobs while preserving non-scene assets untouched.
 const existing: Blob[] = existsSync(storePath)
   ? unpack(new Uint8Array(await Bun.file(storePath).arrayBuffer()))
   : [];
@@ -104,8 +105,8 @@ for (const f of files) {
   console.log(`  ${key}: ${blobs[0].data.length} B meta, ${xf} f32 xforms, ${desc.colliders?.length ?? 0} colliders`);
 }
 
-const sceneKeys = new Set(sceneBlobs.map((b) => b.key));
-const merged = [...existing.filter((b) => !sceneKeys.has(b.key)), ...sceneBlobs];
+const isSceneBlob = (key: string): boolean => /:scene\.(meta|xforms|colliders)$/.test(key);
+const merged = [...existing.filter((b) => !isSceneBlob(b.key)), ...sceneBlobs];
 const out = pack(merged); // pack() sorts by key, so glTF + scene blobs interleave fine
 await Bun.write(storePath, out);
 console.log(`bake-scene: wrote src/assets.dcstore (${merged.length} blobs, ${(out.length / 1024).toFixed(1)} KB)`);

@@ -284,6 +284,62 @@ export class Mesh {
   }
 
   /**
+   * Axis-aligned box for first-person interiors. PSP/PPSSPP can drop a large
+   * triangle that straddles the camera/near plane; subdividing each face keeps
+   * the visible room surfaces in front of the eye as independent small triangles.
+   */
+  static interiorBox(w: number, h: number, d: number, faceColors: Color[], cell = 0.5): Mesh {
+    const hx = w / 2;
+    const hy = h / 2;
+    const hz = d / 2;
+    const b = new MeshBuilder();
+    const size = cell > 0 ? cell : 0.5;
+    const dist = (a: number[], c: number[]) => Math.sqrt(
+      (a[0] - c[0]) * (a[0] - c[0])
+      + (a[1] - c[1]) * (a[1] - c[1])
+      + (a[2] - c[2]) * (a[2] - c[2]),
+    );
+    const emitFace = (a: number[], c0: number[], d0: number[], color: Color) => {
+      const su = Math.max(1, Math.ceil(dist(a, c0) / size));
+      const sv = Math.max(1, Math.ceil(dist(a, d0) / size));
+      const ux = c0[0] - a[0], uy = c0[1] - a[1], uz = c0[2] - a[2];
+      const vx = d0[0] - a[0], vy = d0[1] - a[1], vz = d0[2] - a[2];
+      const grid: number[] = [];
+      function emitVertex(u: number, v: number): number {
+        return b.vertex(
+          a[0] + ux * u + vx * v,
+          a[1] + uy * u + vy * v,
+          a[2] + uz * u + vz * v,
+          color,
+        );
+      }
+      for (let y = 0; y <= sv; y++) {
+        for (let x = 0; x <= su; x++) {
+          grid.push(emitVertex(x / su, y / sv));
+        }
+      }
+      for (let y = 0; y < sv; y++) {
+        for (let x = 0; x < su; x++) {
+          b.quad(
+            grid[y * (su + 1) + x],
+            grid[y * (su + 1) + x + 1],
+            grid[(y + 1) * (su + 1) + x + 1],
+            grid[(y + 1) * (su + 1) + x],
+          );
+        }
+      }
+    };
+    // Same face order and winding as Mesh.box: +X,-X,+Y,-Y,+Z,-Z.
+    emitFace([hx, -hy, hz], [hx, -hy, -hz], [hx, hy, hz], faceColors[0]);
+    emitFace([-hx, -hy, -hz], [-hx, -hy, hz], [-hx, hy, -hz], faceColors[1]);
+    emitFace([-hx, hy, hz], [hx, hy, hz], [-hx, hy, -hz], faceColors[2]);
+    emitFace([-hx, -hy, -hz], [hx, -hy, -hz], [-hx, -hy, hz], faceColors[3]);
+    emitFace([-hx, -hy, hz], [hx, -hy, hz], [-hx, hy, hz], faceColors[4]);
+    emitFace([hx, -hy, -hz], [-hx, -hy, -hz], [hx, hy, -hz], faceColors[5]);
+    return b.build();
+  }
+
+  /**
    * Axis-aligned textured + lit cube centered at origin. Every face gets full
    * 0..1 UVs (so a whole texture maps onto each face) and an outward normal, so
    * it exercises FMT_UV + FMT_NORMAL (the M1 texture/light path). `tint` is the
@@ -325,6 +381,35 @@ export class Mesh {
     const i2 = b.vertex(hx, 0, -hz, color);
     const i3 = b.vertex(-hx, 0, -hz, color);
     b.quad(i0, i1, i2, i3);
+    return b.build();
+  }
+
+  /** Subdivided horizontal plane on Y=0, preserving Mesh.plane's winding. */
+  static gridPlane(w: number, d: number, color: Color, cell = 0.5): Mesh {
+    const hx = w / 2;
+    const hz = d / 2;
+    const size = cell > 0 ? cell : 0.5;
+    const su = Math.max(1, Math.ceil(w / size));
+    const sv = Math.max(1, Math.ceil(d / size));
+    const b = new MeshBuilder();
+    const grid: number[] = [];
+    for (let z = 0; z <= sv; z++) {
+      const pz = hz - d * (z / sv);
+      for (let x = 0; x <= su; x++) {
+        const px = -hx + w * (x / su);
+        grid.push(b.vertex(px, 0, pz, color));
+      }
+    }
+    for (let z = 0; z < sv; z++) {
+      for (let x = 0; x < su; x++) {
+        b.quad(
+          grid[z * (su + 1) + x],
+          grid[z * (su + 1) + x + 1],
+          grid[(z + 1) * (su + 1) + x + 1],
+          grid[(z + 1) * (su + 1) + x],
+        );
+      }
+    }
     return b.build();
   }
 }

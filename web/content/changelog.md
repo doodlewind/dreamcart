@@ -20,7 +20,7 @@ levels into walkable scenes.
 - **`ActionMap` + data-driven scenes** — input bindings and scene graphs are now plain
   data, decoupled from per-game code; includes a pre-merge refactor of the scene layer
   ([#23](https://github.com/doodlewind/dreamcart/pull/23)).
-- **`adventure3d` scene-ification** — the adventure arena is now described entirely by
+- **`tatical3d` scene-ification** — the tactical arena is now described entirely by
   data, with a byte-exact result against the old hand-built scene ([#25](https://github.com/doodlewind/dreamcart/pull/25)).
 
 ### 3D & worlds

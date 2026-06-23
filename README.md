@@ -36,9 +36,9 @@ in shared JS and a native engine per platform (see
 | 3DS | C (libctru) + QuickJS | citro2d / citro3d | ✅ runs (Azahar/hardware) |
 | Android (dual-screen) | Kotlin + WebView (web engine) | Canvas2D / WebGL2 | ✅ runs (3DS-style handheld; top=game, bottom=native UI) — see [`android/`](android/) |
 
-| Flappy (`flappy.js`) | Tactical 3D (`adventure3d.js`) |
+| Flappy (`flappy.js`) | Tactical 3D (`tatical3d.js`) |
 |:---:|:---:|
-| ![Flappy — a Flappy-Bird clone on the 2D contract](docs/flappy.png) | ![Tactical 3D — skinned soldier in an arena on the g3d contract](docs/tactical3d.png) |
+| ![Flappy — a Flappy-Bird clone on the 2D contract](docs/flappy.png) | ![Tactical 3D — skinned soldier in an arena on the g3d contract](docs/tatical3d.png) |
 | 2D framework game | 3D framework game (hardware-skinned glTF) |
 
 ## Games

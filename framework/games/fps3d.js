@@ -36,11 +36,11 @@ class FpsScene extends Scene {
 
     // The room: a box viewed from inside (no culling, so the inner faces show).
     // faces: +X,-X,+Y(ceiling),-Y(floor),+Z,-Z.
-    const room = Mesh.box(20, 6, 20, [
+    const room = Mesh.interiorBox(20, 6, 20, [
       rgb(70, 90, 130), rgb(70, 90, 130),
       rgb(120, 130, 150), rgb(40, 44, 54),
       rgb(80, 100, 140), rgb(80, 100, 140),
-    ]);
+    ], 0.5);
     this.world.add({ mesh: room, position: new Vec3(0, 3, 0) });
 
     // Shootable targets (a shared cube mesh).

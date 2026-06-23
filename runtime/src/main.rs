@@ -44,6 +44,8 @@ static GAME_JS: &str = include_str!(concat!(env!("OUT_DIR"), "/game.js"));
 // base64-decoding megabyte string literals at boot.
 static GAME_DCPAK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/game.dcpak"));
 static PSPJS_TRACE: &str = env!("PSPJS_TRACE");
+#[cfg(feature = "capture")]
+static PSPJS_CAPTURE_INPUT: &str = env!("PSPJS_CAPTURE_INPUT");
 
 // The libquickjs-sys wrapper (src/lib.rs) re-exports JS_GetArrayBuffer but not
 // JS_NewArrayBuffer, which the linked QuickJS C library does provide (quickjs.h).
@@ -253,6 +255,8 @@ unsafe fn run() {
         let bx = (pad.lx as i32 - 128).clamp(-127, 127);
         let by = (pad.ly as i32 - 128).clamp(-127, 127);
         let mask = (pad.buttons.bits() as i32 & 0xffff) | ((bx & 0xff) << 16) | ((by & 0xff) << 24);
+        #[cfg(feature = "capture")]
+        let mask = capture_input_mask(frame_count, mask);
         if trace_enabled() && frame_count < 4 {
             trace_u32("frame buttons", pad.buttons.bits());
         }
@@ -312,6 +316,85 @@ unsafe fn run() {
 
         frame_count = frame_count.wrapping_add(1);
     }
+}
+
+#[cfg(feature = "capture")]
+fn parse_capture_u32(s: &[u8], mut i: usize, end: usize) -> Option<u32> {
+    while i < end && (s[i] == b' ' || s[i] == b'\t') {
+        i += 1;
+    }
+    if i >= end {
+        return None;
+    }
+    let hex = i + 1 < end && s[i] == b'0' && (s[i + 1] == b'x' || s[i + 1] == b'X');
+    if hex {
+        i += 2;
+    }
+    let mut out = 0u32;
+    let mut any = false;
+    while i < end {
+        let c = s[i];
+        let d = if c >= b'0' && c <= b'9' {
+            c - b'0'
+        } else if hex && c >= b'a' && c <= b'f' {
+            c - b'a' + 10
+        } else if hex && c >= b'A' && c <= b'F' {
+            c - b'A' + 10
+        } else if c == b' ' || c == b'\t' {
+            break;
+        } else {
+            return None;
+        };
+        out = out.saturating_mul(if hex { 16 } else { 10 }).saturating_add(d as u32);
+        any = true;
+        i += 1;
+    }
+    if any { Some(out) } else { None }
+}
+
+/// Build-time scripted input for deterministic PPSSPPHeadless captures.
+///
+/// Format: `frame:mask,frame:mask` where mask may be decimal or hex. The active
+/// mask is the last threshold at or before `frame_count`, so
+/// `0:0,12:0x20` means settle in the default pose, then hold RIGHT from frame 12.
+#[cfg(feature = "capture")]
+fn capture_input_mask(frame_count: u32, fallback: i32) -> i32 {
+    let s = PSPJS_CAPTURE_INPUT.as_bytes();
+    if s.is_empty() {
+        return fallback;
+    }
+    let mut i = 0usize;
+    let mut best_frame: Option<u32> = None;
+    let mut best_mask = fallback as u32;
+    while i < s.len() {
+        while i < s.len() && (s[i] == b',' || s[i] == b';' || s[i] == b' ' || s[i] == b'\t') {
+            i += 1;
+        }
+        let frame_start = i;
+        while i < s.len() && s[i] != b':' && s[i] != b',' && s[i] != b';' {
+            i += 1;
+        }
+        if i >= s.len() || s[i] != b':' {
+            break;
+        }
+        let frame_end = i;
+        i += 1;
+        let mask_start = i;
+        while i < s.len() && s[i] != b',' && s[i] != b';' {
+            i += 1;
+        }
+        let mask_end = i;
+        if let (Some(frame), Some(mask)) = (
+            parse_capture_u32(s, frame_start, frame_end),
+            parse_capture_u32(s, mask_start, mask_end),
+        ) {
+            if frame <= frame_count && best_frame.map_or(true, |best| frame >= best) {
+                best_frame = Some(frame);
+                best_mask = mask;
+            }
+        }
+    }
+    best_mask as i32
 }
 
 /// Dump the just-presented display framebuffer to `ms0:/dc_cap/fNNNN.raw` (512-stride
