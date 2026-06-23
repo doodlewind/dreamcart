@@ -46,7 +46,10 @@ unsafe fn ensure_init() {
     }
     INITED = true;
     let free = sys::sceKernelMaxFreeMemSize() as usize;
-    let margin = 4 * 1024 * 1024;
+    // 5 MB margin (was 4 MB): leaves room OUTSIDE the arena for the dedicated audio
+    // thread's 64 KB stack + the SRC channel's internal buffers (the synth's DAC/
+    // ring/voice tables are `static` .bss, not heap — see runtime/src/audio.rs).
+    let margin = 5 * 1024 * 1024;
     let size = if free > margin + 1024 * 1024 { free - margin } else { free / 2 };
     if size == 0 {
         return;

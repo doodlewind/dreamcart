@@ -12,6 +12,8 @@ import { CharController, Collide } from '../src/controller';
 import { ActionMap } from '../src/action';
 import { loadScene } from '../src/scene-desc';
 import { THREE_SOLDIER } from '../src/assets-three-soldier';
+import { SoundBank } from '../src/audio';
+import { voiceTable } from '../src/assets-audio';
 
 /** @import { UpdateContext, Graphics, Scene3D } from '../src/index' */
 
@@ -24,6 +26,7 @@ class TacticalScene extends Scene {
   /** @type {CharController} */ ctrl = /** @type {any} */ (null);
   /** @type {ActionMap} */ act = /** @type {any} */ (null);
   fps = new Fps();
+  /** @type {SoundBank} */ snd = /** @type {any} */ (null);
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -71,6 +74,12 @@ class TacticalScene extends Scene {
       rotation: Quat.fromEuler(-HALF_PI, 0, 0),
       scale: new Vec3(THREE_SOLDIER.scale, THREE_SOLDIER.scale, THREE_SOLDIER.scale),
     }));
+
+    // Shared footstep glue (deterministic, no HUD -> golden pixels unchanged).
+    this.snd = new SoundBank({ steps: { voice: 'footstep' } });
+    if (typeof snd !== 'undefined' && snd) snd.defineVoices(voiceTable());
+    this.snd.bindSteps(this.soldier);
+    ctx.engine.audio = this.snd;
 
     this.reset();
     ctx.engine.scene3d = this.world;

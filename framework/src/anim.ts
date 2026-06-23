@@ -24,6 +24,13 @@ export class AnimationPlayer {
   readonly outT: Float32Array;
   readonly outR: Float32Array;
   readonly outS: Float32Array;
+  /**
+   * Optional footstep glue (audio.ts SoundBank.bindSteps installs it): called
+   * once each time `advance` wraps the clip cursor past the loop point. Null on
+   * the non-audio path, so advance()'s deterministic math is byte-unchanged when
+   * unbound — the callback only runs when something has explicitly bound it.
+   */
+  onWrap: (() => void) | null = null;
 
   constructor(clip: BakedClip, jointCount: number) {
     this.clip = clip;
@@ -39,8 +46,13 @@ export class AnimationPlayer {
     this.time += dt;
     const d = this.duration;
     if (d > 0) {
-      this.time -= Math.floor(this.time / d) * d;
+      // Detect a loop wrap for the footstep glue. `wraps` counts whole-period
+      // crossings; the reduction below is byte-identical to before regardless, so
+      // the deterministic sample()/golden path is untouched when onWrap is null.
+      const wraps = Math.floor(this.time / d);
+      this.time -= wraps * d;
       if (this.time < 0) this.time += d;
+      if (this.onWrap && wraps > 0) this.onWrap();
     } else {
       this.time = 0;
     }

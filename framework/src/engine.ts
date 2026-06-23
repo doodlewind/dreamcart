@@ -5,6 +5,7 @@ import { Input } from './input';
 import { Rng } from './rng';
 import { Scene } from './scene';
 import type { Scene3D } from './scene3d';
+import type { SoundBank } from './audio';
 
 export interface UpdateContext {
   input: Input;
@@ -29,6 +30,10 @@ export class Engine {
   /** Optional 3D scene; when set (and the host provides g3d) it is rendered
    * each frame BEFORE the 2D tree, so 2D draws form a HUD over the 3D pass. */
   scene3d?: Scene3D;
+  /** Optional shared sound bank; when set, the engine flushes it once per frame
+   * (after the 3D render, before/with the 2D HUD) so the game's play()/loop()
+   * calls cross to the host in one batched FFI call. Settable like scene3d. */
+  audio?: SoundBank;
   private enc?: CommandEncoder;
   private stack: Scene[] = [];
 
@@ -99,6 +104,10 @@ export class Engine {
         this.enc.reset();
         this.scene3d.render(this.enc);
       }
+      // Audio: flush this frame's accumulated play()/loop() commands in ONE FFI
+      // crossing, AFTER the 3D render and BEFORE the 2D HUD draw (the HUD reads
+      // audio.active/lastEvent/vu, which flush() updates deterministically).
+      this.audio?.flush();
       const tc = nowF ? nowF() : 0;
       sc.drawTree(this.g);
       if (nowF) {

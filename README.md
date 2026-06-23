@@ -1,26 +1,45 @@
-# DreamCart
-An **isomorphic** JavaScript game runtime — the *same* game `.js` runs unchanged on
-Sony **PSP**, the **Web**, and Nintendo **3DS**, powered by [QuickJS](https://bellard.org/quickjs/)
-(plus [rust-psp](https://github.com/overdrivenpotato/rust-psp) on PSP and
+<p align="center">
+  <img src="web/static/logo.png" alt="DreamCart" width="150" />
+</p>
+
+<h1 align="center">DreamCart</h1>
+<p align="center"><b>Self-contained game cartridges for tiny worlds.</b></p>
+
+DreamCart is an **isomorphic** JavaScript game runtime — the *same* game `.js` runs
+unchanged on Sony **PSP**, the **Web**, Nintendo **3DS**, and a dual-screen
+**Android** handheld, powered by [QuickJS](https://bellard.org/quickjs/) (plus
+[rust-psp](https://github.com/overdrivenpotato/rust-psp) on PSP and
 [libctru/citro2d](https://github.com/devkitPro/libctru) on 3DS).
 
 Each platform implements the same tiny native contract — `gfx.clear(r,g,b)`,
 `gfx.fillRect(x,y,w,h,r,g,b)`, `log(msg)`, and a `frame(buttons)` function called
 once per frame with a fixed controller bitmask — so games in
-[`runtime/src/game/`](runtime/src/game/) are written once and run everywhere.
-An **optional** `g3d` contract adds 3D the same way: meshes uploaded once + one
-batched draw-list per frame, with all scene/physics/math logic in shared JS and a
-native engine per platform (see [`docs/3d-design.md`](docs/3d-design.md) and the
-`cube3d`/`racing3d`/`fps3d` games).
+[`runtime/src/game/`](runtime/src/game/) are written once and run everywhere. An
+**optional** `g3d` contract adds hardware-accelerated 3D the same way: meshes
+uploaded once + one batched draw-list per frame, with all scene/physics/math logic
+in shared JS and a native engine per platform (see
+[`docs/3d-design.md`](docs/3d-design.md) and the `cube3d`/`racing3d`/`fps3d` games).
+
+### Live
+
+| | |
+|---|---|
+| 🎮 **Playground** | <https://dreamcart.games/play/> — run any game in a themeable handheld console, in your browser |
+| 📖 **Docs** | <https://dreamcart.games/docs/> — architecture + lib API reference |
+| 🗓 **Changelog** | <https://dreamcart.games/changelog/> — capability summaries by date |
+| 🏠 **Home** | <https://dreamcart.games/> |
 
 | Platform | Host | Graphics (2D / 3D) | Status |
 |----------|------|--------------------|--------|
 | PSP | Rust (rust-psp) + QuickJS | sceGu / sceGu+sceGum | ✅ runs (PPSSPP) |
-| Web | Canvas + RAF | Canvas2D / WebGL2 | ✅ runs ([Playground](web/index.html)) |
+| Web | Canvas + RAF | Canvas2D / WebGL2 | ✅ runs ([Playground](https://dreamcart.games/play/)) |
 | 3DS | C (libctru) + QuickJS | citro2d / citro3d | ✅ runs (Azahar/hardware) |
 | Android (dual-screen) | Kotlin + WebView (web engine) | Canvas2D / WebGL2 | ✅ runs (3DS-style handheld; top=game, bottom=native UI) — see [`android/`](android/) |
 
-![Snake running on PPSSPP](docs/snake.png)
+| Flappy (`flappy.js`) | Tactical 3D (`tatical3d.js`) |
+|:---:|:---:|
+| ![Flappy — a Flappy-Bird clone on the 2D contract](docs/flappy.png) | ![Tactical 3D — skinned soldier in an arena on the g3d contract](docs/tatical3d.png) |
+| 2D framework game | 3D framework game (hardware-skinned glTF) |
 
 ## Games
 There are two kinds of games, by naming convention:
@@ -31,7 +50,9 @@ There are two kinds of games, by naming convention:
   exist to exercise the low-level API directly, with no framework.
 - **Unprefixed — framework games.** Authored against the framework (see
   [Framework](#framework-typescript-sdk-javascript-games) below) and bundled into
-  the same runtime.
+  the same runtime — including the 3D demos (`cube3d`, `racing3d`, `fps3d`,
+  `skin3d`, `outdoor3d`, `bsp3d`, …) and a Jin-Yong-flavoured **wuxia village**
+  story game (`rpg.js`).
 
 The raw low-level demos live in [`runtime/src/game/`](runtime/src/game/):
 
@@ -44,7 +65,7 @@ The raw low-level demos live in [`runtime/src/game/`](runtime/src/game/):
 | Tetris | `raw-tetris.js` | LEFT/RIGHT move, DOWN soft-drop, CROSS/UP rotate, START restart |
 | Platformer | `raw-platformer.js` | LEFT/RIGHT run, CROSS jump, START restart |
 
-Select which one to embed at build time with `PSPJS_GAME`:
+Select which one to embed in a native build with `PSPJS_GAME`:
 
 ``` sh
 PSPJS_GAME=raw-tetris.js bun run psp     # builds EBOOT.PBP for Tetris
@@ -69,8 +90,7 @@ bun run psp:trace
 # -> dist/psp-trace/PSP/GAME/dreamcart-raw-snake-trace/EBOOT.PBP
 ```
 
-Copy `dist/psp-trace/PSP` to the root of the PSP memory stick. On PS Vita
-Adrenaline, the final path is
+On PS Vita Adrenaline, the final path is
 `ux0:pspemu/PSP/GAME/dreamcart-raw-snake-trace/EBOOT.PBP`.
 
 ## Play (one command)
@@ -78,21 +98,19 @@ Adrenaline, the final path is
 matching emulator:
 
 ``` sh
-bun run play web              # open the playground (pick a game from the list)
-bun run play web maze         # playground, jump straight to a game
+bun run play web              # open the Playground (pick a game from the list)
+bun run play web maze         # Playground, jump straight to a game
 bun run play psp raw-tetris   # build EBOOT + launch PPSSPP
 bun run play 3ds rpg          # build .3dsx + launch a 3DS emulator (Azahar/Citra/…)
 ```
 
-Run `bun run play` with no args to see the game list. For Web you don't need a
-game arg — the playground has a dropdown. PSP needs PPSSPP
-(`brew install --cask ppsspp`); 3DS needs a 3DS emulator in `/Applications`
-(it prints the built `.3dsx` path + install hint if none is found).
+Run `bun run play` with no args to see the game list. PSP needs PPSSPP
+(`brew install --cask ppsspp`); 3DS needs a 3DS emulator in `/Applications`.
 
 ## Framework (TypeScript SDK, JavaScript games)
 The raw `gfx`/`frame` contract is deliberately tiny. On top of it lives a small,
 **isomorphic** game framework ([`framework/`](framework/)) that runs the same on
-**all three platforms**. The SDK ([`framework/src/`](framework/src)) is written in
+**all platforms**. The SDK ([`framework/src/`](framework/src)) is written in
 **TypeScript**, but games themselves are authored in **plain JavaScript** — the
 project's firm boundary is that game business logic is JS. Games still get full
 editor/CI type-checking via `// @ts-check` + JSDoc types imported from the SDK
@@ -102,20 +120,43 @@ is bundled (framework inlined) per platform, so PSP/Web/3DS execute identical co
 It provides: a scene/entity tree (`Scene`/`Node` with `update`/`draw`), the game
 loop, edge-detecting `Input`, a seeded deterministic `Rng`, `Graphics`
 (`rect`/`sprite`/`text`), palette `Bitmap`s with a baked **8×8 ASCII font** and
-sprites, a `TileMap` with camera, and a `DialogueBox`. Assets are *baked* to TS
-data modules (`framework/bake/`).
+sprites, a `TileMap` with camera, a `DialogueBox`, a shared `CharController` +
+analog input contract, an `ActionMap`, and data-driven scene descriptions. The 3D
+stack adds the `g3d` contract, `Scene3D`, `mesh`/`material`/`light`/`skin`,
+deterministic `math`, glTF hardware skinning, and a retained **native scene**
+(cull + draw in Rust, not per-node QuickJS — the key PSP performance unlock).
+Assets are *baked* to the binary [`.dcpak`](docs/dcpak-format.md) container
+(`framework/bake/`). Full API: <https://dreamcart.games/docs/>.
 
-Six framework games live in [`framework/games/`](framework/games/), including a
-Jin-Yong-flavoured **wuxia story game** (`rpg.js`) — start in your room, walk out
-the door, and roam the village talking to villagers and the elder:
+## The web site & Playground
+The site at **[dreamcart.games](https://dreamcart.games)** — home, Playground,
+Docs and Changelog — is a static **Bun + React** multi-page app built into
+`web/site/` and deployed to Cloudflare Pages. It uses a single CSS **token
+contract** with **themes-as-data** (switched via `<html data-theme>`) and headless
+components keyed by `data-part`, so one theme picker re-skins the whole site —
+including the **handheld console** the Playground renders games inside (desktop:
+horizontal, PSP-like; mobile: vertical, Game Boy SP-like). Four themes ship:
+`cartridge` (default), `psp-silver`, `dmg` (Game Boy green), and `light`.
 
-![Wuxia village (framework RPG)](docs/village.png)
+The Playground runs the *same* game files as every other platform: it implements
+the identical `gfx`/`input`/`frame` contract on Canvas/WebGL2
+([`web/engine.js`](web/engine.js), the global `window.PSPJS`) and loads the games
+from a generated manifest ([`web/build-games.ts`](web/build-games.ts) →
+`window.GAMES`). Each game's menu title, order and on-screen controls come from a
+header comment in its own source (`// @title` / `// @order` / `// @controls`) — the
+single source of truth, so adding a game needs no edit to the build script. Game
+source is hidden by default behind a **Code** drawer (raw games stay editable +
+runnable; framework games are read-only). Docs and Changelog are authored as
+Markdown in [`web/content/`](web/content/) and rendered to static HTML at build
+time (syntax highlighting via highlight.js, theme-recolored through tokens).
 
-The browser **Playground** lets you switch all games (raw + framework) and view
-their JavaScript source:
+``` sh
+bun run serve        # build + serve the full site -> http://localhost:8123
+bun run site         # build the static site into web/site/
+bun run deploy       # build + publish web/site/ to Cloudflare Pages
+```
 
-![Playground](docs/playground.png)
-
+## Build & test
 ``` sh
 bun install
 bun run build          # bake assets -> typecheck -> bundle games -> web manifest
@@ -137,8 +178,8 @@ button bitmask is identical across the Web and 3DS hosts, the framework SDK, and
 every raw demo's `BTN_*` constants (the raw games are eval'd as a string and so
 can't `import` the canonical `Btn`, so the test enforces they never drift).
 Because the same bundle runs on every platform, this catches crashes and visual
-regressions in the shared code. Run with
-`bun run test`; regenerate goldens with `UPDATE=1 bun framework/test/golden.ts`.
+regressions in the shared code. Run with `bun run test`; regenerate goldens with
+`UPDATE=1 bun framework/test/golden.ts`.
 
 ## Architecture
 - **Rust host** (`runtime/src/main.rs`) owns the process: it sets up the GU
@@ -156,6 +197,8 @@ regressions in the shared code. Run with
   `JS_NewRuntime2` so it allocates through the Rust/PSP allocator (rust-psp's
   startup sets up no C heap, so newlib `malloc` is unusable).
 - **FFI bindings**: extended in `quickjs-rs/libquickjs-sys/src/lib.rs`.
+- **Web host** (`web/engine.js`): the same `gfx`/`input`/`frame` contract on
+  Canvas2D, with an optional WebGL2 layer for the `g3d` 3D pass.
 
 ## Setup (from a fresh clone, macOS)
 Install [Bun](https://bun.sh) and [Homebrew](https://brew.sh) (and Docker, e.g.
@@ -199,23 +242,16 @@ Open the EBOOT in [PPSSPP](https://www.ppsspp.org/):
 open -a PPSSPPSDL --args runtime/target/mipsel-sony-psp/debug/EBOOT.PBP
 ```
 
-## Web (Playground)
-Start the `Bun.serve` dev server and open the Playground (edit + run, switch
-games, view source, on-screen + keyboard controls):
-
+## Run on the Web
 ``` sh
 bun run serve        # -> http://localhost:8123  (PORT=3000 to change)
 ```
 
-Open <http://localhost:8123/> (or `?game=rpg.js` to pick one). The server
-([`web/serve.ts`](web/serve.ts)) regenerates the game manifest on startup. Each
-game's menu title, order and on-screen controls come from a header comment in
-its own source (`// @title` / `// @order` / `// @controls`) — the single source
-of truth, so adding a game needs no edit to the build script. The Playground
-implements the identical `gfx`/`input`/`frame` contract on Canvas
-([`web/engine.js`](web/engine.js)), so the same game files run in the browser.
+Open <http://localhost:8123/play/> (or `/play/?game=rpg.js` to pick one). The dev
+server ([`web/serve.ts`](web/serve.ts)) builds the full site and serves it with
+Cloudflare-Pages-style directory routing.
 
-## 3DS
+## Run on 3DS
 Builds a `.3dsx` homebrew app using the `devkitpro/devkitarm` Docker image — no
 host toolchain install or sudo needed (just Docker, e.g. OrbStack/Docker Desktop):
 
@@ -227,6 +263,15 @@ Run the `.3dsx` in [Azahar](https://azahar-emu.org/) (the maintained Citra fork)
 or on real hardware. The 3DS host ([`runtime-3ds/source/main.c`](runtime-3ds/source/main.c))
 embeds QuickJS and renders the same games via citro2d (scaled to the 400×240 top
 screen), with logs on the bottom screen.
+
+## Run on Android (dual-screen)
+A 3DS-style dual-screen handheld app (game on the top screen, native UI on the
+bottom) that runs the **web engine** inside a WebView. See [`android/`](android/):
+
+``` sh
+bun run android          # assemble the debug APK
+bun run android:install  # install + launch on a connected device/emulator
+```
 
 ## License
 MIT

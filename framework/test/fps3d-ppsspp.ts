@@ -54,13 +54,8 @@ let chromium: any;
 try { ({ chromium } = await import('playwright')); }
 catch { console.error('playwright not installed — run: bun add -d playwright'); process.exit(2); }
 const port = Number(process.env.FPS3D_PORT || 8298);
-const server = Bun.spawn(['bun', 'web/serve.ts'], {
-  cwd: root,
-  env: { ...process.env, PORT: String(port) },
-  stdout: 'ignore',
-  stderr: 'ignore',
-});
-await new Promise((r) => setTimeout(r, 1600));
+const { startRefServer } = await import('./bsp-compare/ref-server.ts');
+const server = startRefServer(port);
 try {
   const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-unsafe-swiftshader'] });
   for (const shot of shots) {
@@ -75,7 +70,7 @@ try {
   }
   await browser.close();
 } finally {
-  server.kill();
+  server.stop(true);
 }
 
 console.log('# structural diffs ...');

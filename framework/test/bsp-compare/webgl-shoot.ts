@@ -1,8 +1,8 @@
 // Headless WebGL2 screenshot of the static bsp-compare scene, via real Chrome
 // (Playwright channel:'chrome' — uses system Google Chrome, no browser download). It
-// starts the web reference server (this worktree's engine.js + bundles + headless.html)
-// on a dedicated free port, drives Chrome, and writes a 480x272 <map>.webgl.png — the
-// GROUND-TRUTH render the diff harness compares PPSSPP against.
+// starts a tiny reference server (ref-server.ts: this worktree's engine.js + bundles +
+// headless.html) on a dedicated free port, drives Chrome, and writes a 480x272
+// <map>.webgl.png — the GROUND-TRUTH render the diff harness compares PPSSPP against.
 //
 // Requires: Google Chrome installed + `bun add -d playwright`. Local tool (not CI).
 // Run:  BSP_MAP=box bun framework/test/bsp-compare/webgl-shoot.ts
@@ -19,9 +19,9 @@ catch { console.error('playwright not installed — run: bun add -d playwright')
 
 if (!existsSync(root + 'web/games.generated.js')) { console.error('build the web bundles first: bun framework/build.ts && bun web/build-games.ts'); process.exit(2); }
 
-// Start the reference server (Bun.serve over web/) on a free port.
-const server = Bun.spawn(['bun', 'web/serve.ts'], { cwd: root, env: { ...process.env, PORT: String(PORT) }, stdout: 'ignore', stderr: 'ignore' });
-await new Promise((r) => setTimeout(r, 1600));
+// Start the reference server (serves headless.html + engine.js + games.generated.js) in-process.
+const { startRefServer } = await import('./ref-server.ts');
+const server = startRefServer(PORT);
 
 try {
   const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-unsafe-swiftshader'] });
@@ -39,5 +39,5 @@ try {
   await browser.close();
   console.log(`wrote ${map}.webgl.png${errs.length ? '  (pageerrors: ' + errs.join('; ') + ')' : ''}`);
 } finally {
-  server.kill();
+  server.stop(true);
 }

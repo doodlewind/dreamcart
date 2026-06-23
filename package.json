@@ -9,9 +9,10 @@
     "play": "bun scripts/play.ts",
     "serve": "bun web/serve.ts",
     "web": "bun web/build-games.ts",
+    "og": "bun web/og.ts",
     "site": "bun web/deploy-build.ts",
     "deploy": "bun web/deploy-build.ts && bunx wrangler pages deploy web/site --project-name dreamcart",
-    "bake": "bun framework/bake/bake-font.ts && bun framework/bake/bake-sprites.ts && bun framework/bake/bake-gltf.ts && bun framework/bake/bake-scene.ts && bun framework/bake/bake-bsp.ts box && bun framework/bake/bake-bsp.ts zfight",
+    "bake": "bun framework/bake/bake-font.ts && bun framework/bake/bake-sprites.ts && bun framework/bake/bake-gltf.ts && bun framework/bake/bake-scene.ts && bun framework/bake/bake-bsp.ts box && bun framework/bake/bake-bsp.ts zfight && bun framework/bake/bake-audio.ts",
     "gen-fixtures": "bun framework/test/fixtures/make-box-bsp.ts && bun framework/test/fixtures/make-zfight-bsp.ts",
     "typecheck": "bunx tsc -p framework/tsconfig.json --noEmit && bunx tsc -p framework/games/tsconfig.json --noEmit",
     "bundle": "bun framework/build.ts",
@@ -32,7 +33,13 @@
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.4.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "highlight.js": "^11.11.1",
+    "marked": "^18.0.5",
     "playwright": "^1.61.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "typescript": "^5.6.3",
     "upng-js": "^2.1.0"
   }

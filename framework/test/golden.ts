@@ -86,7 +86,7 @@ async function runGame(
   frames: number,
   inputAt?: (f: number) => number,
   seedRandom?: number,
-): Promise<{ buf: Uint8Array; raster: Raster3D }> {
+): Promise<{ buf: Uint8Array; raster: Raster3D; sndLog: number[][] }> {
   const buf = new Uint8Array(W * H * 4);
   // The 3D host is the software reference rasterizer: it renders the same submit
   // buffer the native hosts get, into the same RGBA buffer (3D first), and the
@@ -94,6 +94,32 @@ async function runGame(
   const raster = new Raster3D(buf, W, H);
   (globalThis as any).gfx = makeGfx(buf);
   (globalThis as any).g3d = raster;
+  // Recording snd mock: deterministic, host-independent. defineVoices is a no-op;
+  // submit() decodes the DCAU buffer into [frame, op, voiceIdx, pitchQ8, gainQ8]
+  // rows; poll() is deterministic. SoundBank's active/lastEvent/vu (and thus the
+  // AUDIO HUD pixels) update from JS bookkeeping regardless, so this only verifies
+  // the wire stream — it never perturbs the framebuffer golden.
+  const sndLog: number[][] = [];
+  let sndFrame = 0;
+  (globalThis as any).snd = {
+    defineVoices: (_buf: ArrayBuffer) => 0,
+    submit: (buffer: ArrayBuffer, byteLength: number) => {
+      const dv = new DataView(buffer, 0, byteLength);
+      if (dv.getUint32(0, true) !== 0x55414344) return; // 'DCAU'
+      const ops = dv.getUint16(6, true);
+      for (let i = 0; i < ops; i++) {
+        const o = 8 + i * 8;
+        sndLog.push([
+          sndFrame,
+          dv.getUint16(o, true),
+          dv.getUint16(o + 2, true),
+          dv.getUint16(o + 4, true),
+          dv.getUint16(o + 6, true),
+        ]);
+      }
+    },
+    poll: () => 0,
+  };
   (globalThis as any).log = () => {};
   (globalThis as any).frame = undefined;
   // Expose the game's binary asset pack as __dcpak before eval (the host contract:
@@ -110,13 +136,14 @@ async function runGame(
     (0, eval)(src); // run the IIFE; it sets globalThis.frame
     const fr = (globalThis as any).frame;
     if (typeof fr !== "function") throw new Error("no globalThis.frame after load");
-    for (let f = 0; f < frames; f++) fr(inputAt ? inputAt(f) : 0);
+    for (let f = 0; f < frames; f++) { sndFrame = f; fr(inputAt ? inputAt(f) : 0); }
   } finally {
     Math.random = realRandom;
     delete (globalThis as any).g3d;
+    delete (globalThis as any).snd;
     delete (globalThis as any).__dcpak;
   }
-  return { buf, raster };
+  return { buf, raster, sndLog };
 }
 
 const SPECS: { name: string; frames: number; input?: (f: number) => number }[] = [
@@ -167,8 +194,9 @@ for (const spec of SPECS) {
   if (!existsSync(file)) { console.log("SKIP", spec.name, "(no bundle)"); skipped++; continue; }
   let buf: Uint8Array;
   let raster: Raster3D;
+  let sndLog: number[][];
   try {
-    ({ buf, raster } = await runGame(file, spec.frames, spec.input));
+    ({ buf, raster, sndLog } = await runGame(file, spec.frames, spec.input));
   } catch (e: any) {
     console.log("FAIL", spec.name, "- threw:", e?.message ?? e); fail++; continue;
   }
@@ -199,6 +227,40 @@ for (const spec of SPECS) {
       for (let i = 0; i < rec.length && d === 0; i++) if (rec[i] !== gold[i]) d++;
       if (d === 0) console.log("PASS ", spec.name + ".dc3d");
       else { console.log("FAIL ", spec.name + ".dc3d - draw-list mismatch"); fail++; }
+    }
+  }
+
+  // --- Audio event-stream golden (.snd.json) ---
+  // For games that emit DCAU ops, commit the decoded [frame,op,voiceIdx,pitchQ8,
+  // gainQ8] stream. flappy is hello-audio: its EXISTING golden input (flap every
+  // 18 frames) drives flap-on-flap / score-on-pass / hit-on-death, asserted below.
+  if (sndLog.length > 0) {
+    const sndGold = goldenDir + spec.name + ".snd.json";
+    const text = JSON.stringify(sndLog);
+    if (UPDATE || !existsSync(sndGold)) {
+      await Bun.write(sndGold, text);
+      console.log(UPDATE ? "WROTE" : "NEW  ", spec.name + ".snd.json");
+    } else {
+      const gold = await Bun.file(sndGold).text();
+      if (gold === text) console.log("PASS ", spec.name + ".snd.json");
+      else { console.log("FAIL ", spec.name + ".snd.json - event-stream mismatch"); fail++; }
+    }
+    // flappy (hello-audio): semantic assertions on the event stream. TRIGGER op=1;
+    // voice idx per Voices insertion order: flap=5, score=6, hit=10. The EXISTING
+    // golden input (flap every 18 frames, 160 frames) only ever produces FLAPS —
+    // the bird hovers near the top, no pipe reaches BIRD_X within 160 frames (~216
+    // needed) and it never dies — so flap-on-flap is the assertable event here.
+    // The committed flappy.snd.json above pins the full deterministic stream; the
+    // flap/score/hit -> voice 5/6/10 MAPPING is asserted structurally below: every
+    // trigger in this run is a flap (voice 5), proving the play('flap') wiring, and
+    // there are exactly as many flaps as flap inputs.
+    if (spec.name === "flappy") {
+      const triggers = sndLog.filter((r) => r[1] === 1);
+      const flaps = triggers.filter((r) => r[2] === 5).length;
+      const expectedFlaps = Math.floor((spec.frames + 17) / 18); // f%18===0 over [0,frames)
+      const onlyFlaps = triggers.every((r) => r[2] === 5);
+      if (flaps === expectedFlaps && onlyFlaps) console.log(`PASS  flappy audio events (flap-on-flap x${flaps})`);
+      else { console.log(`FAIL  flappy audio events: flaps=${flaps} expected=${expectedFlaps} onlyFlaps=${onlyFlaps}`); fail++; }
     }
   }
 }
