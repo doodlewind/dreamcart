@@ -1,0 +1,287 @@
+// compiler/dcpak.ts — standalone .dcpak writer (dreamcart-container-compatible).
+//
+// Byte-for-byte the dreamcart format (docs/dcpak-format.md v1; constants
+// pinned in spec/spec.ts DCPAK_*), so existing tooling opens psp-ui packs.
+// psp-ui entries:
+//   ui:styles        styles.bin (compiler/tailwind.ts)
+//   ui:font.<slot>   one FONT ATLAS blob per baked slot (compiler/bake-font.ts)
+//   ui:img.<name>    demo image texture (IMG entry layout below)
+//
+// IMG entry layout (psp-ui addition — the container itself is unchanged):
+//   off 0  u16  width   (texture dims; pow2, <= TEX_MAX_DIM)
+//   off 2  u16  height
+//   off 4  u8   psm     (spec.ts PSM: 2 = 4444, 3 = 8888)
+//   off 5  u8   reserved (0)
+//   off 6  u16  reserved (0)
+//   off 8  ...  raw pixel rows (8888: RGBA bytes == ABGR u32 LE; 4444: u16 LE
+//               with nibbles A<<12|B<<8|G<<4|R, the GE ABGR4444 layout)
+//
+// Also here: a minimal PNG decoder (8-bit RGB/RGBA/gray, non-interlaced —
+// zlib via node:zlib inflateSync) for baking demo images. Palette/16-bit/
+// interlaced PNGs are rejected with a clear error.
+
+import { inflateSync } from "node:zlib";
+import {
+  DCPAK_ALIGN,
+  DCPAK_DTYPE,
+  DCPAK_ENTRY_SIZE,
+  DCPAK_FNV1A_OFFSET_BASIS,
+  DCPAK_FNV1A_PRIME,
+  DCPAK_HEADER_SIZE,
+  DCPAK_MAGIC,
+  DCPAK_VERSION,
+  PSM,
+  TEX_MAX_DIM,
+} from "../spec/spec.ts";
+
+export interface PakBlob {
+  key: string;
+  /** DCPAK_DTYPE code (advisory element type). */
+  dtype: number;
+  data: Uint8Array;
+}
+
+export function fnv1a(s: string): number {
+  let h = DCPAK_FNV1A_OFFSET_BASIS;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, DCPAK_FNV1A_PRIME);
+  }
+  return h >>> 0;
+}
+
+const align = (n: number): number => (n + (DCPAK_ALIGN - 1)) & ~(DCPAK_ALIGN - 1);
+
+/** Pack blobs into .dcpak bytes. Entries sorted by key; blobs 16-aligned. */
+export function pack(blobsIn: PakBlob[]): Uint8Array {
+  const blobs = [...blobsIn].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  const seen = new Set<string>();
+  for (const b of blobs) {
+    if (seen.has(b.key)) throw new Error("dcpak: duplicate key " + b.key);
+    seen.add(b.key);
+  }
+
+  const enc = new TextEncoder();
+  const names = blobs.map((b) => enc.encode(b.key));
+  const dirOffset = DCPAK_HEADER_SIZE;
+  const namesOffset = dirOffset + blobs.length * DCPAK_ENTRY_SIZE;
+  let nameCursor = 0;
+  const nameOffsets = names.map((n) => {
+    const o = nameCursor;
+    nameCursor += n.length;
+    return o;
+  });
+  const blobsOffset = align(namesOffset + nameCursor);
+  let blobCursor = blobsOffset;
+  const blobOffsets = blobs.map((b) => {
+    const o = blobCursor;
+    blobCursor += align(b.data.length);
+    return o;
+  });
+
+  const out = new Uint8Array(blobCursor);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, DCPAK_MAGIC, true);
+  dv.setUint16(4, DCPAK_VERSION, true);
+  dv.setUint16(6, 0, true);
+  dv.setUint32(8, blobs.length, true);
+  dv.setUint32(12, dirOffset, true);
+  dv.setUint32(16, namesOffset, true);
+  dv.setUint32(20, blobsOffset, true);
+  dv.setUint32(24, out.length, true);
+  dv.setUint32(28, 0, true);
+
+  for (let i = 0; i < blobs.length; i++) {
+    const e = dirOffset + i * DCPAK_ENTRY_SIZE;
+    dv.setUint32(e + 0, fnv1a(blobs[i].key), true);
+    dv.setUint32(e + 4, blobOffsets[i], true);
+    dv.setUint32(e + 8, blobs[i].data.length, true);
+    dv.setUint32(e + 12, nameOffsets[i], true);
+    dv.setUint16(e + 16, names[i].length, true);
+    out[e + 18] = blobs[i].dtype & 0xff;
+    out[e + 19] = 0;
+    dv.setUint32(e + 20, 0, true);
+    out.set(names[i], namesOffset + nameOffsets[i]);
+    out.set(blobs[i].data, blobOffsets[i]);
+  }
+  return out;
+}
+
+/** Parse .dcpak bytes back into blobs (round-trips pack(); build-side only). */
+export function unpack(file: Uint8Array): PakBlob[] {
+  const dv = new DataView(file.buffer, file.byteOffset, file.byteLength);
+  if (dv.getUint32(0, true) !== DCPAK_MAGIC) throw new Error("dcpak: bad magic");
+  if (dv.getUint16(4, true) !== DCPAK_VERSION) throw new Error("dcpak: unsupported version");
+  const entryCount = dv.getUint32(8, true);
+  const dirOff = dv.getUint32(12, true);
+  const namesOff = dv.getUint32(16, true);
+  const dec = new TextDecoder();
+  const blobs: PakBlob[] = [];
+  for (let i = 0; i < entryCount; i++) {
+    const e = dirOff + i * DCPAK_ENTRY_SIZE;
+    const blobOff = dv.getUint32(e + 4, true);
+    const byteLen = dv.getUint32(e + 8, true);
+    const nameOff = dv.getUint32(e + 12, true);
+    const nameLen = dv.getUint16(e + 16, true);
+    const key = dec.decode(file.subarray(namesOff + nameOff, namesOff + nameOff + nameLen));
+    blobs.push({ key, dtype: file[e + 18], data: file.slice(blobOff, blobOff + byteLen) });
+  }
+  return blobs;
+}
+
+// ---------------------------------------------------------------------------
+// Image entries
+// ---------------------------------------------------------------------------
+
+export interface DecodedImage {
+  width: number;
+  height: number;
+  /** RGBA, 4 bytes/px, row-major. */
+  rgba: Uint8Array;
+}
+
+/** Encode an IMG entry blob (see layout at the top of this file). */
+export function encodeImageEntry(img: DecodedImage, psm: number = PSM.PSM_8888): Uint8Array {
+  const { width: w, height: h, rgba } = img;
+  const pow2 = (n: number) => n > 0 && (n & (n - 1)) === 0;
+  if (!pow2(w) || !pow2(h) || w > TEX_MAX_DIM || h > TEX_MAX_DIM) {
+    throw new Error(`dcpak image: dims must be pow2 <= ${TEX_MAX_DIM}, got ${w}x${h}`);
+  }
+  if (rgba.length !== w * h * 4) throw new Error("dcpak image: rgba length mismatch");
+  const bpp = psm === PSM.PSM_8888 ? 4 : 2;
+  const out = new Uint8Array(8 + w * h * bpp);
+  const dv = new DataView(out.buffer);
+  dv.setUint16(0, w, true);
+  dv.setUint16(2, h, true);
+  out[4] = psm;
+  if (psm === PSM.PSM_8888) {
+    out.set(rgba, 8); // RGBA byte order IS the ABGR u32 LE layout
+  } else if (psm === PSM.PSM_4444) {
+    for (let i = 0, n = w * h; i < n; i++) {
+      const r = rgba[i * 4] >> 4;
+      const g = rgba[i * 4 + 1] >> 4;
+      const b = rgba[i * 4 + 2] >> 4;
+      const a = rgba[i * 4 + 3] >> 4;
+      dv.setUint16(8 + i * 2, (a << 12) | (b << 8) | (g << 4) | r, true);
+    }
+  } else {
+    throw new Error(`dcpak image: unsupported psm ${psm}`);
+  }
+  return out;
+}
+
+/** Procedural placeholder texture (missing demo image): 32x32 checkerboard. */
+export function placeholderImage(): DecodedImage {
+  const w = 32;
+  const h = 32;
+  const rgba = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const on = ((x >> 3) + (y >> 3)) & 1;
+      rgba[i] = on ? 0x63 : 0x1e; // indigo-500 / slate-800 checker
+      rgba[i + 1] = on ? 0x66 : 0x29;
+      rgba[i + 2] = on ? 0xf1 : 0x3b;
+      rgba[i + 3] = 255;
+    }
+  }
+  return { width: w, height: h, rgba };
+}
+
+// ---------------------------------------------------------------------------
+// Minimal PNG decoder (build-time only)
+// ---------------------------------------------------------------------------
+
+/** Decode an 8-bit RGB/RGBA/grayscale non-interlaced PNG to RGBA. */
+export function decodePng(bytes: Uint8Array): DecodedImage {
+  const SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  for (let i = 0; i < 8; i++) {
+    if (bytes[i] !== SIG[i]) throw new Error("png: bad signature");
+  }
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let o = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idat: Uint8Array[] = [];
+  while (o + 8 <= bytes.length) {
+    const len = dv.getUint32(o, false);
+    const type = String.fromCharCode(bytes[o + 4], bytes[o + 5], bytes[o + 6], bytes[o + 7]);
+    const body = bytes.subarray(o + 8, o + 8 + len);
+    if (type === "IHDR") {
+      width = dv.getUint32(o + 8, false);
+      height = dv.getUint32(o + 12, false);
+      bitDepth = bytes[o + 16];
+      colorType = bytes[o + 17];
+      if (bytes[o + 20] !== 0) throw new Error("png: interlaced PNGs unsupported");
+    } else if (type === "IDAT") {
+      idat.push(body);
+    } else if (type === "IEND") {
+      break;
+    }
+    o += 12 + len; // len + type + crc
+  }
+  if (bitDepth !== 8) throw new Error(`png: only 8-bit supported (got ${bitDepth})`);
+  const channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[colorType];
+  if (!channels) throw new Error(`png: unsupported color type ${colorType} (palette PNGs: re-export as RGBA)`);
+
+  const zdata = new Uint8Array(idat.reduce((n, c) => n + c.length, 0));
+  let zo = 0;
+  for (const c of idat) {
+    zdata.set(c, zo);
+    zo += c.length;
+  }
+  const raw = new Uint8Array(inflateSync(zdata)); // IDAT is zlib-wrapped deflate
+
+  const stride = width * channels;
+  const rgba = new Uint8Array(width * height * 4);
+  const prev = new Uint8Array(stride);
+  const line = new Uint8Array(stride);
+  let ro = 0;
+  for (let y = 0; y < height; y++) {
+    const filter = raw[ro++];
+    for (let x = 0; x < stride; x++) {
+      const cur = raw[ro + x];
+      const a = x >= channels ? line[x - channels] : 0;
+      const b = prev[x];
+      const c = x >= channels ? prev[x - channels] : 0;
+      let v: number;
+      switch (filter) {
+        case 0: v = cur; break;
+        case 1: v = cur + a; break;
+        case 2: v = cur + b; break;
+        case 3: v = cur + ((a + b) >> 1); break;
+        case 4: {
+          const p = a + b - c;
+          const pa = Math.abs(p - a);
+          const pb = Math.abs(p - b);
+          const pc = Math.abs(p - c);
+          v = cur + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
+          break;
+        }
+        default: throw new Error(`png: bad filter ${filter}`);
+      }
+      line[x] = v & 0xff;
+    }
+    ro += stride;
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const s = x * channels;
+      switch (colorType) {
+        case 0: rgba[i] = rgba[i + 1] = rgba[i + 2] = line[s]; rgba[i + 3] = 255; break;
+        case 2: rgba[i] = line[s]; rgba[i + 1] = line[s + 1]; rgba[i + 2] = line[s + 2]; rgba[i + 3] = 255; break;
+        case 4: rgba[i] = rgba[i + 1] = rgba[i + 2] = line[s]; rgba[i + 3] = line[s + 1]; break;
+        case 6: rgba[i] = line[s]; rgba[i + 1] = line[s + 1]; rgba[i + 2] = line[s + 2]; rgba[i + 3] = line[s + 3]; break;
+      }
+    }
+    prev.set(line);
+  }
+  return { width, height, rgba };
+}
+
+/** Standard psp-ui entry keys. */
+export const KEY_STYLES = "ui:styles";
+export const keyFont = (slot: number): string => `ui:font.${slot}`;
+export const keyImage = (name: string): string => `ui:img.${name}`;
+export { DCPAK_DTYPE };

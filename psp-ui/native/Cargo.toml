@@ -1,0 +1,30 @@
+# psp-ui-psp — the PSP EBOOT: QuickJS + psp-ui-core + sceGu backend.
+#
+# STANDALONE LONE-BIN CRATE: cargo-psp requires this crate to be outside any
+# workspace (do NOT add a workspace Cargo.toml at psp-ui/).
+#
+# Build via scripts/psp.ts: `rustup run nightly-2026-05-28 cargo psp` with the
+# env block from dreamcart runtime/build.ts (llvm-ar, RUSTFLAGS
+# -A linker-messages, RUST_PSP_TARGET=targets/mipsel-sony-psp.json,
+# RUST_PSP_ABORT_ONLY=1, TARGET_CFLAGS). Requires the repo-root
+# mipsel-sony-psp/ SDK (bun run bootstrap in the dreamcart repo).
+#
+# Memory (DESIGN.md "Memory (the blocker fix)" [R]): the psp crate is built
+# with `external-global-alloc` (gates out rust-psp's one-kernel-object-per-
+# allocation SystemAlloc #[global_allocator] AND its #[alloc_error_handler]);
+# src/alloc.rs provides both, backed by the single-kernel-block arena that
+# also serves QuickJS (qjs_alloc.rs) and newlib malloc (c_heap.rs).
+
+[package]
+name = "psp-ui-psp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+psp = { path = "../../rust-psp/psp", features = ["external-c-heap", "abort-only", "external-global-alloc"] }
+libquickjs-sys = { path = "../../quickjs-rs/libquickjs-sys" }
+psp-ui-core = { path = "../core" }
+
+[features]
+# E2E frame-dump build for test/e2e-ppsspp.ts (dumps frames to ms0:/dc_cap).
+capture = []
