@@ -115,6 +115,7 @@ const env = {
   // by native/build.rs (only consumed under --capture; harmless otherwise).
   // Explicit so stale values never linger in the cargo fingerprint.
   PSPUI_CAPTURE_INPUT: process.env.PSPUI_CAPTURE_INPUT ?? "",
+  PSPUI_TRACE: process.env.PSPUI_TRACE ?? "",
   PSPUI_CAP_START: process.env.PSPUI_CAP_START ?? "",
   PSPUI_CAP_N: process.env.PSPUI_CAP_N ?? "",
 };

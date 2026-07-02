@@ -142,7 +142,7 @@ interface Spec {
 const SPECS: Spec[] = [
   {
     // hero: initial layout (f2), mid focus-transition after DOWN at f5 —
-    // transition-colors 150ms ≈ 9 frames (f10), then five CROSS presses
+    // transition-colors 150ms ≈ 9 frames (f10), then five CIRCLE presses
     // (edge-detected: 1-frame pulses) -> count 5: "You pressed a lot!" row
     // visible, white bar translated 10px, focus color settled (f80).
     name: "hero-main",
@@ -152,19 +152,19 @@ const SPECS: Spec[] = [
       f === 5
         ? BTN.DOWN
         : f >= 20 && f <= 36 && (f - 20) % 4 === 0
-          ? BTN.CROSS
+          ? BTN.CIRCLE
           : 0,
   },
   {
     // cards: f2 = early layout (cards mid mount-fade, nothing focused);
     // RIGHT at f4 focuses card 0, RIGHT at f8 moves to card 1 — f12 is
     // mid focus-transition (card 0 settling back down, card 1 lifting);
-    // CROSS at f18 opens card 1's detail panel (mount color-fade + translateY
+    // CIRCLE at f18 opens card 1's detail panel (mount color-fade + translateY
     // spring) — f78 is fully settled, ambient streaks drifted ~1.2 s.
     name: "cards-main",
     frames: 90,
     capture: [2, 12, 78],
-    input: (f) => (f === 4 || f === 8 ? BTN.RIGHT : f === 18 ? BTN.CROSS : 0),
+    input: (f) => (f === 4 || f === 8 ? BTN.RIGHT : f === 18 ? BTN.CIRCLE : 0),
   },
   {
     // stats: f2 = early layout (counters near 0, bar fills barely started —

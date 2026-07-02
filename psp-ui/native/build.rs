@@ -44,6 +44,9 @@ fn main() {
     // under --features capture (same pattern as dreamcart runtime/build.rs
     // PSPJS_CAPTURE_INPUT).
     let capture_input = env::var("PSPUI_CAPTURE_INPUT").unwrap_or_default();
+    // Optional real-hardware boot trace. scripts/hw.ts serves the build dir as
+    // host0:, so main.rs can append trace lines to host0:/psp-ui-trace.txt.
+    let trace = env::var("PSPUI_TRACE").unwrap_or_default();
     // Per-demo capture window (frames dumped = cap_start..cap_start+cap_n);
     // empty -> main.rs defaults (16/32).
     let cap_start = env::var("PSPUI_CAP_START").unwrap_or_default();
@@ -51,10 +54,12 @@ fn main() {
 
     println!("cargo:rustc-env=PSPUI_APP={app}");
     println!("cargo:rustc-env=PSPUI_CAPTURE_INPUT={capture_input}");
+    println!("cargo:rustc-env=PSPUI_TRACE={trace}");
     println!("cargo:rustc-env=PSPUI_CAP_START={cap_start}");
     println!("cargo:rustc-env=PSPUI_CAP_N={cap_n}");
     println!("cargo:rerun-if-env-changed=PSPUI_APP");
     println!("cargo:rerun-if-env-changed=PSPUI_CAPTURE_INPUT");
+    println!("cargo:rerun-if-env-changed=PSPUI_TRACE");
     println!("cargo:rerun-if-env-changed=PSPUI_CAP_START");
     println!("cargo:rerun-if-env-changed=PSPUI_CAP_N");
     if let Ok(entries) = fs::read_dir(dist) {

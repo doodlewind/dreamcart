@@ -7,6 +7,7 @@
   "scripts": {
     "build": "bun scripts/build.ts",
     "psp": "bun scripts/psp.ts",
+    "hw": "bun scripts/hw.ts",
     "dev": "bun scripts/dev.ts",
     "wasm": "bun scripts/wasm.ts",
     "serve": "bun host-web/serve.ts",

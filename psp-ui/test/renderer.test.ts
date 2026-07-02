@@ -49,9 +49,11 @@ import {
   resetInput,
   setInputRoot,
 } from "../src/input.ts";
-import { render as publicRender } from "../src/index.ts";
+import { mount as publicMount, render as publicRender } from "../src/index.ts";
 import { rootMirror } from "../src/renderer.ts";
-import { BTN, NODE_TYPE, ROOT_ID, PROP, STYLE_ID_NONE } from "../spec/spec.ts";
+import { resetPack } from "../src/dcpak.ts";
+import { encodeImageEntry, pack } from "../compiler/dcpak.ts";
+import { BTN, DCPAK_DTYPE, NODE_TYPE, PSM, ROOT_ID, PROP, STYLE_ID_NONE } from "../spec/spec.ts";
 
 // ---------------------------------------------------------------------------
 // Mock host
@@ -145,9 +147,14 @@ beforeEach(() => {
   resetRendererState();
   resetStyles();
   resetTextures();
+  resetPack();
   resetInput();
   setStyleResolver(resolveStyle);
   root = freshRoot();
+  const g = globalThis as { ui?: HostOps; __dcpak?: ArrayBuffer; frame?: (buttons: number) => void };
+  delete g.ui;
+  delete g.__dcpak;
+  delete g.frame;
 });
 
 // ---------------------------------------------------------------------------
@@ -539,7 +546,7 @@ describe("setProperty dispatch table [R]", () => {
 });
 
 describe("focus + onPress (input.ts)", () => {
-  test("d-pad traversal in document order, CROSS fires focused handler", () => {
+  test("d-pad traversal in document order, CIRCLE fires focused handler", () => {
     setInputRoot(root);
     let pressedA = 0;
     let pressedB = 0;
@@ -572,7 +579,7 @@ describe("focus + onPress (input.ts)", () => {
     expect(host.of("setFocus").length).toBe(focusCalls);
 
     handleFrame(0);
-    handleFrame(BTN.CROSS);
+    handleFrame(BTN.CIRCLE);
     expect(pressedB).toBe(1);
     expect(pressedA).toBe(0);
 
@@ -580,7 +587,7 @@ describe("focus + onPress (input.ts)", () => {
     handleFrame(BTN.UP); // back to a
     expect(getFocused()).toBe(a);
     handleFrame(0);
-    handleFrame(BTN.CROSS);
+    handleFrame(BTN.CIRCLE);
     expect(pressedA).toBe(1);
 
     dispose();
@@ -712,5 +719,34 @@ describe("public render() (index.ts)", () => {
     expect(rootMirror.children.length).toBe(0);
     // subtree root destroyed once (native destroy recurses)
     expect(host.of("destroyNode")).toEqual([["destroyNode", el.id]]);
+  });
+
+  test("mount() hides host, dcpak image, and frame boilerplate", () => {
+    const g = globalThis as { ui?: HostOps; __dcpak?: ArrayBuffer; frame?: (buttons: number) => void };
+    g.ui = host.ops;
+    const image = encodeImageEntry(
+      { width: 1, height: 1, rgba: new Uint8Array([10, 20, 30, 255]) },
+      PSM.PSM_8888,
+    );
+    const pak = pack([{ key: "ui:img.logo.png", dtype: DCPAK_DTYPE.u8, data: image }]);
+    g.__dcpak = pak.buffer.slice(pak.byteOffset, pak.byteOffset + pak.byteLength) as ArrayBuffer;
+
+    const before: number[] = [];
+    const dispose = publicMount(
+      () => {
+        const img = createElement("image");
+        setProp(img, "src", "logo.png", undefined);
+        return img;
+      },
+      { beforeFrame: (buttons) => before.push(buttons) },
+    );
+
+    expect(host.of("uploadTexture")).toEqual([["uploadTexture"]]);
+    expect(host.of("setImage").length).toBe(1);
+    expect(typeof g.frame).toBe("function");
+    g.frame?.(BTN.CIRCLE);
+    expect(before).toEqual([BTN.CIRCLE]);
+
+    dispose();
   });
 });

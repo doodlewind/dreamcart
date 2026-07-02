@@ -36,7 +36,7 @@ export interface NodeMirror {
   text?: string;
   /** Focus traversal membership (input.ts). */
   focusable?: boolean;
-  /** CROSS handler while focused (input.ts). */
+  /** CIRCLE handler while focused (input.ts). */
   onPress?: (() => void) | undefined;
 }
 

@@ -58,7 +58,7 @@ export default function Hero() {
           focusable
           onPress={() => setCount(count() + 1)}
         >
-          <text class="text-base text-white font-bold">Press X</text>
+          <text class="text-base text-white font-bold">Press Circle</text>
         </view>
         <text class="text-sm text-slate-400">Count: {count()}</text>
         <Show when={count() > 3}>
