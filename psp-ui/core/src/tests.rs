@@ -1,0 +1,1086 @@
+//! Core behavior tests (run with `cargo test` — the dev-dependency
+//! self-reference turns the `std` feature on for the harness).
+
+use alloc::vec::Vec;
+
+use crate::{spec, style, Ui};
+
+// ---- binary blob builders (bytes hand-assembled per spec.ts formats) --------
+
+struct StyleSpec {
+    base: Vec<(u8, u32)>,
+    focus: Vec<(u8, u32)>,
+    active: Vec<(u8, u32)>,
+    /// (mask, dur_ms, delay_ms, easing)
+    transition: Option<(u32, u16, u16, u8)>,
+}
+
+impl StyleSpec {
+    fn new() -> StyleSpec {
+        StyleSpec { base: Vec::new(), focus: Vec::new(), active: Vec::new(), transition: None }
+    }
+}
+
+fn encode_styles(styles: &[StyleSpec]) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&spec::style_table::MAGIC.to_le_bytes());
+    out.extend_from_slice(&spec::style_table::VERSION.to_le_bytes());
+    out.extend_from_slice(&(styles.len() as u16).to_le_bytes());
+    for s in styles {
+        let mut flags = 0u8;
+        if !s.base.is_empty() {
+            flags |= spec::style_table::VARIANT_BASE;
+        }
+        if !s.focus.is_empty() {
+            flags |= spec::style_table::VARIANT_FOCUS;
+        }
+        if !s.active.is_empty() {
+            flags |= spec::style_table::VARIANT_ACTIVE;
+        }
+        if s.transition.is_some() {
+            flags |= spec::style_table::HAS_TRANSITION;
+        }
+        out.push(flags);
+        if let Some((mask, dur, delay, easing)) = s.transition {
+            out.extend_from_slice(&mask.to_le_bytes());
+            out.extend_from_slice(&dur.to_le_bytes());
+            out.extend_from_slice(&delay.to_le_bytes());
+            out.push(easing);
+            out.extend_from_slice(&[0, 0, 0]);
+        }
+        for v in [&s.base, &s.focus, &s.active] {
+            if v.is_empty() {
+                continue;
+            }
+            out.push(v.len() as u8);
+            for &(prop, value) in v {
+                out.push(prop);
+                out.push(0);
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+    }
+    out
+}
+
+/// Synthetic font atlas: `glyphs` are (codepoint, gid, advance), sorted by
+/// codepoint. Bitmaps are all-zero (metrics are what the tests exercise).
+fn encode_atlas(
+    slot: u8,
+    cell_w: u8,
+    cell_h: u8,
+    baseline: u8,
+    line_height: u8,
+    glyph_count: u16,
+    glyphs: &[(u32, u16, u8)],
+) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&spec::font_atlas::MAGIC.to_le_bytes());
+    out.extend_from_slice(&spec::font_atlas::VERSION.to_le_bytes());
+    out.extend_from_slice(&(glyphs.len() as u16).to_le_bytes());
+    out.push(cell_w);
+    out.push(cell_h);
+    out.push(baseline);
+    out.push(line_height);
+    out.push(slot);
+    out.push(0); // flags
+    out.extend_from_slice(&[0, 0]); // reserved
+    assert_eq!(glyphs.len(), glyph_count as usize, "test blob: glyphCount == cmap entries");
+    for &(cp, gid, adv) in glyphs {
+        out.extend_from_slice(&cp.to_le_bytes());
+        out.extend_from_slice(&gid.to_le_bytes());
+        out.push(adv);
+        out.push(0);
+    }
+    let bytes_per_row = (cell_w as usize + 7) / 8;
+    out.extend_from_slice(&alloc::vec![0u8; glyph_count as usize * cell_h as usize * bytes_per_row]);
+    out
+}
+
+fn abgr(r: u8, g: u8, b: u8, a: u8) -> u32 {
+    ((a as u32) << 24) | ((b as u32) << 16) | ((g as u32) << 8) | r as u32
+}
+
+// ---- DrawList decoding helpers ------------------------------------------------
+
+fn decode_xy(word: u32) -> (i32, i32) {
+    ((word & 0xffff) as u16 as i16 as i32, (word >> 16) as u16 as i16 as i32)
+}
+
+fn decode_wh(word: u32) -> (i32, i32) {
+    ((word & 0xffff) as i32, (word >> 16) as i32)
+}
+
+/// Walk a DrawList asserting the pinned CPU-clip invariant: every coordinate
+/// in [0, SCREEN_W] x [0, SCREEN_H], rect extents in range, scissors
+/// balanced, only known ops. Returns per-op counts (indexed by op code).
+fn validate_drawlist(words: &[u32]) -> [u32; 8] {
+    let (sw, sh) = (spec::SCREEN_W as i32, spec::SCREEN_H as i32);
+    let xy_ok = |w: u32| {
+        let (x, y) = decode_xy(w);
+        assert!((0..=sw).contains(&x) && (0..=sh).contains(&y), "coord out of range: ({x},{y})");
+    };
+    let rect_ok = |xyw: u32, whw: u32| {
+        xy_ok(xyw);
+        let (x, y) = decode_xy(xyw);
+        let (w, h) = decode_wh(whw);
+        assert!(x + w <= sw && y + h <= sh, "rect exceeds screen: {x},{y} {w}x{h}");
+    };
+    let mut counts = [0u32; 8];
+    let mut depth = 0i32;
+    let mut i = 0usize;
+    while i < words.len() {
+        let op = words[i];
+        counts[op as usize] += 1;
+        match op {
+            spec::draw_op::RECT => {
+                rect_ok(words[i + 1], words[i + 2]);
+                i += 4;
+            }
+            spec::draw_op::GRAD_RECT => {
+                rect_ok(words[i + 1], words[i + 2]);
+                assert!(words[i + 5] <= 3, "bad GradDir");
+                i += 6;
+            }
+            spec::draw_op::GLYPH_RUN => {
+                let n = (words[i + 1] >> 16) as usize;
+                assert!(n > 0, "empty glyph run emitted");
+                for g in 0..n {
+                    xy_ok(words[i + 3 + g * 2]);
+                }
+                i += 3 + 2 * n;
+            }
+            spec::draw_op::TEX_QUAD => {
+                rect_ok(words[i + 2], words[i + 3]);
+                for uv in 4..8 {
+                    let f = f32::from_bits(words[i + uv]);
+                    assert!((0.0..=1.0).contains(&f), "UV out of range: {f}");
+                }
+                i += 9;
+            }
+            spec::draw_op::SCISSOR => {
+                rect_ok(words[i + 1], words[i + 2]);
+                depth += 1;
+                i += 3;
+            }
+            spec::draw_op::SCISSOR_POP => {
+                depth -= 1;
+                assert!(depth >= 0, "unbalanced SCISSOR_POP");
+                i += 1;
+            }
+            spec::draw_op::TRI => {
+                xy_ok(words[i + 1]);
+                xy_ok(words[i + 2]);
+                xy_ok(words[i + 3]);
+                i += 7;
+            }
+            other => panic!("unknown draw op {other} at word {i}"),
+        }
+    }
+    assert_eq!(depth, 0, "unbalanced SCISSOR/SCISSOR_POP");
+    counts
+}
+
+// ---- tests ---------------------------------------------------------------------
+
+#[test]
+fn arena_id_reuse_and_stale_id_noop() {
+    let mut ui = Ui::new();
+    let a = ui.create_node(spec::NodeType::View as u8);
+    assert!(a > 0);
+    ui.insert_before(spec::ROOT_ID, a, 0);
+    ui.destroy_node(a);
+    // Slot is reused with a bumped generation -> different id, same slot.
+    let b = ui.create_node(spec::NodeType::View as u8);
+    assert_ne!(a, b);
+    assert_eq!(a & spec::ID_SLOT_MASK as i32, b & spec::ID_SLOT_MASK as i32);
+    // Ops on the stale id are silent no-ops and don't touch the new node.
+    ui.set_prop(a, spec::prop::WIDTH, 123.0);
+    ui.set_text(a, "stale");
+    ui.destroy_node(a);
+    assert!(ui.layout_of(a).is_none());
+    assert!(ui.layout_of(b).is_some());
+    assert_eq!(ui.animate(a, spec::prop::OPACITY, 0.0, 100, 0, 0), -1);
+}
+
+#[test]
+fn insert_before_dom_move_semantics() {
+    let mut ui = Ui::new();
+    let mk = |ui: &mut Ui, h: f64| {
+        let n = ui.create_node(0);
+        ui.set_prop(n, spec::prop::HEIGHT, h);
+        ui.insert_before(spec::ROOT_ID, n, 0);
+        n
+    };
+    let a = mk(&mut ui, 10.0);
+    let b = mk(&mut ui, 20.0);
+    let c = mk(&mut ui, 30.0);
+    ui.tick();
+    // Column: a@0, b@10, c@30.
+    assert_eq!(ui.layout_of(c).unwrap().1, 30.0);
+    // Move c before a WITHOUT removing first (DOM move semantics).
+    ui.insert_before(spec::ROOT_ID, c, a);
+    ui.tick();
+    // New order c, a, b: c@0, a@30, b@40.
+    assert_eq!(ui.layout_of(c).unwrap().1, 0.0);
+    assert_eq!(ui.layout_of(a).unwrap().1, 30.0);
+    assert_eq!(ui.layout_of(b).unwrap().1, 40.0);
+    // Move across parents: b into a wrapper -> gone from root flow.
+    let wrap = ui.create_node(0);
+    ui.insert_before(spec::ROOT_ID, wrap, 0);
+    ui.insert_before(wrap, b, 0);
+    ui.tick();
+    assert_eq!(ui.layout_of(b).unwrap().1, 0.0); // now relative to wrap
+    // Cycle guard: inserting an ancestor under its descendant is a no-op.
+    ui.insert_before(b, wrap, 0);
+    ui.tick();
+    assert_eq!(ui.layout_of(wrap).unwrap().1, 40.0); // still under root, after c+a
+}
+
+#[test]
+fn style_resolution_with_focus_variant() {
+    let mut ui = Ui::new();
+    let red = abgr(255, 0, 0, 255);
+    let green = abgr(0, 255, 0, 255);
+    let mut s = StyleSpec::new();
+    s.base = alloc::vec![(spec::prop::BG_COLOR, red), (spec::prop::WIDTH, 100f32.to_bits())];
+    s.focus = alloc::vec![(spec::prop::BG_COLOR, green)];
+    assert!(ui.load_styles(&encode_styles(&[s])));
+    let n = ui.create_node(0);
+    ui.insert_before(spec::ROOT_ID, n, 0);
+    ui.set_style(n, 0);
+    assert_eq!(ui.resolved_style(n).unwrap().bg_color, red);
+    assert_eq!(ui.resolved_style(n).unwrap().width, 100.0);
+    ui.set_focus(n);
+    assert_eq!(ui.focused(), n);
+    assert_eq!(ui.resolved_style(n).unwrap().bg_color, green);
+    ui.set_focus(0);
+    assert_eq!(ui.resolved_style(n).unwrap().bg_color, red);
+    // Dynamic override sits on top of every variant.
+    let blue = abgr(0, 0, 255, 255);
+    ui.set_prop(n, spec::prop::BG_COLOR, blue as f64);
+    ui.set_focus(n);
+    assert_eq!(ui.resolved_style(n).unwrap().bg_color, blue);
+    // Destroying the focused node clears focus.
+    ui.destroy_node(n);
+    assert_eq!(ui.focused(), 0);
+}
+
+#[test]
+fn set_style_diff_spawns_transition() {
+    let mut ui = Ui::new();
+    let red = abgr(255, 0, 0, 255);
+    let blue = abgr(0, 0, 255, 255);
+    let bg_bit = 16; // spec.ts ANIMATABLE order: bgColor = bit 16
+    assert_eq!(spec::ANIM_BIT[spec::prop::BG_COLOR as usize], bg_bit as u8);
+    let mut s0 = StyleSpec::new();
+    s0.base = alloc::vec![(spec::prop::BG_COLOR, red)];
+    let mut s1 = StyleSpec::new();
+    s1.base = alloc::vec![(spec::prop::BG_COLOR, blue)];
+    s1.transition = Some((1 << bg_bit, 300, 0, spec::Easing::Linear as u8)); // 18 frames
+    assert!(ui.load_styles(&encode_styles(&[s0, s1])));
+    let n = ui.create_node(0);
+    ui.insert_before(spec::ROOT_ID, n, 0);
+    ui.set_style(n, 0);
+    assert_eq!(ui.resolved_style(n).unwrap().bg_color, red);
+    ui.set_style(n, 1);
+    // Transition holds the OLD value at spawn (from = current appearance).
+    assert_eq!(ui.resolved_style(n).unwrap().bg_color, red);
+    for _ in 0..9 {
+        ui.tick(); // halfway through 18 frames
+    }
+    let mid = ui.resolved_style(n).unwrap().bg_color;
+    assert_ne!(mid, red);
+    assert_ne!(mid, blue);
+    let midpoint = crate::anim::interp(red, blue, 0.5, true);
+    assert_eq!(mid, midpoint);
+    for _ in 0..20 {
+        ui.tick();
+    }
+    assert_eq!(ui.resolved_style(n).unwrap().bg_color, blue);
+    // Props NOT in the mask never tween: swap back to s0 — bgColor tweens,
+    // but a style without a transition block snaps.
+    ui.set_style(n, 0);
+    ui.tick();
+    assert_eq!(ui.resolved_style(n).unwrap().bg_color, red);
+}
+
+#[test]
+fn fixed_dt_animation_is_deterministic() {
+    fn run() -> Vec<Vec<u32>> {
+        let mut ui = Ui::new();
+        let n = ui.create_node(0);
+        ui.set_prop(n, spec::prop::WIDTH, 60.0);
+        ui.set_prop(n, spec::prop::HEIGHT, 40.0);
+        ui.set_prop(n, spec::prop::BG_COLOR, abgr(200, 100, 50, 255) as f64);
+        ui.insert_before(spec::ROOT_ID, n, 0);
+        ui.animate(n, spec::prop::TRANSLATE_X, 300.0, 500, spec::Easing::OutBack as u8, 32);
+        ui.animate(n, spec::prop::ROTATE, 65.0, 400, spec::Easing::Spring as u8, 0);
+        ui.animate(n, spec::prop::BG_COLOR, abgr(10, 220, 30, 255) as f64, 250, spec::Easing::EaseInOut as u8, 0);
+        let mut frames = Vec::new();
+        for _ in 0..70 {
+            ui.tick();
+            frames.push(ui.draw().words.clone());
+        }
+        frames
+    }
+    let a = run();
+    let b = run();
+    assert_eq!(a, b, "two identical runs must produce byte-equal DrawLists");
+    for f in &a {
+        validate_drawlist(f);
+    }
+    // The rotated frames must actually exercise the TRI path.
+    let tri_frames = a
+        .iter()
+        .filter(|f| validate_drawlist(f)[spec::draw_op::TRI as usize] > 0)
+        .count();
+    assert!(tri_frames > 0, "rotation should emit TRI ops");
+}
+
+#[test]
+fn gap_column_layout_matches_hand_computed() {
+    let mut ui = Ui::new();
+    ui.set_prop(spec::ROOT_ID, spec::prop::GAP, 10.0);
+    ui.set_prop(spec::ROOT_ID, spec::prop::PADDING_T, 5.0);
+    ui.set_prop(spec::ROOT_ID, spec::prop::PADDING_L, 7.0);
+    let mut kids = Vec::new();
+    for h in [40.0, 50.0, 60.0] {
+        let n = ui.create_node(0);
+        ui.set_prop(n, spec::prop::WIDTH, 100.0);
+        ui.set_prop(n, spec::prop::HEIGHT, h);
+        ui.insert_before(spec::ROOT_ID, n, 0);
+        kids.push(n);
+    }
+    ui.tick();
+    assert_eq!(ui.layout_of(spec::ROOT_ID).unwrap(), (0.0, 0.0, 480.0, 272.0));
+    // Column: y = paddingT + sum(prev heights + gaps), x = paddingL.
+    assert_eq!(ui.layout_of(kids[0]).unwrap(), (7.0, 5.0, 100.0, 40.0));
+    assert_eq!(ui.layout_of(kids[1]).unwrap(), (7.0, 55.0, 100.0, 50.0));
+    assert_eq!(ui.layout_of(kids[2]).unwrap(), (7.0, 115.0, 100.0, 60.0));
+}
+
+#[test]
+fn empty_text_nodes_are_excluded_from_layout() {
+    let mut ui = Ui::new();
+    assert!(ui.load_font_atlas(&encode_atlas(
+        0,
+        8,
+        8,
+        7,
+        10,
+        3,
+        &[(0xfffd, 0, 8), ('A' as u32, 1, 6), ('B' as u32, 2, 5)],
+    )));
+    ui.set_prop(spec::ROOT_ID, spec::prop::GAP, 10.0);
+    // align-items start so the text node keeps its measured width instead of
+    // stretching to the column's cross size.
+    ui.set_prop(spec::ROOT_ID, spec::prop::ALIGN, spec::Align::Start as u32 as f64);
+    let a = ui.create_node(0);
+    ui.set_prop(a, spec::prop::HEIGHT, 20.0);
+    ui.insert_before(spec::ROOT_ID, a, 0);
+    let t = ui.create_node(spec::NodeType::Text as u8); // Solid <Show> marker
+    ui.insert_before(spec::ROOT_ID, t, 0);
+    let b = ui.create_node(0);
+    ui.set_prop(b, spec::prop::HEIGHT, 20.0);
+    ui.insert_before(spec::ROOT_ID, b, 0);
+    ui.tick();
+    // The empty text node consumes NO space and NO gap [R]: b sits at 30.
+    assert_eq!(ui.layout_of(b).unwrap().1, 30.0);
+    assert_eq!(ui.layout_of(t).unwrap(), (0.0, 0.0, 0.0, 0.0));
+    // replace_text makes it participate: one line of "AB" = 11x10.
+    ui.replace_text(t, "AB");
+    ui.tick();
+    let (_, ty, tw, th) = ui.layout_of(t).unwrap();
+    assert_eq!((ty, tw, th), (30.0, 11.0, 10.0));
+    assert_eq!(ui.layout_of(b).unwrap().1, 50.0);
+    // And back to empty -> excluded again.
+    ui.replace_text(t, "");
+    ui.tick();
+    assert_eq!(ui.layout_of(b).unwrap().1, 30.0);
+}
+
+#[test]
+fn drawlist_clip_invariant_offscreen_rects() {
+    let mut ui = Ui::new();
+    // Partially off every edge + fully off + rotated partially off.
+    let cases: [(f64, f64, f64); 5] = [
+        (450.0, 250.0, 0.0),   // off bottom-right
+        (-30.0, -20.0, 0.0),   // off top-left
+        (600.0, 10.0, 0.0),    // fully off right
+        (400.0, -30.0, 45.0),  // rotated, off top-right
+        (-40.0, 240.0, 30.0),  // rotated, off bottom-left
+    ];
+    for (tx, ty, rot) in cases {
+        let n = ui.create_node(0);
+        ui.set_prop(n, spec::prop::WIDTH, 100.0);
+        ui.set_prop(n, spec::prop::HEIGHT, 60.0);
+        ui.set_prop(n, spec::prop::POS_TYPE, spec::PosType::Absolute as u32 as f64);
+        ui.set_prop(n, spec::prop::INSET_T, 0.0);
+        ui.set_prop(n, spec::prop::INSET_L, 0.0);
+        ui.set_prop(n, spec::prop::BG_COLOR, abgr(255, 255, 255, 255) as f64);
+        ui.set_prop(n, spec::prop::BORDER_COLOR, abgr(0, 0, 0, 255) as f64);
+        ui.set_prop(n, spec::prop::BORDER_WIDTH, 3.0);
+        ui.set_prop(n, spec::prop::TRANSLATE_X, tx);
+        ui.set_prop(n, spec::prop::TRANSLATE_Y, ty);
+        ui.set_prop(n, spec::prop::ROTATE, rot);
+        ui.insert_before(spec::ROOT_ID, n, 0);
+    }
+    // A gradient clipped at the screen edge must re-interpolate, not clamp.
+    let g = ui.create_node(0);
+    ui.set_prop(g, spec::prop::WIDTH, 200.0);
+    ui.set_prop(g, spec::prop::HEIGHT, 40.0);
+    ui.set_prop(g, spec::prop::POS_TYPE, spec::PosType::Absolute as u32 as f64);
+    ui.set_prop(g, spec::prop::INSET_T, 0.0);
+    ui.set_prop(g, spec::prop::INSET_L, 0.0);
+    ui.set_prop(g, spec::prop::GRAD_FROM, abgr(0, 0, 0, 255) as f64);
+    ui.set_prop(g, spec::prop::GRAD_TO, abgr(200, 200, 200, 255) as f64);
+    ui.set_prop(g, spec::prop::GRAD_DIR, spec::GradDir::ToRight as u32 as f64);
+    ui.set_prop(g, spec::prop::TRANSLATE_X, 380.0); // visible span = half
+    ui.insert_before(spec::ROOT_ID, g, 0);
+    ui.tick();
+    let words = ui.draw().words.clone();
+    let counts = validate_drawlist(&words);
+    assert!(counts[spec::draw_op::RECT as usize] > 0);
+    assert!(counts[spec::draw_op::TRI as usize] > 0, "rotated offscreen boxes clip into TRIs");
+    assert!(counts[spec::draw_op::GRAD_RECT as usize] > 0);
+    // Find the gradient and check the endpoint re-interpolation: the rect
+    // spans x 380..580, the clip keeps 380..480 = fractions 0.0..0.5, so the
+    // from-color is untouched and the to-color becomes lerp(from, to, 0.5).
+    let mut i = 0usize;
+    let mut found = false;
+    while i < words.len() {
+        match words[i] {
+            spec::draw_op::RECT => i += 4,
+            spec::draw_op::GRAD_RECT => {
+                let (x, _) = decode_xy(words[i + 1]);
+                let (w, _) = decode_wh(words[i + 2]);
+                assert_eq!((x, w), (380, 100));
+                assert_eq!(words[i + 3], abgr(0, 0, 0, 255)); // from untouched (clip starts at 0.0)
+                let expected = crate::anim::interp(abgr(0, 0, 0, 255), abgr(200, 200, 200, 255), 0.5, true);
+                assert_eq!(words[i + 4], expected, "gradient to-color re-interpolated over the clip");
+                found = true;
+                i += 6;
+            }
+            spec::draw_op::TRI => i += 7,
+            spec::draw_op::GLYPH_RUN => i += 3 + 2 * ((words[i + 1] >> 16) as usize),
+            spec::draw_op::TEX_QUAD => i += 9,
+            spec::draw_op::SCISSOR => i += 3,
+            _ => i += 1,
+        }
+    }
+    assert!(found, "gradient rect must survive the clip");
+}
+
+#[test]
+fn overflow_hidden_emits_balanced_intersected_scissors() {
+    let mut ui = Ui::new();
+    let outer = ui.create_node(0);
+    ui.set_prop(outer, spec::prop::WIDTH, 100.0);
+    ui.set_prop(outer, spec::prop::HEIGHT, 80.0);
+    ui.set_prop(outer, spec::prop::OVERFLOW, spec::Overflow::Hidden as u32 as f64);
+    ui.insert_before(spec::ROOT_ID, outer, 0);
+    let inner = ui.create_node(0);
+    ui.set_prop(inner, spec::prop::WIDTH, 300.0); // overflows outer
+    ui.set_prop(inner, spec::prop::HEIGHT, 300.0);
+    ui.set_prop(inner, spec::prop::OVERFLOW, spec::Overflow::Hidden as u32 as f64);
+    ui.set_prop(inner, spec::prop::SHRINK, 0.0);
+    ui.insert_before(outer, inner, 0);
+    let leaf = ui.create_node(0);
+    ui.set_prop(leaf, spec::prop::WIDTH, 500.0);
+    ui.set_prop(leaf, spec::prop::HEIGHT, 500.0);
+    ui.set_prop(leaf, spec::prop::SHRINK, 0.0);
+    ui.set_prop(leaf, spec::prop::BG_COLOR, abgr(9, 9, 9, 255) as f64);
+    ui.insert_before(inner, leaf, 0);
+    ui.tick();
+    let words = ui.draw().words.clone();
+    let counts = validate_drawlist(&words);
+    assert_eq!(counts[spec::draw_op::SCISSOR as usize], 2);
+    assert_eq!(counts[spec::draw_op::SCISSOR_POP as usize], 2);
+    // Every scissor rect is pre-intersected with the enclosing ones: the
+    // inner scissor must equal the outer 100x80 (300x300 ∩ 100x80).
+    let mut rects = Vec::new();
+    let mut i = 0usize;
+    while i < words.len() {
+        match words[i] {
+            spec::draw_op::SCISSOR => {
+                rects.push((decode_xy(words[i + 1]), decode_wh(words[i + 2])));
+                i += 3;
+            }
+            spec::draw_op::RECT => i += 4,
+            spec::draw_op::GRAD_RECT => i += 6,
+            spec::draw_op::TRI => i += 7,
+            spec::draw_op::GLYPH_RUN => i += 3 + 2 * ((words[i + 1] >> 16) as usize),
+            spec::draw_op::TEX_QUAD => i += 9,
+            _ => i += 1,
+        }
+    }
+    assert_eq!(rects, alloc::vec![((0, 0), (100, 80)), ((0, 0), (100, 80))]);
+    // The leaf rect is clipped inside them.
+    // (validate_drawlist already guarantees range; check tighter bound:)
+    let mut i = 0usize;
+    let mut depth = 0;
+    while i < words.len() {
+        match words[i] {
+            spec::draw_op::SCISSOR => {
+                depth += 1;
+                i += 3;
+            }
+            spec::draw_op::SCISSOR_POP => {
+                depth -= 1;
+                i += 1;
+            }
+            spec::draw_op::RECT => {
+                if depth == 2 {
+                    let (x, y) = decode_xy(words[i + 1]);
+                    let (w, h) = decode_wh(words[i + 2]);
+                    assert!(x + w <= 100 && y + h <= 80, "leaf rect not clipped to scissor");
+                }
+                i += 4;
+            }
+            spec::draw_op::GRAD_RECT => i += 6,
+            spec::draw_op::TRI => i += 7,
+            spec::draw_op::GLYPH_RUN => i += 3 + 2 * ((words[i + 1] >> 16) as usize),
+            spec::draw_op::TEX_QUAD => i += 9,
+            _ => i += 1,
+        }
+    }
+}
+
+#[test]
+fn text_measurement_against_synthetic_atlas() {
+    let mut ui = Ui::new();
+    let blob = encode_atlas(
+        2,
+        8,
+        8,
+        7,
+        10,
+        3,
+        &[(0xfffd, 0, 8), ('A' as u32, 1, 6), ('B' as u32, 2, 5)],
+    );
+    assert!(ui.load_font_atlas(&blob));
+    // Bad blobs are rejected.
+    assert!(!ui.load_font_atlas(&blob[..10]));
+    assert!(!ui.load_font_atlas(&[0u8; 64]));
+    assert_eq!(ui.measure_text("AB", 2), 11.0);
+    assert_eq!(ui.measure_text("ABA", 2), 17.0);
+    assert_eq!(ui.measure_text("AB\nA", 2), 11.0); // max line
+    assert_eq!(ui.measure_text("", 2), 0.0);
+    assert_eq!(ui.measure_text("A", 0), 0.0); // unregistered slot
+    // cmap miss -> tofu (gid 0) + miss counter, advance = cell width.
+    assert_eq!(ui.glyph_misses(), 0);
+    assert_eq!(ui.measure_text("Z", 2), 8.0);
+    assert_eq!(ui.glyph_misses(), 1);
+    // Atlas accessor exposes glyph bitmaps for the backends.
+    let atlas = ui.font_atlas(2).unwrap();
+    assert_eq!(atlas.lookup('B' as u32), Some((2, 5)));
+    assert_eq!(atlas.glyph_rows(1).len(), 8); // cellH * 1 byte per row
+}
+
+#[test]
+fn glyph_runs_render_with_alignment_and_color() {
+    let mut ui = Ui::new();
+    ui.load_font_atlas(&encode_atlas(
+        0,
+        8,
+        8,
+        7,
+        10,
+        3,
+        &[(0xfffd, 0, 8), ('A' as u32, 1, 6), ('B' as u32, 2, 5)],
+    ));
+    let color = abgr(10, 20, 30, 255);
+    let t = ui.create_node(spec::NodeType::Text as u8);
+    ui.set_prop(t, spec::prop::WIDTH, 51.0);
+    ui.set_prop(t, spec::prop::TEXT_COLOR, color as f64);
+    ui.set_prop(t, spec::prop::TEXT_ALIGN, spec::TextAlign::Right as u32 as f64);
+    // Mixed run: element text + text-node child concatenate.
+    ui.set_text(t, "A");
+    let child = ui.create_node(spec::NodeType::Text as u8);
+    ui.set_text(child, "B");
+    ui.insert_before(t, child, 0);
+    ui.insert_before(spec::ROOT_ID, t, 0);
+    ui.tick();
+    let words = ui.draw().words.clone();
+    validate_drawlist(&words);
+    // One run, 2 glyphs, right-aligned in 51px: line w = 11 -> x0 = 40.
+    let i = words.iter().position(|&w| w == spec::draw_op::GLYPH_RUN).unwrap();
+    assert_eq!(words[i + 1], 2 << 16); // slot 0, n = 2
+    assert_eq!(words[i + 2], color);
+    assert_eq!(decode_xy(words[i + 3]), (40, 1)); // y: (10 - 8) / 2 = 1
+    assert_eq!(words[i + 4], 1); // gid 'A'
+    assert_eq!(decode_xy(words[i + 5]), (46, 1));
+    assert_eq!(words[i + 6], 2); // gid 'B'
+}
+
+#[test]
+fn explicit_animate_lifecycle() {
+    let mut ui = Ui::new();
+    let n = ui.create_node(0);
+    ui.set_prop(n, spec::prop::WIDTH, 100.0);
+    ui.insert_before(spec::ROOT_ID, n, 0);
+    // 10 frames linear 100 -> 200 (layout-dirtying: width relayouts).
+    let aid = ui.animate(n, spec::prop::WIDTH, 200.0, 167, spec::Easing::Linear as u8, 0);
+    assert!(aid > 0);
+    for _ in 0..5 {
+        ui.tick();
+    }
+    let mid = ui.resolved_style(n).unwrap().width;
+    assert!(mid > 100.0 && mid < 200.0);
+    assert_eq!(ui.layout_of(n).unwrap().2, crate::layout::roundf(mid)); // relayouted this frame
+    // Cancel freezes the current value (as a dynamic override).
+    ui.cancel_anim(aid);
+    let frozen = ui.resolved_style(n).unwrap().width;
+    assert_eq!(frozen, mid);
+    for _ in 0..10 {
+        ui.tick();
+    }
+    assert_eq!(ui.resolved_style(n).unwrap().width, frozen);
+    // Stale anim id: no-op.
+    ui.cancel_anim(aid);
+    // Run one to completion: final value persists as an override.
+    let aid2 = ui.animate(n, spec::prop::WIDTH, 300.0, 100, spec::Easing::EaseOut as u8, 0);
+    assert!(aid2 > 0);
+    for _ in 0..20 {
+        ui.tick();
+    }
+    assert_eq!(ui.resolved_style(n).unwrap().width, 300.0);
+    assert_eq!(ui.layout_of(n).unwrap().2, 300.0);
+    // Non-animatable prop is rejected.
+    assert_eq!(ui.animate(n, spec::prop::FLEX_DIR, 1.0, 100, 0, 0), -1);
+}
+
+#[test]
+fn destroy_subtree_frees_anims_and_slots() {
+    let mut ui = Ui::new();
+    let parent = ui.create_node(0);
+    let child = ui.create_node(0);
+    ui.insert_before(spec::ROOT_ID, parent, 0);
+    ui.insert_before(parent, child, 0);
+    ui.set_focus(child);
+    let aid = ui.animate(child, spec::prop::OPACITY, 0.0, 1000, 0, 0);
+    assert!(aid > 0);
+    ui.destroy_node(parent);
+    assert_eq!(ui.focused(), 0);
+    assert!(ui.layout_of(parent).is_none());
+    assert!(ui.layout_of(child).is_none());
+    // The track died with the subtree: cancel is a no-op, ticks don't panic.
+    ui.cancel_anim(aid);
+    for _ in 0..3 {
+        ui.tick();
+        validate_drawlist(&ui.draw().words.clone());
+    }
+}
+
+#[test]
+fn opacity_multiplies_down_the_subtree() {
+    let mut ui = Ui::new();
+    let outer = ui.create_node(0);
+    ui.set_prop(outer, spec::prop::WIDTH, 100.0);
+    ui.set_prop(outer, spec::prop::HEIGHT, 100.0);
+    ui.set_prop(outer, spec::prop::OPACITY, 0.5);
+    ui.insert_before(spec::ROOT_ID, outer, 0);
+    let inner = ui.create_node(0);
+    ui.set_prop(inner, spec::prop::WIDTH, 50.0);
+    ui.set_prop(inner, spec::prop::HEIGHT, 50.0);
+    ui.set_prop(inner, spec::prop::OPACITY, 0.5);
+    ui.set_prop(inner, spec::prop::BG_COLOR, abgr(100, 100, 100, 255) as f64);
+    ui.insert_before(outer, inner, 0);
+    ui.tick();
+    let words = ui.draw().words.clone();
+    validate_drawlist(&words);
+    let i = words.iter().position(|&w| w == spec::draw_op::RECT).unwrap();
+    let a = words[i + 3] >> 24;
+    // 255 * 0.5 * 0.5 ≈ 64 (rounding via +0.5 in scale_alpha).
+    assert_eq!(a, 64);
+}
+
+#[test]
+fn zindex_orders_siblings_stably() {
+    let mut ui = Ui::new();
+    let mk = |ui: &mut Ui, z: f64, r: u8| {
+        let n = ui.create_node(0);
+        ui.set_prop(n, spec::prop::WIDTH, 10.0);
+        ui.set_prop(n, spec::prop::HEIGHT, 10.0);
+        ui.set_prop(n, spec::prop::POS_TYPE, spec::PosType::Absolute as u32 as f64);
+        ui.set_prop(n, spec::prop::INSET_T, 0.0);
+        ui.set_prop(n, spec::prop::INSET_L, 0.0);
+        ui.set_prop(n, spec::prop::Z_INDEX, z);
+        ui.set_prop(n, spec::prop::BG_COLOR, abgr(r, 0, 0, 255) as f64);
+        ui.insert_before(spec::ROOT_ID, n, 0);
+    };
+    mk(&mut ui, 1.0, 1); // insertion order 1, z 1
+    mk(&mut ui, 0.0, 2); // insertion order 2, z 0
+    mk(&mut ui, 0.0, 3); // insertion order 3, z 0 (stable after r=2)
+    mk(&mut ui, -1.0, 4); // negative z paints first
+    ui.tick();
+    let words = ui.draw().words.clone();
+    validate_drawlist(&words);
+    let mut reds = Vec::new();
+    let mut i = 0usize;
+    while i < words.len() {
+        match words[i] {
+            spec::draw_op::RECT => {
+                reds.push((words[i + 3] & 0xff) as u8);
+                i += 4;
+            }
+            spec::draw_op::GRAD_RECT => i += 6,
+            spec::draw_op::TRI => i += 7,
+            spec::draw_op::GLYPH_RUN => i += 3 + 2 * ((words[i + 1] >> 16) as usize),
+            spec::draw_op::TEX_QUAD => i += 9,
+            _ => i += 1,
+        }
+    }
+    assert_eq!(reds, alloc::vec![4, 2, 3, 1]);
+}
+
+#[test]
+fn image_tex_quad_clips_with_uv_reinterpolation() {
+    let mut ui = Ui::new();
+    let pixels = alloc::vec![0xffu8; 16 * 16 * 4];
+    let tex = ui.upload_texture(&pixels, 16, 16, spec::psm::PSM_8888);
+    assert_eq!(tex, 0);
+    // Validation failures.
+    assert_eq!(ui.upload_texture(&pixels, 17, 16, spec::psm::PSM_8888), -1);
+    assert_eq!(ui.upload_texture(&pixels, 1024, 16, spec::psm::PSM_8888), -1);
+    assert_eq!(ui.upload_texture(&pixels[..8], 16, 16, spec::psm::PSM_8888), -1);
+    assert_eq!(ui.upload_texture(&pixels, 16, 16, 99), -1);
+    let (px, w, h, psm) = ui.texture(tex).unwrap();
+    assert_eq!((px.len(), w, h, psm), (1024, 16, 16, spec::psm::PSM_8888));
+    assert_eq!(px.as_ptr() as usize % 16, 0, "texture pixels must be 16-byte aligned");
+
+    let img = ui.create_node(spec::NodeType::Image as u8);
+    ui.set_prop(img, spec::prop::WIDTH, 100.0);
+    ui.set_prop(img, spec::prop::HEIGHT, 100.0);
+    ui.set_prop(img, spec::prop::POS_TYPE, spec::PosType::Absolute as u32 as f64);
+    ui.set_prop(img, spec::prop::INSET_T, 0.0);
+    ui.set_prop(img, spec::prop::INSET_L, 0.0);
+    ui.set_prop(img, spec::prop::TRANSLATE_X, 430.0); // half off right: u1 = 0.5
+    ui.set_image(img, tex);
+    ui.insert_before(spec::ROOT_ID, img, 0);
+    ui.tick();
+    let words = ui.draw().words.clone();
+    validate_drawlist(&words);
+    let i = words.iter().position(|&w| w == spec::draw_op::TEX_QUAD).unwrap();
+    assert_eq!(words[i + 1], tex as u32);
+    assert_eq!(decode_xy(words[i + 2]), (430, 0));
+    assert_eq!(decode_wh(words[i + 3]), (50, 100));
+    assert_eq!(f32::from_bits(words[i + 4]), 0.0); // u0
+    assert_eq!(f32::from_bits(words[i + 6]), 0.5); // u1
+    assert_eq!(f32::from_bits(words[i + 7]), 1.0); // v1
+}
+
+#[test]
+fn root_is_a_full_screen_flex_column() {
+    let mut ui = Ui::new();
+    ui.tick();
+    assert_eq!(ui.layout_of(spec::ROOT_ID).unwrap(), (0.0, 0.0, 480.0, 272.0));
+    let r = ui.resolved_style(spec::ROOT_ID).unwrap();
+    assert_eq!(r.flex_dir, spec::FlexDir::Col as u8);
+    // Root cannot be destroyed.
+    ui.destroy_node(spec::ROOT_ID);
+    assert!(ui.layout_of(spec::ROOT_ID).is_some());
+}
+
+#[test]
+fn full_percent_sentinel_maps_to_100_percent() {
+    let mut ui = Ui::new();
+    let n = ui.create_node(0);
+    ui.set_prop(n, spec::prop::WIDTH, -1.0); // w-full
+    ui.set_prop(n, spec::prop::HEIGHT, 40.0);
+    ui.insert_before(spec::ROOT_ID, n, 0);
+    ui.tick();
+    assert_eq!(ui.layout_of(n).unwrap(), (0.0, 0.0, 480.0, 40.0));
+}
+
+#[test]
+fn style_table_parse_rejects_garbage() {
+    let mut ui = Ui::new();
+    assert!(!ui.load_styles(&[1, 2, 3]));
+    assert!(!ui.load_styles(&[0u8; 32]));
+    let good = encode_styles(&[StyleSpec::new()]);
+    assert!(ui.load_styles(&good));
+    assert!(!ui.load_styles(&good[..good.len() - 1 + 0][..6])); // truncated header
+    // A record with a style id past the table resolves as unstyled.
+    // (Compare via raw prop bits — Resolved holds NANs, so PartialEq lies.)
+    let n = ui.create_node(0);
+    ui.set_style(n, 99);
+    let r = ui.resolved_style(n).unwrap();
+    let d = style::Resolved::default();
+    for prop in 0u16..=255 {
+        assert_eq!(r.get_bits(prop as u8), d.get_bits(prop as u8), "prop {prop}");
+    }
+}
+
+#[test]
+fn scale_only_transform_stays_axis_aligned() {
+    let mut ui = Ui::new();
+    let n = ui.create_node(0);
+    ui.set_prop(n, spec::prop::WIDTH, 100.0);
+    ui.set_prop(n, spec::prop::HEIGHT, 50.0);
+    ui.set_prop(n, spec::prop::BG_COLOR, abgr(1, 2, 3, 255) as f64);
+    ui.set_prop(n, spec::prop::SCALE, 0.5);
+    ui.insert_before(spec::ROOT_ID, n, 0);
+    ui.tick();
+    let words = ui.draw().words.clone();
+    let counts = validate_drawlist(&words);
+    assert_eq!(counts[spec::draw_op::TRI as usize], 0);
+    let i = words.iter().position(|&w| w == spec::draw_op::RECT).unwrap();
+    // Scaled 0.5 about center: 100x50 -> 50x25 at (25, 12.5->13 rounded).
+    assert_eq!(decode_xy(words[i + 1]), (25, 13));
+    assert_eq!(decode_wh(words[i + 2]), (50, 25));
+}
+
+#[test]
+fn root_cannot_be_reparented_under_a_detached_node() {
+    let mut ui = Ui::new();
+    // A DETACHED parent defeats the ancestor-walk cycle guard; the explicit
+    // root-as-child reject must keep slot 1 alive forever.
+    let x = ui.create_node(0);
+    ui.insert_before(x, spec::ROOT_ID, 0);
+    ui.destroy_node(x);
+    ui.tick();
+    assert!(ui.layout_of(spec::ROOT_ID).is_some(), "root died");
+    // The core still works: a new child under the root lays out.
+    let n = ui.create_node(0);
+    ui.set_prop(n, spec::prop::HEIGHT, 40.0);
+    ui.insert_before(spec::ROOT_ID, n, 0);
+    ui.tick();
+    assert_eq!(ui.layout_of(n).unwrap(), (0.0, 0.0, 480.0, 40.0));
+    // Also via an ATTACHED parent (plain cycle guard case).
+    ui.insert_before(n, spec::ROOT_ID, 0);
+    ui.tick();
+    assert_eq!(ui.layout_of(spec::ROOT_ID).unwrap(), (0.0, 0.0, 480.0, 272.0));
+}
+
+#[test]
+fn any_negative_size_is_the_size_full_sentinel() {
+    // spec.ts: "Any negative width/height value is treated as this sentinel".
+    let mut ui = Ui::new();
+    let n = ui.create_node(0);
+    ui.set_prop(n, spec::prop::WIDTH, -2.0);
+    ui.set_prop(n, spec::prop::HEIGHT, 40.0);
+    ui.insert_before(spec::ROOT_ID, n, 0);
+    ui.tick();
+    assert_eq!(ui.layout_of(n).unwrap(), (0.0, 0.0, 480.0, 40.0));
+    ui.set_prop(n, spec::prop::HEIGHT, -0.5);
+    ui.tick();
+    assert_eq!(ui.layout_of(n).unwrap(), (0.0, 0.0, 480.0, 272.0));
+}
+
+#[test]
+fn size_full_sentinel_is_not_animatable() {
+    let mut ui = Ui::new();
+    let n = ui.create_node(0);
+    ui.set_prop(n, spec::prop::WIDTH, 200.0);
+    ui.set_prop(n, spec::prop::HEIGHT, 40.0);
+    ui.insert_before(spec::ROOT_ID, n, 0);
+    ui.tick();
+    // animate() TO the sentinel: no-op, returns -1, width stays put.
+    assert_eq!(ui.animate(n, spec::prop::WIDTH, -1.0, 500, spec::Easing::Linear as u8, 0), -1);
+    for _ in 0..5 {
+        ui.tick();
+    }
+    assert_eq!(ui.layout_of(n).unwrap().2, 200.0);
+    // animate() FROM the sentinel: also a no-op.
+    ui.set_prop(n, spec::prop::WIDTH, -1.0);
+    assert_eq!(ui.animate(n, spec::prop::WIDTH, 100.0, 500, spec::Easing::Linear as u8, 0), -1);
+    ui.tick();
+    assert_eq!(ui.layout_of(n).unwrap().2, 480.0);
+    // Style transitions between a pixel width and w-full spawn NO width
+    // track: the variant swap snaps.
+    let mut s0 = StyleSpec::new();
+    s0.base = alloc::vec![(spec::prop::WIDTH, 160f32.to_bits())];
+    let mut s1 = StyleSpec::new();
+    s1.base = alloc::vec![(spec::prop::WIDTH, (-1f32).to_bits())];
+    s1.transition = Some((0xffff_ffff, 300, 0, spec::Easing::Linear as u8));
+    assert!(ui.load_styles(&encode_styles(&[s0, s1])));
+    let m = ui.create_node(0);
+    ui.set_prop(m, spec::prop::HEIGHT, 10.0);
+    ui.insert_before(spec::ROOT_ID, m, 0);
+    ui.set_style(m, 0);
+    ui.tick();
+    assert_eq!(ui.layout_of(m).unwrap().2, 160.0);
+    ui.set_style(m, 1);
+    assert_eq!(ui.resolved_style(m).unwrap().width, -1.0, "snap, not a tween");
+    ui.tick();
+    assert_eq!(ui.layout_of(m).unwrap().2, 480.0);
+}
+
+#[test]
+fn huge_durations_do_not_overflow() {
+    assert!(crate::anim::ms_to_frames(u32::MAX) >= 1); // would panic pre-fix
+    assert_eq!(crate::anim::ms_to_frames(100_000_000), 6_000_000);
+    let mut ui = Ui::new();
+    let n = ui.create_node(0);
+    ui.insert_before(spec::ROOT_ID, n, 0);
+    let aid = ui.animate(n, spec::prop::OPACITY, 0.0, u32::MAX, 0, u32::MAX);
+    assert!(aid > 0);
+    for _ in 0..3 {
+        ui.tick();
+    }
+}
+
+#[test]
+fn auto_endpoints_snap_instead_of_tweening_nan() {
+    let mut ui = Ui::new();
+    // Transition from an AUTO (NaN) width to a pixel width: browsers snap;
+    // pre-fix the tween held NaN for the whole duration.
+    let mut s = StyleSpec::new();
+    s.base = alloc::vec![(spec::prop::WIDTH, 200f32.to_bits())];
+    s.transition = Some((0xffff_ffff, 300, 0, spec::Easing::Linear as u8));
+    assert!(ui.load_styles(&encode_styles(&[s])));
+    let n = ui.create_node(0);
+    ui.set_prop(n, spec::prop::HEIGHT, 20.0);
+    ui.insert_before(spec::ROOT_ID, n, 0);
+    ui.tick();
+    assert_eq!(ui.layout_of(n).unwrap().2, 480.0); // stretched auto width
+    ui.set_style(n, 0);
+    let w = ui.resolved_style(n).unwrap().width;
+    assert_eq!(w, 200.0, "snap to target, no NaN mid-flight (got {w})");
+    ui.tick();
+    assert_eq!(ui.layout_of(n).unwrap().2, 200.0);
+    // Explicit animate() from auto: no track, target written as an override.
+    let m = ui.create_node(0);
+    ui.insert_before(spec::ROOT_ID, m, 0);
+    assert_eq!(ui.animate(m, spec::prop::HEIGHT, 50.0, 300, spec::Easing::Linear as u8, 0), -1);
+    ui.tick();
+    assert_eq!(ui.layout_of(m).unwrap().3, 50.0);
+}
+
+#[test]
+fn insert_past_max_tree_depth_is_a_noop() {
+    // Tree-level: the over-limit insert returns false.
+    let mut t = crate::tree::Tree::new();
+    let mut parent = spec::ROOT_ID;
+    for depth in 1..=spec::MAX_TREE_DEPTH {
+        let n = t.alloc(0);
+        assert!(t.insert_before(parent, n, 0), "insert at depth {depth} must succeed");
+        parent = n;
+    }
+    let over = t.alloc(0);
+    assert!(!t.insert_before(parent, over, 0), "insert past MAX_TREE_DEPTH must no-op");
+    // Ui-level smoke: the capped chain still ticks/draws safely.
+    let mut ui = Ui::new();
+    let mut parent = spec::ROOT_ID;
+    for _ in 1..=spec::MAX_TREE_DEPTH {
+        let n = ui.create_node(0);
+        ui.set_prop(n, spec::prop::BG_COLOR, abgr(8, 8, 8, 255) as f64);
+        ui.insert_before(parent, n, 0);
+        parent = n;
+    }
+    let over = ui.create_node(0);
+    ui.insert_before(parent, over, 0); // silent no-op
+    ui.tick();
+    validate_drawlist(&ui.draw().words.clone());
+    assert!(ui.layout_of(parent).is_some());
+}
+
+#[test]
+fn set_image_negative_clears_the_binding() {
+    let mut ui = Ui::new();
+    let pixels = alloc::vec![0xffu8; 16 * 16 * 4];
+    let tex = ui.upload_texture(&pixels, 16, 16, spec::psm::PSM_8888);
+    assert_eq!(tex, 0, "texture handles are 0-based");
+    let img = ui.create_node(spec::NodeType::Image as u8);
+    ui.set_prop(img, spec::prop::WIDTH, 32.0);
+    ui.set_prop(img, spec::prop::HEIGHT, 32.0);
+    ui.insert_before(spec::ROOT_ID, img, 0);
+    ui.set_image(img, tex);
+    ui.tick();
+    let counts = validate_drawlist(&ui.draw().words.clone());
+    assert_eq!(counts[spec::draw_op::TEX_QUAD as usize], 1);
+    // Unknown positive handles are still ignored (binding kept)...
+    ui.set_image(img, 99);
+    let counts = validate_drawlist(&ui.draw().words.clone());
+    assert_eq!(counts[spec::draw_op::TEX_QUAD as usize], 1);
+    // ...but any negative handle CLEARS (renderer.ts sends -1 for src="").
+    ui.set_image(img, -1);
+    let counts = validate_drawlist(&ui.draw().words.clone());
+    assert_eq!(counts[spec::draw_op::TEX_QUAD as usize], 0);
+}
+
+#[test]
+fn cmap_xoff_shifts_glyph_cells_left() {
+    // A synthetic atlas whose 'A' carries xoff=2 (negative-LSB bake shift):
+    // the emitted cell must sit at pen - 2 while advances are unaffected.
+    let mut blob = encode_atlas(
+        0,
+        8,
+        8,
+        7,
+        10,
+        3,
+        &[(0xfffd, 0, 8), ('A' as u32, 1, 6), ('B' as u32, 2, 5)],
+    );
+    // Patch cmap byte +7 (xoff) of the 'A' entry (entry index 1: sorted by
+    // codepoint 'A' < 'B' < 0xfffd).
+    let a_entry = spec::font_atlas::HEADER_SIZE + spec::font_atlas::CMAP_ENTRY_SIZE;
+    blob[a_entry + 7] = 2;
+    let mut ui = Ui::new();
+    assert!(ui.load_font_atlas(&blob));
+    assert_eq!(ui.measure_text("AB", 0), 11.0, "xoff must not change advances");
+    ui.set_prop(spec::ROOT_ID, spec::prop::PADDING_L, 10.0);
+    let t = ui.create_node(spec::NodeType::Text as u8);
+    ui.set_prop(t, spec::prop::TEXT_COLOR, abgr(255, 255, 255, 255) as f64);
+    ui.set_text(t, "AB");
+    ui.insert_before(spec::ROOT_ID, t, 0);
+    ui.tick();
+    let words = ui.draw().words.clone();
+    validate_drawlist(&words);
+    let i = words.iter().position(|&w| w == spec::draw_op::GLYPH_RUN).unwrap();
+    assert_eq!(decode_xy(words[i + 3]).0, 10 - 2, "'A' cell shifted left by its xoff");
+    assert_eq!(decode_xy(words[i + 5]).0, 10 + 6, "'B' (xoff 0) at the plain pen position");
+}
+
+/// Two runs of a whole interaction script (styles, focus transitions,
+/// springs, text edits) must be byte-identical — the golden-test bedrock.
+#[test]
+fn end_to_end_determinism_script() {
+    fn run() -> Vec<u32> {
+        let mut ui = Ui::new();
+        let mut s0 = StyleSpec::new();
+        s0.base = alloc::vec![
+            (spec::prop::WIDTH, 80f32.to_bits()),
+            (spec::prop::HEIGHT, 30f32.to_bits()),
+            (spec::prop::BG_COLOR, abgr(30, 41, 59, 255)),
+        ];
+        s0.focus = alloc::vec![(spec::prop::BG_COLOR, abgr(129, 140, 248, 255))];
+        s0.transition = Some((0xffff_ffff, 150, 0, spec::Easing::SpringBouncy as u8));
+        ui.load_styles(&encode_styles(&[s0]));
+        ui.load_font_atlas(&encode_atlas(
+            0,
+            8,
+            8,
+            7,
+            10,
+            3,
+            &[(0xfffd, 0, 8), ('A' as u32, 1, 6), ('B' as u32, 2, 5)],
+        ));
+        let card = ui.create_node(0);
+        ui.set_style(card, 0);
+        ui.insert_before(spec::ROOT_ID, card, 0);
+        let label = ui.create_node(spec::NodeType::Text as u8);
+        ui.set_text(label, "AB");
+        ui.insert_before(card, label, 0);
+        let mut all = Vec::new();
+        for f in 0..40u32 {
+            if f == 5 {
+                ui.set_focus(card);
+            }
+            if f == 20 {
+                ui.set_focus(0);
+            }
+            if f == 25 {
+                ui.replace_text(label, "BA\nA");
+            }
+            ui.tick();
+            all.extend_from_slice(&ui.draw().words);
+        }
+        all
+    }
+    let a = run();
+    assert!(!a.is_empty());
+    assert_eq!(a, run());
+}

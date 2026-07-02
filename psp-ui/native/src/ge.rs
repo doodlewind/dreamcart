@@ -1,0 +1,430 @@
+//! DrawList -> sceGu. Walks the core's Vec<u32> (spec.ts "DRAWLIST op
+//! format") and enqueues GE commands into the display list main.rs opened —
+//! this module NEVER calls sceGuStart/Finish/Sync/SwapBuffers (dreamcart
+//! contract).
+//!
+//! PER-FRAME BUMP VERTEX ARENA [R]: the GE consumes vertices ASYNCHRONOUSLY
+//! in Direct mode, so a region handed to sceGuDrawArray must never be
+//! rewritten within the frame. Every batch allocates fresh 16-byte-aligned
+//! space from a Vec<Chunk16>-backed pool (grown through the arena-backed
+//! global allocator, retained across frames); main.rs calls `reset_pool()`
+//! only AFTER sceGuSync — the GE has finished reading by then.
+//!
+//! Coordinates arrive pre-clipped from the core (always inside
+//! [0,480]x[0,272], i16-safe — the CPU clip stage guarantee), so no clamping
+//! happens here. Glyph CELLS may overhang the screen edge by up to a cell
+//! (only their top-left is range-guaranteed): far under i16 wrap range, and
+//! the always-on scissor test pixel-clips them.
+//!
+//! UV semantics (VERIFIED on PPSSPP, and documented in rust-psp itself —
+//! sceGuTexOffset/TexScale: "Only used by the 3D T&L pipe, renders done with
+//! VertexType::TRANSFORM_2D are not affected"): in TRANSFORM_2D texture
+//! coordinates are RAW TEXELS, not normalized. The DrawList's normalized f32
+//! UVs are multiplied by the texture dimensions before hitting the vertices.
+//!
+//! GE state contract: Blend is enabled (SrcAlpha/OneMinusSrcAlpha) for the
+//! whole pass; Texture2D only around TEX_QUADs; on exit Blend + Texture2D
+//! are disabled, scissor is restored to full screen — sticky-state reset per
+//! the dreamcart pass-boundary rule.
+
+use alloc::vec::Vec;
+use core::ffi::c_void;
+use core::ptr::null;
+
+use psp::sys::{
+    self, BlendFactor, BlendOp, ClearBuffer, GuPrimitive, GuState, MipmapLevel,
+    TextureColorComponent, TextureEffect, TextureFilter, TexturePixelFormat, VertexType,
+};
+use psp::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use psp_ui_core::{spec, Ui};
+
+// ---------------------------------------------------------------------------
+// Vertex formats (GE fixed component order: [uv][color][pos])
+// ---------------------------------------------------------------------------
+
+/// COLOR_8888 | VERTEX_16BIT | TRANSFORM_2D — 12-byte stride (the GE derives
+/// the stride from the vtype: 4B color + 6B pos, padded to 4-byte alignment).
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct VertC {
+    color: u32,
+    x: i16,
+    y: i16,
+    z: i16,
+    _pad: i16,
+}
+
+/// TEXTURE_16BIT | COLOR_8888 | VERTEX_16BIT | TRANSFORM_2D — 16-byte stride
+/// (4B uv + 4B color + 6B pos, padded).
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct VertTC {
+    u: i16,
+    v: i16,
+    color: u32,
+    x: i16,
+    y: i16,
+    z: i16,
+    _pad: i16,
+}
+
+const VTYPE_C: VertexType = VertexType::from_bits_truncate(
+    VertexType::COLOR_8888.bits() | VertexType::VERTEX_16BIT.bits() | VertexType::TRANSFORM_2D.bits(),
+);
+const VTYPE_TC: VertexType = VertexType::from_bits_truncate(
+    VertexType::TEXTURE_16BIT.bits()
+        | VertexType::COLOR_8888.bits()
+        | VertexType::VERTEX_16BIT.bits()
+        | VertexType::TRANSFORM_2D.bits(),
+);
+
+// ---------------------------------------------------------------------------
+// Per-frame bump vertex arena [R]
+// ---------------------------------------------------------------------------
+
+#[repr(C, align(16))]
+#[derive(Copy, Clone)]
+struct Chunk16([u8; 16]);
+
+const BLOCK_BYTES: usize = 64 * 1024;
+
+struct Pool {
+    blocks: Vec<Vec<Chunk16>>,
+    cur: usize,
+    off: usize,
+}
+
+static mut POOL: Option<Pool> = None;
+
+/// Bump-allocate `bytes` (16-byte aligned) valid until `reset_pool()`.
+unsafe fn pool_alloc(bytes: usize) -> *mut u8 {
+    if POOL.is_none() {
+        POOL = Some(Pool { blocks: Vec::new(), cur: 0, off: 0 });
+    }
+    let pool = POOL.as_mut().unwrap();
+    let need = (bytes + 15) & !15;
+    loop {
+        if pool.cur < pool.blocks.len() {
+            let cap = pool.blocks[pool.cur].len() * 16;
+            if pool.off + need <= cap {
+                let p = (pool.blocks[pool.cur].as_mut_ptr() as *mut u8).add(pool.off);
+                pool.off += need;
+                return p;
+            }
+            pool.cur += 1;
+            pool.off = 0;
+        } else {
+            // Grow: a standard block, or an exact-size one for oversize asks.
+            let n = core::cmp::max(need, BLOCK_BYTES) / 16;
+            pool.blocks.push(alloc::vec![Chunk16([0u8; 16]); n]);
+        }
+    }
+}
+
+/// Rewind the bump pool. ONLY call after sceGuSync — the GE reads the
+/// vertex memory asynchronously until then.
+pub unsafe fn reset_pool() {
+    if let Some(pool) = POOL.as_mut() {
+        pool.cur = 0;
+        pool.off = 0;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// word decoding (spec.ts DRAWLIST packings)
+// ---------------------------------------------------------------------------
+
+#[inline]
+fn xy(word: u32) -> (i16, i16) {
+    ((word & 0xffff) as u16 as i16, (word >> 16) as u16 as i16)
+}
+
+#[inline]
+fn wh(word: u32) -> (i32, i32) {
+    ((word & 0xffff) as i32, (word >> 16) as i32)
+}
+
+// ---------------------------------------------------------------------------
+// draws
+// ---------------------------------------------------------------------------
+
+/// Max vertices per sceGuDrawArray call: the GE PRIM command packs the count
+/// into its low 16 bits (rust-psp sends `(prim << 16) | count` unmasked), so
+/// counts >= 0x10000 would corrupt the primitive field. 65532 is divisible by
+/// both 2 and 3, preserving Sprites-pair and Triangles-triple granularity.
+const MAX_PRIM_VERTS: i32 = 65532;
+
+/// dcache-writeback a batch, then enqueue its draw — chunked so no single
+/// PRIM exceeds the 16-bit vertex-count field (dense glyph runs can).
+#[inline]
+unsafe fn flush(prim: GuPrimitive, vtype: VertexType, count: i32, verts: *const c_void, bytes: usize) {
+    if count <= 0 {
+        return;
+    }
+    sys::sceKernelDcacheWritebackRange(verts, bytes as u32);
+    let stride = bytes / count as usize;
+    let mut done: i32 = 0;
+    while done < count {
+        let n = (count - done).min(MAX_PRIM_VERTS);
+        sys::sceGuDrawArray(
+            prim,
+            vtype,
+            n,
+            null(),
+            (verts as *const u8).add(done as usize * stride) as *const c_void,
+        );
+        done += n;
+    }
+}
+
+/// Program the sampler for one core texture (pixels were dcache-written-back
+/// at upload). tbw = width (pow2 >= 8 from the compiler's pow2<=512 check).
+unsafe fn apply_texture(pixels: &[u8], w: u32, h: u32, psm: u32) {
+    let fmt = match psm {
+        spec::psm::PSM_4444 => TexturePixelFormat::Psm4444,
+        _ => TexturePixelFormat::Psm8888,
+    };
+    sys::sceGuEnable(GuState::Texture2D);
+    sys::sceGuTexMode(fmt, 0, 0, 0);
+    sys::sceGuTexImage(MipmapLevel::None, w as i32, h as i32, w as i32, pixels.as_ptr() as *const c_void);
+    sys::sceGuTexFunc(TextureEffect::Modulate, TextureColorComponent::Rgba);
+    sys::sceGuTexFilter(TextureFilter::Linear, TextureFilter::Linear);
+}
+
+/// Count the horizontal 1-bit runs in one glyph's rows (MSB = leftmost).
+fn count_glyph_runs(rows: &[u8], bpr: usize, cell_w: usize, cell_h: usize) -> usize {
+    let mut runs = 0usize;
+    for y in 0..cell_h {
+        let row = &rows[y * bpr..y * bpr + bpr];
+        let mut in_run = false;
+        for x in 0..cell_w {
+            let on = row[x >> 3] & (0x80 >> (x & 7)) != 0;
+            if on && !in_run {
+                runs += 1;
+            }
+            in_run = on;
+        }
+    }
+    runs
+}
+
+/// Render one frame's DrawList into the open display list.
+pub unsafe fn render(ui: &Ui, words: &[u32]) {
+    // Frame clear: uncovered framebuffer regions must not show stale VRAM.
+    sys::sceGuClearColor(0xff00_0000);
+    sys::sceGuClear(ClearBuffer::COLOR_BUFFER_BIT);
+
+    // Pass state: alpha blending on for everything (opacity, text AA-less
+    // cells with alpha colors, texture alpha).
+    sys::sceGuEnable(GuState::Blend);
+    sys::sceGuBlendFunc(BlendOp::Add, BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha, 0, 0);
+    sys::sceGuDisable(GuState::Texture2D);
+
+    // Scissor stack: the core emits rects already intersected with every
+    // enclosing scissor, so SET on push and restore the previous on pop.
+    let mut scissors: Vec<(i32, i32, i32, i32)> = Vec::new();
+
+    let n = words.len();
+    let mut i = 0usize;
+    while i < n {
+        match words[i] {
+            // The `i + N <= n` guards make truncated tails fall through to the
+            // default `break` arm instead of spinning forever with count = 0.
+            spec::draw_op::RECT if i + 4 <= n => {
+                // Batch consecutive RECTs into ONE sprite draw.
+                let mut end = i;
+                while end + 4 <= n && words[end] == spec::draw_op::RECT {
+                    end += 4;
+                }
+                let count = (end - i) / 4;
+                let bytes = count * 2 * core::mem::size_of::<VertC>();
+                let verts = pool_alloc(bytes) as *mut VertC;
+                for k in 0..count {
+                    let o = i + k * 4;
+                    let (x, y) = xy(words[o + 1]);
+                    let (w, h) = wh(words[o + 2]);
+                    let color = words[o + 3];
+                    *verts.add(k * 2) = VertC { color, x, y, z: 0, _pad: 0 };
+                    *verts.add(k * 2 + 1) = VertC {
+                        color,
+                        x: (x as i32 + w) as i16,
+                        y: (y as i32 + h) as i16,
+                        z: 0,
+                        _pad: 0,
+                    };
+                }
+                flush(GuPrimitive::Sprites, VTYPE_C, (count * 2) as i32, verts as *const c_void, bytes);
+                i = end;
+            }
+            spec::draw_op::GRAD_RECT if i + 6 <= n => {
+                let (x, y) = xy(words[i + 1]);
+                let (w, h) = wh(words[i + 2]);
+                let from = words[i + 3];
+                let to = words[i + 4];
+                let dir = words[i + 5];
+                let (x0, y0, x1, y1) = (x, y, (x as i32 + w) as i16, (y as i32 + h) as i16);
+                // Corner colors per GradDir (spec ENUMS.GradDir ordinals).
+                let (tl, tr, bl, br) = match dir {
+                    d if d == spec::GradDir::ToTop as u32 => (to, to, from, from),
+                    d if d == spec::GradDir::ToLeft as u32 => (to, from, to, from),
+                    d if d == spec::GradDir::ToRight as u32 => (from, to, from, to),
+                    _ => (from, from, to, to), // ToBottom
+                };
+                let bytes = 4 * core::mem::size_of::<VertC>();
+                let verts = pool_alloc(bytes) as *mut VertC;
+                *verts.add(0) = VertC { color: tl, x: x0, y: y0, z: 0, _pad: 0 };
+                *verts.add(1) = VertC { color: tr, x: x1, y: y0, z: 0, _pad: 0 };
+                *verts.add(2) = VertC { color: bl, x: x0, y: y1, z: 0, _pad: 0 };
+                *verts.add(3) = VertC { color: br, x: x1, y: y1, z: 0, _pad: 0 };
+                flush(GuPrimitive::TriangleStrip, VTYPE_C, 4, verts as *const c_void, bytes);
+                i += 6;
+            }
+            spec::draw_op::TRI if i + 7 <= n => {
+                // Batch consecutive TRIs (7 words each) into ONE draw.
+                let mut end = i;
+                while end + 7 <= n && words[end] == spec::draw_op::TRI {
+                    end += 7;
+                }
+                let count = (end - i) / 7;
+                let bytes = count * 3 * core::mem::size_of::<VertC>();
+                let verts = pool_alloc(bytes) as *mut VertC;
+                for k in 0..count {
+                    let o = i + k * 7;
+                    for c in 0..3usize {
+                        let (x, y) = xy(words[o + 1 + c]);
+                        *verts.add(k * 3 + c) =
+                            VertC { color: words[o + 4 + c], x, y, z: 0, _pad: 0 };
+                    }
+                }
+                flush(GuPrimitive::Triangles, VTYPE_C, (count * 3) as i32, verts as *const c_void, bytes);
+                i = end;
+            }
+            spec::draw_op::GLYPH_RUN if i + 3 <= n => {
+                let w1 = words[i + 1];
+                let slot = (w1 & 0xff) as u8;
+                let count = (w1 >> 16) as usize;
+                let color = words[i + 2];
+                let body = i + 3;
+                let next = body + count * 2;
+                if next > n {
+                    break; // truncated list — bail
+                }
+                if let Some(atlas) = ui.font_atlas(slot) {
+                    // WA2 pattern: bit-scan each glyph cell into horizontal
+                    // solid runs, batched as sprite pairs in ONE draw.
+                    let bpr = atlas.bytes_per_row();
+                    let (cw, ch) = (atlas.cell_w as usize, atlas.cell_h as usize);
+                    // Pass 1: exact vertex count for the bump alloc.
+                    let mut rects = 0usize;
+                    for g in 0..count {
+                        let gid = (words[body + g * 2 + 1] & 0xffff) as u16;
+                        if gid < atlas.glyph_count {
+                            rects += count_glyph_runs(atlas.glyph_rows(gid), bpr, cw, ch);
+                        }
+                    }
+                    if rects > 0 {
+                        let bytes = rects * 2 * core::mem::size_of::<VertC>();
+                        let verts = pool_alloc(bytes) as *mut VertC;
+                        let mut vi = 0usize;
+                        // Pass 2: emit the runs.
+                        for g in 0..count {
+                            let (gx, gy) = xy(words[body + g * 2]);
+                            let gid = (words[body + g * 2 + 1] & 0xffff) as u16;
+                            if gid >= atlas.glyph_count {
+                                continue;
+                            }
+                            let rows = atlas.glyph_rows(gid);
+                            for y in 0..ch {
+                                let row = &rows[y * bpr..y * bpr + bpr];
+                                let mut x = 0usize;
+                                while x < cw {
+                                    if row[x >> 3] & (0x80 >> (x & 7)) == 0 {
+                                        x += 1;
+                                        continue;
+                                    }
+                                    let start = x;
+                                    while x < cw && row[x >> 3] & (0x80 >> (x & 7)) != 0 {
+                                        x += 1;
+                                    }
+                                    let rx = gx as i32 + start as i32;
+                                    let ry = gy as i32 + y as i32;
+                                    *verts.add(vi) =
+                                        VertC { color, x: rx as i16, y: ry as i16, z: 0, _pad: 0 };
+                                    *verts.add(vi + 1) = VertC {
+                                        color,
+                                        x: (rx + (x - start) as i32) as i16,
+                                        y: (ry + 1) as i16,
+                                        z: 0,
+                                        _pad: 0,
+                                    };
+                                    vi += 2;
+                                }
+                            }
+                        }
+                        flush(GuPrimitive::Sprites, VTYPE_C, vi as i32, verts as *const c_void, bytes);
+                    }
+                }
+                i = next;
+            }
+            spec::draw_op::TEX_QUAD if i + 9 <= n => {
+                let handle = words[i + 1] as i32;
+                let (x, y) = xy(words[i + 2]);
+                let (w, h) = wh(words[i + 3]);
+                let u0 = f32::from_bits(words[i + 4]);
+                let v0 = f32::from_bits(words[i + 5]);
+                let u1 = f32::from_bits(words[i + 6]);
+                let v1 = f32::from_bits(words[i + 7]);
+                let color = words[i + 8];
+                if let Some((pixels, tw, th, psm)) = ui.texture(handle) {
+                    apply_texture(pixels, tw, th, psm);
+                    // TRANSFORM_2D UVs are TEXELS (see module docs): scale the
+                    // normalized DrawList UVs by the texture dimensions.
+                    let bytes = 2 * core::mem::size_of::<VertTC>();
+                    let verts = pool_alloc(bytes) as *mut VertTC;
+                    *verts.add(0) = VertTC {
+                        u: (u0 * tw as f32) as i16,
+                        v: (v0 * th as f32) as i16,
+                        color,
+                        x,
+                        y,
+                        z: 0,
+                        _pad: 0,
+                    };
+                    *verts.add(1) = VertTC {
+                        u: (u1 * tw as f32) as i16,
+                        v: (v1 * th as f32) as i16,
+                        color,
+                        x: (x as i32 + w) as i16,
+                        y: (y as i32 + h) as i16,
+                        z: 0,
+                        _pad: 0,
+                    };
+                    flush(GuPrimitive::Sprites, VTYPE_TC, 2, verts as *const c_void, bytes);
+                    sys::sceGuDisable(GuState::Texture2D);
+                }
+                i += 9;
+            }
+            spec::draw_op::SCISSOR if i + 3 <= n => {
+                let (x, y) = xy(words[i + 1]);
+                let (w, h) = wh(words[i + 2]);
+                scissors.push((x as i32, y as i32, w, h));
+                sys::sceGuScissor(x as i32, y as i32, w, h);
+                i += 3;
+            }
+            spec::draw_op::SCISSOR_POP => {
+                scissors.pop();
+                match scissors.last() {
+                    Some(&(x, y, w, h)) => sys::sceGuScissor(x, y, w, h),
+                    None => sys::sceGuScissor(0, 0, SCREEN_WIDTH as i32, SCREEN_HEIGHT as i32),
+                }
+                i += 1;
+            }
+            _ => break, // unknown/truncated op: stop rather than desync
+        }
+    }
+
+    // Pass-boundary state reset (sticky GE state).
+    sys::sceGuDisable(GuState::Blend);
+    sys::sceGuDisable(GuState::Texture2D);
+    sys::sceGuScissor(0, 0, SCREEN_WIDTH as i32, SCREEN_HEIGHT as i32);
+}

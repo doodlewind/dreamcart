@@ -1,0 +1,261 @@
+// scripts/build.ts <app> — the TWO-PASS app build (DESIGN.md "Build pipeline").
+//
+//   bun scripts/build.ts demos/hero.tsx        (or just `hero`)
+//
+// pass 1  transform & collect: babel (solid universal + TS) over every
+//         .tsx/.ts reachable from the app entry (content-hash cached),
+//         collecting candidate class strings + text codepoints from the AST.
+// compile tailwind.ts -> styles.bin + src/styles.generated.ts;
+//         bake-font.ts -> font atlas per used slot; demo images (PNG or a
+//         placeholder); dcpak.ts packs it all -> dist/<app>.dcpak.
+// pass 2  Bun.build (plugin serves the CACHED pass-1 transforms, iife,
+//         target browser, minify false) -> dist/<app>.js.
+//
+// Flags: --extra-chars=<string> forces extra codepoints into every atlas.
+
+import { existsSync, statSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
+import { PSM } from "../spec/spec.ts";
+import { RENDERER_PATH, solidUniversalPlugin, transformFile } from "../compiler/solid-plugin.ts";
+import { compileClasses, generateStylesModule } from "../compiler/tailwind.ts";
+import { bakeAtlases } from "../compiler/bake-font.ts";
+import {
+  DCPAK_DTYPE,
+  KEY_STYLES,
+  decodePng,
+  encodeImageEntry,
+  keyFont,
+  keyImage,
+  pack,
+  placeholderImage,
+  type PakBlob,
+} from "../compiler/dcpak.ts";
+
+const ROOT = new URL("..", import.meta.url).pathname; // psp-ui/
+const DIST = ROOT + "dist/";
+
+// ---------------------------------------------------------------------------
+// CLI
+// ---------------------------------------------------------------------------
+
+const args = process.argv.slice(2);
+let extraChars = "";
+let appArg = "";
+for (const a of args) {
+  if (a.startsWith("--extra-chars=")) extraChars = a.slice("--extra-chars=".length);
+  else if (!a.startsWith("-")) appArg = a;
+}
+if (!appArg) {
+  console.error("usage: bun scripts/build.ts <app.tsx | app name> [--extra-chars=...]");
+  process.exit(1);
+}
+
+function resolveEntry(arg: string): string {
+  const tries = [
+    resolvePath(arg),
+    resolvePath(ROOT, arg),
+    resolvePath(ROOT, "demos", arg),
+    resolvePath(ROOT, "demos", arg + ".tsx"),
+    resolvePath(ROOT, "demos", arg + ".ts"),
+  ];
+  for (const t of tries) {
+    if (/\.tsx?$/.test(t) && existsSync(t) && statSync(t).isFile()) return t;
+  }
+  console.error(`psp-ui build: cannot resolve app "${arg}" (tried:\n  ${tries.join("\n  ")})`);
+  process.exit(1);
+}
+
+const entry = resolveEntry(appArg);
+const appName = entry.split("/").pop()!.replace(/\.tsx?$/, "");
+console.log(`psp-ui build: ${appName} (${entry})`);
+
+// ---------------------------------------------------------------------------
+// pass 1 — transform & collect over the entry's import graph
+// ---------------------------------------------------------------------------
+
+/** Extract import/re-export specifiers (our own code style — no dynamic import). */
+function importSpecifiers(src: string): string[] {
+  const out: string[] = [];
+  const re = /(?:^|\n)\s*(?:import|export)\b[^;'"]*?from\s*(["'])([^"']+)\1|(?:^|\n)\s*import\s*(["'])([^"']+)\3/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) out.push(m[2] ?? m[4]);
+  return out;
+}
+
+/** Resolve a relative import the SAME way pass 2's Bun.build does (extension
+ *  remapping like `./card.js` -> card.tsx included), so the two passes agree
+ *  on the module graph by construction. */
+function resolveImport(fromFile: string, spec: string): string | null {
+  if (!spec.startsWith("./") && !spec.startsWith("../") && !spec.startsWith("/")) return null; // bare
+  let resolved: string;
+  try {
+    resolved = Bun.resolveSync(spec, fromFile.slice(0, fromFile.lastIndexOf("/")));
+  } catch {
+    return null;
+  }
+  return /\.tsx?$/.test(resolved) && !resolved.endsWith(".d.ts") ? resolved : null;
+}
+
+const classStrings: string[] = [];
+const seenClass = new Set<string>();
+const codepoints = new Set<number>();
+const visited = new Set<string>();
+
+async function walk(file: string): Promise<void> {
+  if (visited.has(file)) return;
+  visited.add(file);
+  if (file.endsWith(".generated.ts")) return; // never scan generated output [R]
+  const src = await Bun.file(file).text();
+  const res = await transformFile(file, src); // throws with code frame on lint errors
+  for (const s of res.classStrings) {
+    if (!seenClass.has(s)) {
+      seenClass.add(s);
+      classStrings.push(s);
+    }
+  }
+  for (const cp of res.textCodepoints) codepoints.add(cp);
+  for (const spec of importSpecifiers(src)) {
+    const dep = resolveImport(file, spec);
+    if (dep) await walk(dep);
+  }
+}
+
+await walk(entry);
+console.log(`  pass 1: ${visited.size} module(s), ${classStrings.length} candidate literal(s), ${codepoints.size} codepoint(s)`);
+
+// ---------------------------------------------------------------------------
+// compile styles + fonts + images
+// ---------------------------------------------------------------------------
+
+const styles = compileClasses(classStrings);
+if (styles.records.length === 0) {
+  console.warn("  tailwind: no class literals compiled — is the app unstyled?");
+}
+const generatedPath = ROOT + "src/styles.generated.ts";
+await Bun.write(generatedPath, generateStylesModule(styles));
+console.log(`  tailwind: ${styles.records.length} style record(s), ${Object.keys(styles.ids).length} literal(s) -> src/styles.generated.ts`);
+
+const atlases = await bakeAtlases({
+  codepoints,
+  slots: styles.usedFontSlots,
+  extraChars,
+});
+for (const a of atlases) {
+  console.log(
+    `  font: slot ${a.slot} (${a.px}px${a.bold ? " bold" : ""}) ${a.glyphCount} glyphs, cell ${a.cellW}x${a.cellH}, ${a.bytes.length} bytes`,
+  );
+}
+
+// demo images: any collected literal ending .png is a candidate asset name
+const blobs: PakBlob[] = [
+  { key: KEY_STYLES, dtype: DCPAK_DTYPE.u8, data: styles.bin },
+  ...atlases.map((a) => ({ key: keyFont(a.slot), dtype: DCPAK_DTYPE.u8, data: a.bytes })),
+];
+const appDir = entry.slice(0, entry.lastIndexOf("/") + 1);
+const imageNames = classStrings.filter((s) => /^[\w./-]+\.png$/i.test(s));
+for (const name of imageNames) {
+  const candidates = [appDir + name, ROOT + "assets/images/" + name, ROOT + "assets/" + name];
+  const found = candidates.find((c) => existsSync(c));
+  let img;
+  if (found) {
+    img = decodePng(new Uint8Array(await Bun.file(found).arrayBuffer()));
+    console.log(`  image: ${name} <- ${found} (${img.width}x${img.height})`);
+  } else {
+    img = placeholderImage();
+    console.log(`  image: ${name} not found (tried ${candidates.join(", ")}) — baking a 32x32 placeholder`);
+  }
+  blobs.push({ key: keyImage(name), dtype: DCPAK_DTYPE.u8, data: encodeImageEntry(img, PSM.PSM_8888) });
+}
+
+const pak = pack(blobs);
+await Bun.write(DIST + appName + ".dcpak", pak);
+console.log(`  dcpak: ${blobs.length} entries, ${pak.length} bytes -> dist/${appName}.dcpak`);
+
+// ---------------------------------------------------------------------------
+// pass 2 — bundle (served from the pass-1 cache)
+// ---------------------------------------------------------------------------
+
+// src/renderer.ts is owned by the js-runtime phase; if it does not exist yet,
+// drop in the no-op placeholder so the bundle links (see DESIGN.md).
+if (!existsSync(RENDERER_PATH)) {
+  await Bun.write(RENDERER_PATH, placeholderRenderer());
+  console.warn("  pass 2: src/renderer.ts missing — wrote the no-op placeholder (js-runtime phase owns the real one)");
+}
+
+const result = await Bun.build({
+  entrypoints: [entry],
+  outdir: DIST,
+  naming: `${appName}.js`,
+  format: "iife",
+  target: "browser",
+  // solid-js MUST resolve via its "browser" export condition — the "node"
+  // condition serves dist/server.js (SSR build) where reactive updates
+  // silently no-op. See test/renderer.test.ts for the fail-fast guard.
+  conditions: ["browser"],
+  minify: false,
+  sourcemap: "none",
+  plugins: [solidUniversalPlugin()],
+});
+if (!result.success) {
+  for (const log of result.logs) console.error(log);
+  console.error("psp-ui build: pass 2 bundling failed");
+  process.exit(1);
+}
+const bundle = result.outputs.find((o) => o.path.endsWith(".js"));
+console.log(`  pass 2: dist/${appName}.js (${bundle ? (await bundle.arrayBuffer()).byteLength : 0} bytes)`);
+console.log("psp-ui build: done");
+
+// ---------------------------------------------------------------------------
+
+// Keep in sync with DESIGN.md's universal-renderer surface. This is ONLY a
+// link-time stub for builds that run before the js-runtime phase lands.
+function placeholderRenderer(): string {
+  return `\
+// placeholder, impl:js-runtime owns this — written by scripts/build.ts so
+// pass-2 bundling links before src/renderer.ts is implemented. Every export
+// is the no-op shape of Solid's universal-renderer output (createRenderer).
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
+type Node = { type?: string; text?: string; children: Node[]; props: Record<string, unknown> };
+
+const node = (type?: string, text?: string): Node => ({ type, text, children: [], props: {} });
+
+export function render(code: () => unknown, _root?: unknown): () => void {
+  code();
+  return () => {};
+}
+export function effect<T>(fn: (prev?: T) => T, init?: T): void {
+  fn(init);
+}
+export function memo<T>(fn: () => T): () => T {
+  return fn;
+}
+export function createComponent(Comp: (props: unknown) => unknown, props: unknown): unknown {
+  return Comp(props);
+}
+export function createElement(type: string): Node {
+  return node(type);
+}
+export function createTextNode(value: string): Node {
+  return node(undefined, value);
+}
+export function replaceText(n: Node, value: string): void {
+  n.text = value;
+}
+export function insertNode(parent: Node, n: Node, _anchor?: Node): void {
+  parent.children.push(n);
+}
+export function insert(_parent: Node, _accessor: unknown, _marker?: Node | null): void {}
+export function spread(_n: Node, _props: unknown, _skipChildren?: boolean): void {}
+export function setProp(n: Node, name: string, value: unknown, _prev?: unknown): unknown {
+  n.props[name] = value;
+  return value;
+}
+export function mergeProps(...sources: unknown[]): unknown {
+  return Object.assign({}, ...sources);
+}
+export function use(fn: (el: Node) => void, el: Node): void {
+  fn(el);
+}
+`;
+}

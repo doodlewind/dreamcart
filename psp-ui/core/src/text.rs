@@ -1,0 +1,280 @@
+//! Font atlas registry + text measurement + inline-run layout.
+//!
+//! Parses font-atlas blobs (spec.ts "FONT ATLAS binary format", constants in
+//! spec::font_atlas) into a MAX_FONT_SLOTS registry. cmap lookups binary
+//! search (entries are sorted ascending by codepoint); a miss resolves to
+//! gid 0 (the tofu box) and bumps the per-core miss counter.
+//!
+//! v1 line model (documented limitation): NO automatic word wrap — a run
+//! breaks only on explicit '\n'. Measurement is the max line width (sum of
+//! advances + tracking per glyph) by lines x line height.
+
+use alloc::vec::Vec;
+use core::cell::Cell;
+
+use crate::spec;
+
+#[inline]
+fn rd_u16(b: &[u8], off: usize) -> Option<u16> {
+    Some(u16::from_le_bytes([*b.get(off)?, *b.get(off + 1)?]))
+}
+
+#[inline]
+fn rd_u32(b: &[u8], off: usize) -> Option<u32> {
+    Some(u32::from_le_bytes([
+        *b.get(off)?,
+        *b.get(off + 1)?,
+        *b.get(off + 2)?,
+        *b.get(off + 3)?,
+    ]))
+}
+
+/// One cmap entry (sorted ascending by codepoint in the blob).
+#[derive(Clone, Copy, Debug)]
+pub struct CmapEntry {
+    pub codepoint: u32,
+    pub gid: u16,
+    pub advance: u8,
+    /// Left-side-bearing shift (cmap byte +7): px the outline was shifted
+    /// RIGHT at bake so negative-LSB ink stays inside the cell. The cell is
+    /// placed at penX - xoff when drawing.
+    pub xoff: u8,
+}
+
+/// One parsed font atlas (a (family-weight, px) bake bound to a slot).
+pub struct Atlas {
+    pub cell_w: u32,
+    pub cell_h: u32,
+    /// px from cell top to the baseline.
+    pub baseline: u32,
+    /// Default line advance in px.
+    pub line_height: u32,
+    pub slot: u8,
+    pub flags: u8,
+    pub glyph_count: u16,
+    cmap: Vec<CmapEntry>,
+    /// 1-bit row bitmasks: glyphCount x cellH x bytesPerRow, MSB = leftmost.
+    pub bitmap: Vec<u8>,
+}
+
+impl Atlas {
+    /// Parse a font-atlas blob (copies the bytes it keeps). `None` on bad
+    /// magic/version/slot or truncation.
+    pub fn parse(bytes: &[u8]) -> Option<Atlas> {
+        use spec::font_atlas as fa;
+        if rd_u32(bytes, 0)? != fa::MAGIC || rd_u16(bytes, 4)? != fa::VERSION {
+            return None;
+        }
+        let glyph_count = rd_u16(bytes, 6)?;
+        let cell_w = *bytes.get(8)? as u32;
+        let cell_h = *bytes.get(9)? as u32;
+        let baseline = *bytes.get(10)? as u32;
+        let line_height = *bytes.get(11)? as u32;
+        let slot = *bytes.get(12)?;
+        let flags = *bytes.get(13)?;
+        if slot as usize >= spec::MAX_FONT_SLOTS || glyph_count == 0 || cell_w == 0 || cell_h == 0 {
+            return None;
+        }
+        let cmap_off = fa::HEADER_SIZE;
+        let bitmap_off = cmap_off + glyph_count as usize * fa::CMAP_ENTRY_SIZE;
+        let bytes_per_row = (cell_w as usize + 7) / 8;
+        let bitmap_len = glyph_count as usize * cell_h as usize * bytes_per_row;
+        if bytes.len() < bitmap_off + bitmap_len {
+            return None;
+        }
+        let mut cmap = Vec::with_capacity(glyph_count as usize);
+        for i in 0..glyph_count as usize {
+            let o = cmap_off + i * fa::CMAP_ENTRY_SIZE;
+            let gid = rd_u16(bytes, o + 4)?;
+            if gid >= glyph_count {
+                return None;
+            }
+            cmap.push(CmapEntry {
+                codepoint: rd_u32(bytes, o)?,
+                gid,
+                advance: *bytes.get(o + 6)?,
+                xoff: *bytes.get(o + 7)?,
+            });
+        }
+        let mut bitmap = Vec::with_capacity(bitmap_len);
+        bitmap.extend_from_slice(&bytes[bitmap_off..bitmap_off + bitmap_len]);
+        Some(Atlas {
+            cell_w,
+            cell_h,
+            baseline,
+            line_height,
+            slot,
+            flags,
+            glyph_count,
+            cmap,
+            bitmap,
+        })
+    }
+
+    /// Binary-search the cmap. `None` = unmapped codepoint (caller decides
+    /// whether that bumps the miss counter).
+    pub fn lookup(&self, codepoint: u32) -> Option<(u16, u8)> {
+        self.lookup_entry(codepoint).map(|e| (e.gid, e.advance))
+    }
+
+    /// Full cmap entry for a codepoint (gid + advance + xoff).
+    pub fn lookup_entry(&self, codepoint: u32) -> Option<&CmapEntry> {
+        self.cmap
+            .binary_search_by(|e| e.codepoint.cmp(&codepoint))
+            .ok()
+            .map(|i| &self.cmap[i])
+    }
+
+    #[inline]
+    pub fn bytes_per_row(&self) -> usize {
+        (self.cell_w as usize + 7) / 8
+    }
+
+    /// The row-bitmask bytes of one glyph (top row first).
+    pub fn glyph_rows(&self, gid: u16) -> &[u8] {
+        let per_glyph = self.cell_h as usize * self.bytes_per_row();
+        let start = gid as usize * per_glyph;
+        &self.bitmap[start..start + per_glyph]
+    }
+}
+
+/// A placed glyph from inline-run layout: cell top-left relative to the box
+/// origin.
+#[derive(Clone, Copy, Debug)]
+pub struct GlyphPos {
+    pub gid: u16,
+    pub x: f32,
+    pub y: f32,
+}
+
+/// The per-core atlas registry.
+pub struct Fonts {
+    slots: [Option<Atlas>; spec::MAX_FONT_SLOTS],
+    /// cmap-miss counter (Cell: measurement is `&self` per the pinned `Ui`
+    /// signature but a miss must still count).
+    pub misses: Cell<u32>,
+}
+
+impl Default for Fonts {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Fonts {
+    pub fn new() -> Fonts {
+        Fonts {
+            slots: Default::default(),
+            misses: Cell::new(0),
+        }
+    }
+
+    /// Parse + register an atlas at the slot in its header.
+    pub fn load(&mut self, bytes: &[u8]) -> bool {
+        match Atlas::parse(bytes) {
+            Some(a) => {
+                let slot = a.slot as usize;
+                self.slots[slot] = Some(a);
+                true
+            }
+            None => false,
+        }
+    }
+
+    #[inline]
+    pub fn atlas(&self, slot: u8) -> Option<&Atlas> {
+        self.slots.get(slot as usize)?.as_ref()
+    }
+
+    /// (gid, advance, xoff) for a codepoint; a miss resolves to gid 0 (tofu,
+    /// cell width advance) and bumps the miss counter.
+    fn glyph(&self, atlas: &Atlas, cp: u32) -> (u16, f32, f32) {
+        match atlas.lookup_entry(cp) {
+            Some(e) => (e.gid, e.advance as f32, e.xoff as f32),
+            None => {
+                self.misses.set(self.misses.get().wrapping_add(1));
+                (0, atlas.cell_w as f32, 0.0)
+            }
+        }
+    }
+
+    /// Measure a run: (max line width, line count x line height). Empty text
+    /// or an unregistered slot measures (0, 0).
+    pub fn measure_run(&self, text: &str, slot: u8, tracking: f32, line_h_override: f32) -> (f32, f32) {
+        let Some(atlas) = self.atlas(slot) else { return (0.0, 0.0) };
+        if text.is_empty() {
+            return (0.0, 0.0);
+        }
+        let lh = if line_h_override.is_nan() {
+            atlas.line_height as f32
+        } else {
+            line_h_override
+        };
+        let mut max_w = 0.0f32;
+        let mut line_w = 0.0f32;
+        let mut lines = 1u32;
+        for ch in text.chars() {
+            if ch == '\n' {
+                max_w = max_w.max(line_w);
+                line_w = 0.0;
+                lines += 1;
+                continue;
+            }
+            let (_, adv, _) = self.glyph(atlas, ch as u32);
+            line_w += adv + tracking;
+        }
+        max_w = max_w.max(line_w);
+        (max_w, lines as f32 * lh)
+    }
+
+    /// Inline-run layout: place every glyph (cell top-left, relative to the
+    /// box origin) honoring text-align within `box_w` and per-line vertical
+    /// centering of the glyph cell inside the line box.
+    pub fn layout_run(
+        &self,
+        text: &str,
+        slot: u8,
+        tracking: f32,
+        line_h_override: f32,
+        align: u8,
+        box_w: f32,
+        out: &mut Vec<GlyphPos>,
+    ) {
+        let Some(atlas) = self.atlas(slot) else { return };
+        if text.is_empty() {
+            return;
+        }
+        let lh = if line_h_override.is_nan() {
+            atlas.line_height as f32
+        } else {
+            line_h_override
+        };
+        let cell_h = atlas.cell_h as f32;
+        let mut line_top = 0.0f32;
+        for line in text.split('\n') {
+            // Single glyph pass per line (so cmap misses count once): place
+            // at pen-from-0, then shift the whole line by the align offset.
+            let line_start = out.len();
+            let mut pen = 0.0f32;
+            let y = line_top + (lh - cell_h) * 0.5;
+            for ch in line.chars() {
+                let (gid, adv, xoff) = self.glyph(atlas, ch as u32);
+                // The cell holds the outline shifted right by xoff (negative
+                // LSB accents) — place it at pen - xoff so ink lands at pen.
+                out.push(GlyphPos { gid, x: pen - xoff, y });
+                pen += adv + tracking;
+            }
+            let offset = match align {
+                a if a == spec::TextAlign::Center as u8 => (box_w - pen) * 0.5,
+                a if a == spec::TextAlign::Right as u8 => box_w - pen,
+                _ => 0.0,
+            };
+            if offset != 0.0 {
+                for g in &mut out[line_start..] {
+                    g.x += offset;
+                }
+            }
+            line_top += lh;
+        }
+    }
+}

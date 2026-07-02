@@ -1,0 +1,675 @@
+//! Tree walk -> DrawList + the CPU CLIP STAGE [R].
+//!
+//! Word/byte layout is pinned in spec/spec.ts ("DRAWLIST op format"); op
+//! codes in spec::draw_op. GUARANTEE upheld here: every coordinate emitted is
+//! inside [0, SCREEN_W] x [0, SCREEN_H] — never negative, never off-screen —
+//! because the PSP GE wraps i16 coordinates. Clipping re-interpolates UVs
+//! (TEX_QUAD) and gradient endpoint colors (GRAD_RECT).
+//!
+//! Transforms (translate/scale/rotate) compose down the walk as 2D affines.
+//! Axis-aligned content uses RECT/GRAD_RECT/TEX_QUAD; ROTATED solid/gradient
+//! boxes are corner-transformed, Sutherland-Hodgman-clipped and emitted as
+//! TRI ops. v1 degradations (documented):
+//!   - rotated IMAGE quads are conservatively culled (no textured-tri op);
+//!   - glyph cells position along the rotated/scaled frame but stay upright
+//!     and unscaled (bitmap cells); glyphs whose cell top-left leaves the
+//!     screen range or whose cell leaves the clip rect are dropped;
+//!   - rounded corners and shadows need pre-baked atlas textures which no
+//!     host registers yet, so `radius`/`shadow` are skipped gracefully
+//!     (backgrounds draw square, shadows don't draw) rather than emitting
+//!     TexQuads against unregistered atlas handles;
+//!   - opacity multiplies vertex alpha down the subtree (wrong on overlap,
+//!     per DESIGN.md punt list).
+
+use alloc::vec::Vec;
+
+use crate::layout::{floorf, roundf};
+use crate::spec;
+use crate::style::{self, StyleTable, NO_GRADIENT};
+use crate::text::Fonts;
+use crate::tree::Tree;
+
+/// The core -> backend command list: flat little-endian u32 words.
+/// Format pinned in spec/spec.ts ("DRAWLIST op format"); op codes in
+/// spec::draw_op. On wasm the host reads this as a Uint32Array; on PSP,
+/// native/src/ge.rs walks it into sceGu calls.
+pub struct DrawList {
+    pub words: Vec<u32>,
+}
+
+impl DrawList {
+    pub fn new() -> Self {
+        DrawList { words: Vec::new() }
+    }
+}
+
+impl Default for DrawList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ---- small math (no_std: no libm, no micromath — local polyfills) -----------
+
+const SCREEN_W: f32 = spec::SCREEN_W as f32;
+const SCREEN_H: f32 = spec::SCREEN_H as f32;
+const PI: f32 = core::f32::consts::PI;
+
+#[inline]
+fn clampf(x: f32, lo: f32, hi: f32) -> f32 {
+    if x < lo {
+        lo
+    } else if x > hi {
+        hi
+    } else {
+        x
+    }
+}
+
+/// sin for rotate: range-reduce to [-pi/2, pi/2], 5-term Taylor (max error
+/// well under a hundredth of a pixel at screen scale). Deterministic f32.
+fn sinf(x: f32) -> f32 {
+    // reduce to [-pi, pi]
+    let mut r = x - (2.0 * PI) * floorf((x + PI) / (2.0 * PI));
+    // fold into [-pi/2, pi/2]
+    if r > PI / 2.0 {
+        r = PI - r;
+    } else if r < -PI / 2.0 {
+        r = -PI - r;
+    }
+    let x2 = r * r;
+    r * (1.0 + x2 * (-1.0 / 6.0 + x2 * (1.0 / 120.0 + x2 * (-1.0 / 5040.0 + x2 * (1.0 / 362880.0)))))
+}
+
+#[inline]
+fn cosf(x: f32) -> f32 {
+    sinf(x + PI / 2.0)
+}
+
+/// Row-major 2D affine: p' = (a*x + c*y + tx, b*x + d*y + ty).
+#[derive(Clone, Copy, Debug)]
+pub struct Affine {
+    pub a: f32,
+    pub b: f32,
+    pub c: f32,
+    pub d: f32,
+    pub tx: f32,
+    pub ty: f32,
+}
+
+impl Affine {
+    pub const IDENTITY: Affine = Affine { a: 1.0, b: 0.0, c: 0.0, d: 1.0, tx: 0.0, ty: 0.0 };
+
+    #[inline]
+    fn translate(tx: f32, ty: f32) -> Affine {
+        Affine { tx, ty, ..Affine::IDENTITY }
+    }
+
+    /// self ∘ other (apply `other` first, then `self`).
+    fn then(&self, o: &Affine) -> Affine {
+        Affine {
+            a: self.a * o.a + self.c * o.b,
+            b: self.b * o.a + self.d * o.b,
+            c: self.a * o.c + self.c * o.d,
+            d: self.b * o.c + self.d * o.d,
+            tx: self.a * o.tx + self.c * o.ty + self.tx,
+            ty: self.b * o.tx + self.d * o.ty + self.ty,
+        }
+    }
+
+    #[inline]
+    fn apply(&self, x: f32, y: f32) -> (f32, f32) {
+        (self.a * x + self.c * y + self.tx, self.b * x + self.d * y + self.ty)
+    }
+
+    /// True when the transform maps axis-aligned rects to axis-aligned,
+    /// non-mirrored rects.
+    #[inline]
+    fn is_axis_aligned(&self) -> bool {
+        self.b == 0.0 && self.c == 0.0 && self.a > 0.0 && self.d > 0.0
+    }
+}
+
+/// Screen-space clip rect (x0 <= x1, y0 <= y1), f32 but integer-valued.
+#[derive(Clone, Copy, Debug)]
+struct Clip {
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+}
+
+impl Clip {
+    const SCREEN: Clip = Clip { x0: 0.0, y0: 0.0, x1: SCREEN_W, y1: SCREEN_H };
+
+    fn intersect(&self, o: &Clip) -> Clip {
+        Clip {
+            x0: self.x0.max(o.x0),
+            y0: self.y0.max(o.y0),
+            x1: self.x1.min(o.x1),
+            y1: self.y1.min(o.y1),
+        }
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.x1 <= self.x0 || self.y1 <= self.y0
+    }
+}
+
+// ---- word packing -------------------------------------------------------------
+
+#[inline]
+fn xy_word(x: f32, y: f32) -> u32 {
+    let xi = roundf(x) as i32 as i16 as u16 as u32;
+    let yi = roundf(y) as i32 as i16 as u16 as u32;
+    xi | (yi << 16)
+}
+
+#[inline]
+fn wh_word(w: f32, h: f32) -> u32 {
+    let wi = roundf(w) as i32 as u16 as u32;
+    let hi = roundf(h) as i32 as u16 as u32;
+    wi | (hi << 16)
+}
+
+/// Multiply a packed ABGR color's alpha by `opacity` (0..1).
+fn scale_alpha(color: u32, opacity: f32) -> u32 {
+    if opacity >= 1.0 {
+        return color;
+    }
+    let a = ((color >> 24) & 0xff) as f32 * clampf(opacity, 0.0, 1.0);
+    (color & 0x00ff_ffff) | ((((a + 0.5) as u32) & 0xff) << 24)
+}
+
+#[inline]
+fn alpha(color: u32) -> u32 {
+    color >> 24
+}
+
+// ---- fills ---------------------------------------------------------------------
+
+#[derive(Clone, Copy)]
+enum Fill {
+    Flat(u32),
+    /// from/to already opacity-scaled; dir = spec::GradDir ordinal.
+    Grad { from: u32, to: u32, dir: u32 },
+}
+
+/// Color of a local-rect corner under a fill. Corner order: 0 TL, 1 TR,
+/// 2 BR, 3 BL.
+fn corner_color(fill: &Fill, corner: usize) -> u32 {
+    match *fill {
+        Fill::Flat(c) => c,
+        Fill::Grad { from, to, dir } => {
+            let at_from = match dir {
+                d if d == spec::GradDir::ToTop as u32 => corner == 2 || corner == 3, // from at bottom
+                d if d == spec::GradDir::ToLeft as u32 => corner == 1 || corner == 2, // from at right
+                d if d == spec::GradDir::ToRight as u32 => corner == 0 || corner == 3, // from at left
+                _ => corner == 0 || corner == 1, // ToBottom: from at top
+            };
+            if at_from {
+                from
+            } else {
+                to
+            }
+        }
+    }
+}
+
+fn lerp_color(a: u32, b: u32, f: f32) -> u32 {
+    crate::anim::interp(a, b, f, true)
+}
+
+// ---- the walker ------------------------------------------------------------------
+
+struct Walker<'a> {
+    tree: &'a Tree,
+    styles: &'a StyleTable,
+    fonts: &'a Fonts,
+    glyph_scratch: Vec<crate::text::GlyphPos>,
+}
+
+/// Build the full DrawList for the current (laid-out) tree.
+pub fn build(tree: &Tree, styles: &StyleTable, fonts: &Fonts, dl: &mut DrawList) {
+    dl.words.clear();
+    let mut w = Walker { tree, styles, fonts, glyph_scratch: Vec::new() };
+    let root_slot = crate::tree::split_id(spec::ROOT_ID).1;
+    w.paint(root_slot, Affine::IDENTITY, 1.0, Clip::SCREEN, dl);
+}
+
+impl<'a> Walker<'a> {
+    fn paint(&mut self, slot: u32, parent_world: Affine, opacity: f32, clip: Clip, dl: &mut DrawList) {
+        let node = &self.tree.slots[slot as usize];
+        let r = style::resolve(node, self.styles, true);
+        if r.display == spec::Display::None as u8 {
+            return;
+        }
+        let l = node.layout;
+        // Local frame: layout position + translate, then rotate/scale about
+        // the node center.
+        let mut local = Affine::translate(l.x + r.translate_x, l.y + r.translate_y);
+        if r.rotate != 0.0 || r.scale != 1.0 {
+            let (cx, cy) = (l.w * 0.5, l.h * 0.5);
+            let rad = r.rotate * (PI / 180.0);
+            // rotate == 0 keeps EXACT axis alignment (the trig polyfill is a
+            // few ulp off at multiples of pi/2, which would silently demote
+            // scale-only transforms to the TRI path).
+            let (s, c) = if r.rotate == 0.0 { (0.0, 1.0) } else { (sinf(rad), cosf(rad)) };
+            let sc = r.scale;
+            // translate(c) * rotate * scale * translate(-c)
+            let m = Affine {
+                a: c * sc,
+                b: s * sc,
+                c: -s * sc,
+                d: c * sc,
+                tx: cx - (c * sc * cx - s * sc * cy),
+                ty: cy - (s * sc * cx + c * sc * cy),
+            };
+            local = local.then(&m);
+        }
+        let world = parent_world.then(&local);
+        let op = clampf(opacity * r.opacity, 0.0, 1.0);
+        if op <= 0.0 {
+            return;
+        }
+
+        // -- background (rect / gradrect; `radius`/`shadow` skipped: no baked
+        //    corner/shadow atlases are registered by any v1 host) ------------
+        let has_grad = r.grad_dir != NO_GRADIENT && r.grad_dir <= spec::GradDir::ToRight as u32;
+        if has_grad {
+            let fill = Fill::Grad {
+                from: scale_alpha(r.grad_from, op),
+                to: scale_alpha(r.grad_to, op),
+                dir: r.grad_dir,
+            };
+            self.emit_box(dl, &world, 0.0, 0.0, l.w, l.h, fill, &clip);
+        } else if alpha(scale_alpha(r.bg_color, op)) > 0 {
+            self.emit_box(dl, &world, 0.0, 0.0, l.w, l.h, Fill::Flat(scale_alpha(r.bg_color, op)), &clip);
+        }
+
+        // -- border: 4 inset strips ------------------------------------------
+        let bw = r.border_width;
+        if bw > 0.0 && alpha(scale_alpha(r.border_color, op)) > 0 {
+            let bc = Fill::Flat(scale_alpha(r.border_color, op));
+            let bwx = bw.min(l.w * 0.5);
+            let bwy = bw.min(l.h * 0.5);
+            self.emit_box(dl, &world, 0.0, 0.0, l.w, bwy, bc, &clip); // top
+            self.emit_box(dl, &world, 0.0, l.h - bwy, l.w, l.h, bc, &clip); // bottom
+            self.emit_box(dl, &world, 0.0, bwy, bwx, l.h - bwy, bc, &clip); // left
+            self.emit_box(dl, &world, l.w - bwx, bwy, l.w, l.h - bwy, bc, &clip); // right
+        }
+
+        // -- text run ----------------------------------------------------------
+        if node.node_type == spec::NodeType::Text as u8 {
+            self.emit_text(dl, node, &r, &world, op, &clip, l.w);
+            // Text children are absorbed into the run — do not recurse.
+            return;
+        }
+
+        // -- image --------------------------------------------------------------
+        if node.node_type == spec::NodeType::Image as u8 && node.tex >= 0 {
+            self.emit_tex_quad(dl, &world, l.w, l.h, node.tex as u32, op, &clip);
+        }
+
+        // -- children (overflow-hidden scissor around them; z-index stable
+        //    sort within siblings) ---------------------------------------------
+        let mut child_clip = clip;
+        let mut scissored = false;
+        if r.overflow == spec::Overflow::Hidden as u8 {
+            // Scissor rects are axis-aligned: rotated clip boxes use the AABB
+            // of the transformed rect (conservative).
+            let rect = self.world_aabb(&world, l.w, l.h);
+            child_clip = clip.intersect(&rect);
+            if child_clip.is_empty() {
+                return; // nothing of the subtree can be visible
+            }
+            dl.words.push(spec::draw_op::SCISSOR);
+            dl.words.push(xy_word(child_clip.x0, child_clip.y0));
+            dl.words.push(wh_word(child_clip.x1 - child_clip.x0, child_clip.y1 - child_clip.y0));
+            scissored = true;
+        }
+
+        let node = &self.tree.slots[slot as usize];
+        let mut order: Vec<(i32, u32)> = Vec::with_capacity(node.children.len());
+        for &cid in &node.children {
+            if let Some(cs) = self.tree.resolve(cid) {
+                let z = style::resolve(&self.tree.slots[cs as usize], self.styles, true).z_index;
+                order.push((z, cs));
+            }
+        }
+        // Stable by construction: sort_by_key on Vec preserves insertion
+        // order of equal keys (alloc's stable merge sort).
+        order.sort_by_key(|&(z, _)| z);
+        for (_, cs) in order {
+            self.paint(cs, world, op, child_clip, dl);
+        }
+
+        if scissored {
+            dl.words.push(spec::draw_op::SCISSOR_POP);
+        }
+    }
+
+    /// AABB (intersected with the screen) of a local rect under `world`.
+    fn world_aabb(&self, world: &Affine, w: f32, h: f32) -> Clip {
+        let pts = [
+            world.apply(0.0, 0.0),
+            world.apply(w, 0.0),
+            world.apply(w, h),
+            world.apply(0.0, h),
+        ];
+        let mut c = Clip { x0: pts[0].0, y0: pts[0].1, x1: pts[0].0, y1: pts[0].1 };
+        for &(x, y) in &pts[1..] {
+            c.x0 = c.x0.min(x);
+            c.y0 = c.y0.min(y);
+            c.x1 = c.x1.max(x);
+            c.y1 = c.y1.max(y);
+        }
+        // Conservative integer AABB: floor mins, ceil maxes.
+        let ceilf = |x: f32| -floorf(-x);
+        Clip {
+            x0: floorf(clampf(c.x0, 0.0, SCREEN_W)),
+            y0: floorf(clampf(c.y0, 0.0, SCREEN_H)),
+            x1: ceilf(clampf(c.x1, 0.0, SCREEN_W)),
+            y1: ceilf(clampf(c.y1, 0.0, SCREEN_H)),
+        }
+    }
+
+    /// Emit a solid/gradient local-space rect under `world`: axis-aligned
+    /// path (RECT/GRAD_RECT, clipped with color re-interpolation) or the
+    /// rotated path (Sutherland-Hodgman -> TRI ops).
+    #[allow(clippy::too_many_arguments)]
+    fn emit_box(&self, dl: &mut DrawList, world: &Affine, x0: f32, y0: f32, x1: f32, y1: f32, fill: Fill, clip: &Clip) {
+        if x1 <= x0 || y1 <= y0 {
+            return;
+        }
+        if world.is_axis_aligned() {
+            let (sx0, sy0) = world.apply(x0, y0);
+            let (sx1, sy1) = world.apply(x1, y1);
+            let c = Clip {
+                x0: sx0.max(clip.x0),
+                y0: sy0.max(clip.y0),
+                x1: sx1.min(clip.x1),
+                y1: sy1.min(clip.y1),
+            };
+            if c.is_empty() || roundf(c.x1 - c.x0) <= 0.0 || roundf(c.y1 - c.y0) <= 0.0 {
+                return;
+            }
+            match fill {
+                Fill::Flat(color) => {
+                    dl.words.push(spec::draw_op::RECT);
+                    dl.words.push(xy_word(c.x0, c.y0));
+                    dl.words.push(wh_word(c.x1 - c.x0, c.y1 - c.y0));
+                    dl.words.push(color);
+                }
+                Fill::Grad { from, to, dir } => {
+                    // Re-interpolate the endpoint colors over the clipped
+                    // span so the visible slice keeps the exact gradient.
+                    let (f0, f1) = if dir == spec::GradDir::ToLeft as u32 || dir == spec::GradDir::ToRight as u32 {
+                        let w = sx1 - sx0;
+                        ((c.x0 - sx0) / w, (c.x1 - sx0) / w)
+                    } else {
+                        let h = sy1 - sy0;
+                        ((c.y0 - sy0) / h, (c.y1 - sy0) / h)
+                    };
+                    // ToTop/ToLeft run against the +axis: fraction measured
+                    // from the far edge.
+                    let (gf, gt) = if dir == spec::GradDir::ToTop as u32 || dir == spec::GradDir::ToLeft as u32 {
+                        (lerp_color(to, from, f0), lerp_color(to, from, f1))
+                    } else {
+                        (lerp_color(from, to, f0), lerp_color(from, to, f1))
+                    };
+                    // Store colors back in "from/to along dir" order.
+                    let (out_from, out_to) = if dir == spec::GradDir::ToTop as u32 || dir == spec::GradDir::ToLeft as u32 {
+                        (gt, gf)
+                    } else {
+                        (gf, gt)
+                    };
+                    dl.words.push(spec::draw_op::GRAD_RECT);
+                    dl.words.push(xy_word(c.x0, c.y0));
+                    dl.words.push(wh_word(c.x1 - c.x0, c.y1 - c.y0));
+                    dl.words.push(out_from);
+                    dl.words.push(out_to);
+                    dl.words.push(dir);
+                }
+            }
+        } else {
+            // Rotated: transform corners, Sutherland-Hodgman clip, fan into
+            // TRI ops (gouraud carries any gradient through the clip).
+            let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
+            let mut poly: Vec<ClipVert> = Vec::with_capacity(8);
+            for (i, &(lx, ly)) in corners.iter().enumerate() {
+                let (sx, sy) = world.apply(lx, ly);
+                poly.push(ClipVert { x: sx, y: sy, color: unpack(corner_color(&fill, i)) });
+            }
+            let clipped = sutherland_hodgman(&poly, clip);
+            if clipped.len() < 3 {
+                return;
+            }
+            for i in 1..clipped.len() - 1 {
+                emit_tri(dl, &clipped[0], &clipped[i], &clipped[i + 1], clip);
+            }
+        }
+    }
+
+    /// Emit an image TEX_QUAD (axis-aligned only; rotated images are
+    /// conservatively culled — no textured-triangle op in the DrawList v1).
+    fn emit_tex_quad(&self, dl: &mut DrawList, world: &Affine, w: f32, h: f32, tex: u32, op: f32, clip: &Clip) {
+        if !world.is_axis_aligned() {
+            return;
+        }
+        let (sx0, sy0) = world.apply(0.0, 0.0);
+        let (sx1, sy1) = world.apply(w, h);
+        if sx1 <= sx0 || sy1 <= sy0 {
+            return;
+        }
+        let c = Clip {
+            x0: sx0.max(clip.x0),
+            y0: sy0.max(clip.y0),
+            x1: sx1.min(clip.x1),
+            y1: sy1.min(clip.y1),
+        };
+        if c.is_empty() || roundf(c.x1 - c.x0) <= 0.0 || roundf(c.y1 - c.y0) <= 0.0 {
+            return;
+        }
+        // UV re-interpolation over the clipped span (normalized 0..1).
+        let u0 = (c.x0 - sx0) / (sx1 - sx0);
+        let u1 = (c.x1 - sx0) / (sx1 - sx0);
+        let v0 = (c.y0 - sy0) / (sy1 - sy0);
+        let v1 = (c.y1 - sy0) / (sy1 - sy0);
+        dl.words.push(spec::draw_op::TEX_QUAD);
+        dl.words.push(tex);
+        dl.words.push(xy_word(c.x0, c.y0));
+        dl.words.push(wh_word(c.x1 - c.x0, c.y1 - c.y0));
+        dl.words.push(u0.to_bits());
+        dl.words.push(v0.to_bits());
+        dl.words.push(u1.to_bits());
+        dl.words.push(v1.to_bits());
+        dl.words.push(scale_alpha(0xffff_ffff, op));
+    }
+
+    /// Emit the inline text run of a text element as one GLYPH_RUN.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_text(
+        &mut self,
+        dl: &mut DrawList,
+        node: &crate::tree::Node,
+        r: &style::Resolved,
+        world: &Affine,
+        op: f32,
+        clip: &Clip,
+        box_w: f32,
+    ) {
+        let color = scale_alpha(r.text_color, op);
+        if alpha(color) == 0 {
+            return;
+        }
+        let slot = r.font_slot as u8;
+        let Some(atlas) = self.fonts.atlas(slot) else { return };
+        let (cell_w, cell_h) = (atlas.cell_w as f32, atlas.cell_h as f32);
+        let mut run = alloc::string::String::new();
+        // paint() gives us the node ref; re-walk its subtree for the run.
+        // (node.children ids resolve through self.tree.)
+        collect_run_of(self.tree, node, &mut run);
+        if run.is_empty() {
+            return;
+        }
+        let mut scratch = core::mem::take(&mut self.glyph_scratch);
+        scratch.clear();
+        self.fonts
+            .layout_run(&run, slot, r.tracking, r.line_height, r.text_align, box_w, &mut scratch);
+        let start = dl.words.len();
+        dl.words.push(spec::draw_op::GLYPH_RUN);
+        dl.words.push(0); // patched below: slot | count << 16
+        dl.words.push(color);
+        let mut n: u32 = 0;
+        for g in &scratch {
+            // Glyph cells stay axis-aligned; only the anchor transforms.
+            let (sx, sy) = world.apply(g.x, g.y);
+            let (rx, ry) = (roundf(sx), roundf(sy));
+            // Coordinate-range invariant: cell top-left must sit in
+            // [0,SCREEN]; cells that can't be represented are dropped, and
+            // cells fully outside the clip are dropped (backend scissor
+            // pixel-clips partial overlap inside overflow-hidden regions).
+            if rx < 0.0 || ry < 0.0 || rx > SCREEN_W || ry > SCREEN_H {
+                continue;
+            }
+            if rx + cell_w <= clip.x0 || rx >= clip.x1 || ry + cell_h <= clip.y0 || ry >= clip.y1 {
+                continue;
+            }
+            if n == u16::MAX as u32 {
+                break;
+            }
+            dl.words.push(xy_word(rx, ry));
+            dl.words.push(g.gid as u32);
+            n += 1;
+        }
+        if n == 0 {
+            dl.words.truncate(start);
+        } else {
+            dl.words[start + 1] = (slot as u32) | (n << 16);
+        }
+        self.glyph_scratch = scratch;
+    }
+}
+
+/// Concatenated inline run of a text element (own text + text-type
+/// descendants through text nodes).
+fn collect_run_of(tree: &Tree, node: &crate::tree::Node, out: &mut alloc::string::String) {
+    out.push_str(&node.text);
+    for &cid in &node.children {
+        if let Some(cs) = tree.resolve(cid) {
+            let child = &tree.slots[cs as usize];
+            if child.node_type == spec::NodeType::Text as u8 {
+                collect_run_of(tree, child, out);
+            }
+        }
+    }
+}
+
+// ---- Sutherland-Hodgman with color interpolation -------------------------------
+
+#[derive(Clone, Copy)]
+struct ClipVert {
+    x: f32,
+    y: f32,
+    color: [f32; 4], // r, g, b, a (ABGR channel order irrelevant: symmetric)
+}
+
+fn unpack(c: u32) -> [f32; 4] {
+    [
+        (c & 0xff) as f32,
+        ((c >> 8) & 0xff) as f32,
+        ((c >> 16) & 0xff) as f32,
+        ((c >> 24) & 0xff) as f32,
+    ]
+}
+
+fn pack(c: [f32; 4]) -> u32 {
+    let q = |v: f32| ((clampf(v, 0.0, 255.0) + 0.5) as u32) & 0xff;
+    q(c[0]) | (q(c[1]) << 8) | (q(c[2]) << 16) | (q(c[3]) << 24)
+}
+
+fn lerp_vert(a: &ClipVert, b: &ClipVert, t: f32) -> ClipVert {
+    ClipVert {
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+        color: [
+            a.color[0] + (b.color[0] - a.color[0]) * t,
+            a.color[1] + (b.color[1] - a.color[1]) * t,
+            a.color[2] + (b.color[2] - a.color[2]) * t,
+            a.color[3] + (b.color[3] - a.color[3]) * t,
+        ],
+    }
+}
+
+/// Clip a convex polygon against the 4 half-planes of `clip`, interpolating
+/// vertex colors along cut edges.
+fn sutherland_hodgman(poly: &[ClipVert], clip: &Clip) -> Vec<ClipVert> {
+    // edge: (inside predicate, intersection parameter solve)
+    // Encode each edge as (axis, bound, keep_leq): axis 0 = x, 1 = y.
+    let edges: [(usize, f32, bool); 4] = [
+        (0, clip.x0, false), // x >= x0
+        (0, clip.x1, true),  // x <= x1
+        (1, clip.y0, false), // y >= y0
+        (1, clip.y1, true),  // y <= y1
+    ];
+    let mut cur: Vec<ClipVert> = poly.to_vec();
+    for &(axis, bound, keep_leq) in &edges {
+        if cur.is_empty() {
+            break;
+        }
+        let coord = |v: &ClipVert| if axis == 0 { v.x } else { v.y };
+        let inside = |v: &ClipVert| {
+            if keep_leq {
+                coord(v) <= bound
+            } else {
+                coord(v) >= bound
+            }
+        };
+        let mut next: Vec<ClipVert> = Vec::with_capacity(cur.len() + 1);
+        for i in 0..cur.len() {
+            let a = cur[i];
+            let b = cur[(i + 1) % cur.len()];
+            let (ia, ib) = (inside(&a), inside(&b));
+            if ia {
+                next.push(a);
+            }
+            if ia != ib {
+                let da = coord(&a) - bound;
+                let db = coord(&b) - bound;
+                let t = da / (da - db);
+                next.push(lerp_vert(&a, &b, t));
+            }
+        }
+        cur = next;
+    }
+    cur
+}
+
+/// Emit one TRI op (degenerate triangles after rounding are dropped).
+fn emit_tri(dl: &mut DrawList, v0: &ClipVert, v1: &ClipVert, v2: &ClipVert, clip: &Clip) {
+    // Round + final clamp (interpolation is exact at clip bounds but stay
+    // paranoid about float dust).
+    let px = |v: &ClipVert| {
+        (
+            clampf(roundf(clampf(v.x, clip.x0, clip.x1)), 0.0, SCREEN_W),
+            clampf(roundf(clampf(v.y, clip.y0, clip.y1)), 0.0, SCREEN_H),
+        )
+    };
+    let (x0, y0) = px(v0);
+    let (x1, y1) = px(v1);
+    let (x2, y2) = px(v2);
+    // Degenerate (zero-area after rounding)?
+    let area2 = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+    if area2 == 0.0 {
+        return;
+    }
+    dl.words.push(spec::draw_op::TRI);
+    dl.words.push(xy_word(x0, y0));
+    dl.words.push(xy_word(x1, y1));
+    dl.words.push(xy_word(x2, y2));
+    dl.words.push(pack(v0.color));
+    dl.words.push(pack(v1.color));
+    dl.words.push(pack(v2.color));
+}

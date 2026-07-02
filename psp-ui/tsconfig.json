@@ -1,0 +1,19 @@
+{
+  // Editors + `bunx tsc --noEmit` typecheck ONLY — babel-preset-solid owns the
+  // actual JSX transform (jsx must stay "preserve"; see DESIGN.md [R]).
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext"],
+    "types": ["bun"],
+    "jsx": "preserve",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src", "compiler", "demos", "test", "spec", "host-web"]
+}

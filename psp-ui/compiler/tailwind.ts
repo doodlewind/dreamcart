@@ -1,0 +1,537 @@
+// compiler/tailwind.ts — the build-time Tailwind-subset compiler.
+//
+// A candidate string literal compiles to a style record IFF every
+// whitespace-separated token parses as a supported utility [R]; otherwise the
+// literal is silently ignored (it was ordinary text, not a class string).
+// The ONE exception: `rounded-full` in an otherwise-valid literal that does
+// not pin both `w-N` and `h-N` is a HARD compile error [R] (the radius must
+// be build-time bakeable).
+//
+// Utility set = DESIGN.md "Tailwind subset (v1)" with Tailwind default value
+// scales: spacing N = N*4 px (p-2 = 8px), the default color palette, variants
+// focus:/active: folded into the same record, transition-*/duration/ease/delay
+// folded into the record's transition block, and `w-[123px]` / `w-[123]`
+// arbitrary pixel values for every numeric utility.
+//
+// Output: encodeStyleTable(records) -> styles.bin bytes + the generated TS
+// module (STYLE_IDS + font-slot metadata) the renderer imports.
+
+import {
+  ENUMS,
+  PROP,
+  SIZE_FULL,
+  TRANSITION_MASK_ALL,
+  abgr,
+  animBit,
+  encodeStyleTable,
+  f32Bits,
+  type PropName,
+  type StyleProp,
+  type StyleRecord,
+  type StyleTransition,
+} from "../spec/spec.ts";
+
+// ---------------------------------------------------------------------------
+// Font slots (build-assigned, pinned here — bake-font.ts uses the same table)
+// ---------------------------------------------------------------------------
+
+/** Baked px sizes, index-aligned with slot numbers (DESIGN.md pinned slots). */
+export const FONT_PX = [12, 14, 16, 18, 20, 24, 36] as const;
+const TEXT_SIZE_PX: Record<string, number> = {
+  xs: 12, sm: 14, base: 16, lg: 18, xl: 20, "2xl": 24, "4xl": 36,
+};
+
+/** Slot index for a (px, weight) pair: 0..6 regular, 7..13 bold. */
+export function fontSlotFor(px: number, bold: boolean): number {
+  const i = (FONT_PX as readonly number[]).indexOf(px);
+  if (i < 0) throw new Error(`psp-ui tailwind: no font slot for ${px}px`);
+  return bold ? 7 + i : i;
+}
+
+/** (px, bold) for a slot index — inverse of fontSlotFor. */
+export function fontSlotInfo(slot: number): { px: number; bold: boolean } {
+  const bold = slot >= 7;
+  const px = FONT_PX[bold ? slot - 7 : slot];
+  if (px === undefined) throw new Error(`psp-ui tailwind: bad font slot ${slot}`);
+  return { px, bold };
+}
+
+/** Default text style when no text-size/weight utility applies: 16px regular. */
+export const DEFAULT_FONT_SLOT = fontSlotFor(16, false);
+
+// ---------------------------------------------------------------------------
+// Palette (Tailwind v3 defaults) — families cheap to include, shades 50..950
+// ---------------------------------------------------------------------------
+
+// prettier-ignore
+const PALETTE: Record<string, number[]> = {
+  //        50        100       200       300       400       500       600       700       800       900       950
+  slate:   [0xf8fafc, 0xf1f5f9, 0xe2e8f0, 0xcbd5e1, 0x94a3b8, 0x64748b, 0x475569, 0x334155, 0x1e293b, 0x0f172a, 0x020617],
+  gray:    [0xf9fafb, 0xf3f4f6, 0xe5e7eb, 0xd1d5db, 0x9ca3af, 0x6b7280, 0x4b5563, 0x374151, 0x1f2937, 0x111827, 0x030712],
+  zinc:    [0xfafafa, 0xf4f4f5, 0xe4e4e7, 0xd4d4d8, 0xa1a1aa, 0x71717a, 0x52525b, 0x3f3f46, 0x27272a, 0x18181b, 0x09090b],
+  red:     [0xfef2f2, 0xfee2e2, 0xfecaca, 0xfca5a5, 0xf87171, 0xef4444, 0xdc2626, 0xb91c1c, 0x991b1b, 0x7f1d1d, 0x450a0a],
+  orange:  [0xfff7ed, 0xffedd5, 0xfed7aa, 0xfdba74, 0xfb923c, 0xf97316, 0xea580c, 0xc2410c, 0x9a3412, 0x7c2d12, 0x431407],
+  amber:   [0xfffbeb, 0xfef3c7, 0xfde68a, 0xfcd34d, 0xfbbf24, 0xf59e0b, 0xd97706, 0xb45309, 0x92400e, 0x78350f, 0x451a03],
+  yellow:  [0xfefce8, 0xfef9c3, 0xfef08a, 0xfde047, 0xfacc15, 0xeab308, 0xca8a04, 0xa16207, 0x854d0e, 0x713f12, 0x422006],
+  green:   [0xf0fdf4, 0xdcfce7, 0xbbf7d0, 0x86efac, 0x4ade80, 0x22c55e, 0x16a34a, 0x15803d, 0x166534, 0x14532d, 0x052e16],
+  emerald: [0xecfdf5, 0xd1fae5, 0xa7f3d0, 0x6ee7b7, 0x34d399, 0x10b981, 0x059669, 0x047857, 0x065f46, 0x064e3b, 0x022c22],
+  teal:    [0xf0fdfa, 0xccfbf1, 0x99f6e4, 0x5eead4, 0x2dd4bf, 0x14b8a6, 0x0d9488, 0x0f766e, 0x115e59, 0x134e4a, 0x042f2e],
+  cyan:    [0xecfeff, 0xcffafe, 0xa5f3fc, 0x67e8f9, 0x22d3ee, 0x06b6d4, 0x0891b2, 0x0e7490, 0x155e75, 0x164e63, 0x083344],
+  sky:     [0xf0f9ff, 0xe0f2fe, 0xbae6fd, 0x7dd3fc, 0x38bdf8, 0x0ea5e9, 0x0284c7, 0x0369a1, 0x075985, 0x0c4a6e, 0x082f49],
+  blue:    [0xeff6ff, 0xdbeafe, 0xbfdbfe, 0x93c5fd, 0x60a5fa, 0x3b82f6, 0x2563eb, 0x1d4ed8, 0x1e40af, 0x1e3a8a, 0x172554],
+  indigo:  [0xeef2ff, 0xe0e7ff, 0xc7d2fe, 0xa5b4fc, 0x818cf8, 0x6366f1, 0x4f46e5, 0x4338ca, 0x3730a3, 0x312e81, 0x1e1b4b],
+  violet:  [0xf5f3ff, 0xede9fe, 0xddd6fe, 0xc4b5fd, 0xa78bfa, 0x8b5cf6, 0x7c3aed, 0x6d28d9, 0x5b21b6, 0x4c1d95, 0x2e1065],
+  purple:  [0xfaf5ff, 0xf3e8ff, 0xe9d5ff, 0xd8b4fe, 0xc084fc, 0xa855f7, 0x9333ea, 0x7e22ce, 0x6b21a8, 0x581c87, 0x3b0764],
+  fuchsia: [0xfdf4ff, 0xfae8ff, 0xf5d0fe, 0xf0abfc, 0xe879f9, 0xd946ef, 0xc026d3, 0xa21caf, 0x86198f, 0x701a75, 0x4a044e],
+  pink:    [0xfdf2f8, 0xfce7f3, 0xfbcfe8, 0xf9a8d4, 0xf472b6, 0xec4899, 0xdb2777, 0xbe185d, 0x9d174d, 0x831843, 0x500724],
+  rose:    [0xfff1f2, 0xffe4e6, 0xfecdd3, 0xfda4af, 0xfb7185, 0xf43f5e, 0xe11d48, 0xbe123c, 0x9f1239, 0x881337, 0x4c0519],
+};
+const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+
+/** `slate-900` | `white` | `black` | `transparent` -> u32 ABGR, or null. */
+export function paletteColor(name: string): number | null {
+  if (name === "white") return abgr(255, 255, 255);
+  if (name === "black") return abgr(0, 0, 0);
+  if (name === "transparent") return abgr(0, 0, 0, 0);
+  const dash = name.lastIndexOf("-");
+  if (dash <= 0) return null;
+  const fam = PALETTE[name.slice(0, dash)];
+  const shade = SHADES.indexOf(Number(name.slice(dash + 1)));
+  if (!fam || shade < 0) return null;
+  const rgb = fam[shade];
+  return abgr((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
+}
+
+// ---------------------------------------------------------------------------
+// Token parser
+// ---------------------------------------------------------------------------
+
+/** Spacing-scale token part: `2` -> 8 (N*4 px), `[123px]`/`[123]` -> 123. */
+function spacing(part: string): number | null {
+  const arb = /^\[(\d+(?:\.\d+)?)(?:px)?\]$/.exec(part);
+  if (arb) return parseFloat(arb[1]);
+  if (/^\d+(?:\.\d+)?$/.test(part)) return parseFloat(part) * 4;
+  return null;
+}
+
+/** Plain non-negative number token part (opacity-50, z-10, duration-150...). */
+function plainNum(part: string): number | null {
+  return /^\d+(?:\.\d+)?$/.test(part) ? parseFloat(part) : null;
+}
+
+const px = (n: number): number => f32Bits(n);
+const int = (n: number): number => n >>> 0;
+
+type Decl = readonly [number, number]; // [propId, u32 value]
+
+/** Per-variant parse accumulator (pseudo-utilities resolved at literal level). */
+interface VariantAcc {
+  decls: Decl[];
+  sizePx?: number;
+  bold?: boolean;
+  trackingWide?: boolean;
+  roundedFull?: boolean;
+  pinnedW?: number;
+  pinnedH?: number;
+}
+
+interface TransitionAcc {
+  mask?: number;
+  durMs?: number;
+  delayMs?: number;
+  easing?: number;
+}
+
+const maskOf = (props: PropName[]): number => {
+  let m = 0;
+  for (const p of props) {
+    const bit = animBit(p);
+    if (bit < 0) throw new Error(`psp-ui tailwind: ${p} not animatable`);
+    m |= 1 << bit;
+  }
+  return m >>> 0;
+};
+const COLOR_MASK = maskOf(["bgColor", "gradFrom", "gradTo", "borderColor", "textColor"]);
+const OPACITY_MASK = maskOf(["opacity"]);
+const TRANSFORM_MASK = maskOf(["translateX", "translateY", "scale", "rotate"]);
+/** Plain `transition` (Tailwind's default property set, minus what we can't animate). */
+const DEFAULT_MASK = (COLOR_MASK | OPACITY_MASK | TRANSFORM_MASK) >>> 0;
+
+const JUSTIFY: Record<string, number> = {
+  start: ENUMS.Justify.Start, center: ENUMS.Justify.Center, end: ENUMS.Justify.End,
+  between: ENUMS.Justify.Between, around: ENUMS.Justify.Around,
+};
+const ITEMS: Record<string, number> = {
+  start: ENUMS.Align.Start, center: ENUMS.Align.Center,
+  end: ENUMS.Align.End, stretch: ENUMS.Align.Stretch,
+};
+const ROUNDED: Record<string, number> = { sm: 2, md: 6, lg: 8, xl: 12 };
+const SHADOWS: Record<string, number> = { shadow: 1, "shadow-md": 2, "shadow-lg": 3 };
+const GRAD_DIR: Record<string, number> = {
+  t: ENUMS.GradDir.ToTop, b: ENUMS.GradDir.ToBottom,
+  l: ENUMS.GradDir.ToLeft, r: ENUMS.GradDir.ToRight,
+};
+const EASE: Record<string, number> = {
+  linear: ENUMS.Easing.Linear, in: ENUMS.Easing.EaseIn, out: ENUMS.Easing.EaseOut,
+  "in-out": ENUMS.Easing.EaseInOut, spring: ENUMS.Easing.Spring, "out-back": ENUMS.Easing.OutBack,
+};
+const TEXT_ALIGN: Record<string, number> = {
+  left: ENUMS.TextAlign.Left, center: ENUMS.TextAlign.Center, right: ENUMS.TextAlign.Right,
+};
+
+/** Spacing-family prefixes -> prop ids (a single value may fan out to 2/4 props). */
+const SPACING_PROPS: Record<string, number[]> = {
+  gap: [PROP.gap], basis: [PROP.basis],
+  p: [PROP.paddingT, PROP.paddingR, PROP.paddingB, PROP.paddingL],
+  px: [PROP.paddingR, PROP.paddingL], py: [PROP.paddingT, PROP.paddingB],
+  pt: [PROP.paddingT], pr: [PROP.paddingR], pb: [PROP.paddingB], pl: [PROP.paddingL],
+  m: [PROP.marginT, PROP.marginR, PROP.marginB, PROP.marginL],
+  mx: [PROP.marginR, PROP.marginL], my: [PROP.marginT, PROP.marginB],
+  mt: [PROP.marginT], mr: [PROP.marginR], mb: [PROP.marginB], ml: [PROP.marginL],
+  inset: [PROP.insetT, PROP.insetR, PROP.insetB, PROP.insetL],
+  top: [PROP.insetT], right: [PROP.insetR], bottom: [PROP.insetB], left: [PROP.insetL],
+  "min-w": [PROP.minW], "min-h": [PROP.minH], "max-w": [PROP.maxW], "max-h": [PROP.maxH],
+  "translate-x": [PROP.translateX], "translate-y": [PROP.translateY],
+};
+
+/**
+ * Parse ONE utility token (variant prefix already stripped) into the
+ * accumulator. Returns false when the token is not a supported utility.
+ */
+function parseUtility(tok: string, acc: VariantAcc): boolean {
+  const D = acc.decls;
+
+  // -- fixed keywords ---------------------------------------------------------
+  switch (tok) {
+    case "flex": D.push([PROP.display, int(ENUMS.Display.Flex)]); return true;
+    case "flex-row": D.push([PROP.flexDir, int(ENUMS.FlexDir.Row)]); return true;
+    case "flex-col": D.push([PROP.flexDir, int(ENUMS.FlexDir.Col)]); return true;
+    case "flex-wrap": D.push([PROP.flexWrap, int(1)]); return true;
+    case "flex-1":
+      D.push([PROP.grow, px(1)], [PROP.shrink, px(1)], [PROP.basis, px(0)]);
+      return true;
+    case "grow": D.push([PROP.grow, px(1)]); return true;
+    case "grow-0": D.push([PROP.grow, px(0)]); return true;
+    case "shrink-0": D.push([PROP.shrink, px(0)]); return true;
+    case "absolute": D.push([PROP.posType, int(ENUMS.PosType.Absolute)]); return true;
+    case "relative": D.push([PROP.posType, int(ENUMS.PosType.Relative)]); return true;
+    case "hidden": D.push([PROP.display, int(ENUMS.Display.None)]); return true;
+    case "overflow-hidden": D.push([PROP.overflow, int(ENUMS.Overflow.Hidden)]); return true;
+    case "w-full": D.push([PROP.width, px(SIZE_FULL)]); return true;
+    case "h-full": D.push([PROP.height, px(SIZE_FULL)]); return true;
+    case "rounded": D.push([PROP.radius, px(4)]); return true;
+    case "rounded-full": acc.roundedFull = true; return true;
+    case "border": D.push([PROP.borderWidth, px(1)]); return true;
+    case "font-bold": acc.bold = true; return true;
+    case "tracking-wide": acc.trackingWide = true; return true;
+  }
+  if (tok in SHADOWS) { D.push([PROP.shadow, int(SHADOWS[tok])]); return true; }
+
+  // -- prefix-value utilities ---------------------------------------------------
+  const dash = tok.indexOf("-");
+  if (dash <= 0) return false;
+
+  // longest-prefix match over the spacing family (min-w-4, translate-x-[10px]...)
+  for (const prefix of Object.keys(SPACING_PROPS)) {
+    if (tok.startsWith(prefix + "-")) {
+      const v = spacing(tok.slice(prefix.length + 1));
+      if (v === null) continue;
+      for (const p of SPACING_PROPS[prefix]) D.push([p, px(v)]);
+      return true;
+    }
+  }
+
+  const head = tok.slice(0, dash);
+  const rest = tok.slice(dash + 1);
+
+  switch (head) {
+    case "w": case "h": {
+      const v = spacing(rest);
+      if (v === null) return false;
+      D.push([head === "w" ? PROP.width : PROP.height, px(v)]);
+      if (head === "w") acc.pinnedW = v; else acc.pinnedH = v;
+      return true;
+    }
+    case "justify":
+      if (!(rest in JUSTIFY)) return false;
+      D.push([PROP.justify, int(JUSTIFY[rest])]);
+      return true;
+    case "items":
+      if (!(rest in ITEMS)) return false;
+      D.push([PROP.align, int(ITEMS[rest])]);
+      return true;
+    case "z": {
+      const v = plainNum(rest);
+      if (v === null) return false;
+      D.push([PROP.zIndex, int(v)]);
+      return true;
+    }
+    case "bg": {
+      const grad = /^gradient-to-([tblr])$/.exec(rest);
+      if (grad) { D.push([PROP.gradDir, int(GRAD_DIR[grad[1]])]); return true; }
+      const c = paletteColor(rest);
+      if (c === null) return false;
+      D.push([PROP.bgColor, c]);
+      return true;
+    }
+    case "from": case "to": {
+      const c = paletteColor(rest);
+      if (c === null) return false;
+      D.push([head === "from" ? PROP.gradFrom : PROP.gradTo, c]);
+      return true;
+    }
+    case "rounded":
+      if (!(rest in ROUNDED)) return false;
+      D.push([PROP.radius, px(ROUNDED[rest])]);
+      return true;
+    case "opacity": {
+      const v = plainNum(rest);
+      if (v === null || v > 100) return false;
+      D.push([PROP.opacity, px(v / 100)]);
+      return true;
+    }
+    case "border": {
+      const c = paletteColor(rest);
+      if (c === null) return false;
+      D.push([PROP.borderColor, c], [PROP.borderWidth, px(1)]);
+      return true;
+    }
+    case "text": {
+      if (rest in TEXT_ALIGN) { D.push([PROP.textAlign, int(TEXT_ALIGN[rest])]); return true; }
+      if (rest in TEXT_SIZE_PX) { acc.sizePx = TEXT_SIZE_PX[rest]; return true; }
+      const c = paletteColor(rest);
+      if (c === null) return false;
+      D.push([PROP.textColor, c]);
+      return true;
+    }
+    case "leading": {
+      const v = spacing(rest);
+      if (v === null) return false;
+      D.push([PROP.lineHeight, px(v)]);
+      return true;
+    }
+    case "scale": {
+      const v = plainNum(rest);
+      if (v === null) return false;
+      D.push([PROP.scale, px(v / 100)]);
+      return true;
+    }
+    case "rotate": {
+      const v = plainNum(rest);
+      if (v === null) return false;
+      D.push([PROP.rotate, px(v)]);
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Parse a motion token into the transition accumulator (base variant only). */
+function parseMotion(tok: string, tr: TransitionAcc): boolean {
+  switch (tok) {
+    case "transition": tr.mask = DEFAULT_MASK; return true;
+    case "transition-all": tr.mask = TRANSITION_MASK_ALL; return true;
+    case "transition-colors": tr.mask = COLOR_MASK; return true;
+    case "transition-opacity": tr.mask = OPACITY_MASK; return true;
+    case "transition-transform": tr.mask = TRANSFORM_MASK; return true;
+  }
+  const dash = tok.indexOf("-");
+  if (dash <= 0) return false;
+  const head = tok.slice(0, dash);
+  const rest = tok.slice(dash + 1);
+  if (head === "duration" || head === "delay") {
+    const v = plainNum(rest);
+    if (v === null || v > 0xffff) return false;
+    if (head === "duration") tr.durMs = v; else tr.delayMs = v;
+    return true;
+  }
+  if (head === "ease") {
+    if (!(rest in EASE)) return false;
+    tr.easing = EASE[rest];
+    return true;
+  }
+  return false;
+}
+
+/** Dedupe decls last-wins, then order by prop id (canonical — makes records
+ *  from token-reordered literals byte-identical, so they share a styleId). */
+function dedupe(decls: Decl[]): StyleProp[] {
+  const m = new Map<number, number>();
+  for (const [p, v] of decls) m.set(p, v);
+  return [...m.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([prop, value]) => ({ prop, value }));
+}
+
+/**
+ * Parse one candidate class literal.
+ * Returns the StyleRecord, or null when the literal is NOT a class string
+ * (any unsupported token). Throws only for the `rounded-full` [R] rule (and
+ * `hover:`, which DESIGN pins as a loud error) in otherwise-valid literals.
+ */
+export function parseClassLiteral(literal: string): StyleRecord | null {
+  const tokens = literal.trim().split(/\s+/).filter((t) => t.length > 0);
+  if (tokens.length === 0) return null;
+
+  const acc: Record<"base" | "focus" | "active", VariantAcc> = {
+    base: { decls: [] }, focus: { decls: [] }, active: { decls: [] },
+  };
+  const tr: TransitionAcc = {};
+  let sawMotion = false;
+  let sawHover = false;
+
+  for (const tok of tokens) {
+    let variant: "base" | "focus" | "active" = "base";
+    let body = tok;
+    const colon = tok.indexOf(":");
+    if (colon > 0) {
+      const prefix = tok.slice(0, colon);
+      if (prefix === "focus" || prefix === "active") {
+        variant = prefix;
+        body = tok.slice(colon + 1);
+      } else if (prefix === "hover") {
+        sawHover = true; // decided after the rest of the literal parses
+        body = tok.slice(colon + 1);
+      } else {
+        return null; // not a utility (arbitrary text with a colon)
+      }
+    }
+    if (body.length === 0) return null;
+    if (variant === "base" && parseMotion(body, tr)) { sawMotion = true; continue; }
+    if (!parseUtility(body, acc[variant])) return null;
+  }
+
+  // Every token parsed => this IS a class literal; unsupported-by-design
+  // pieces now error loudly instead of silently dropping [R].
+  if (sawHover) {
+    throw new Error(
+      `psp-ui tailwind: \`hover:\` is not supported on PSP (no pointer) in "${literal}" — use focus:/active:.`,
+    );
+  }
+
+  // resolve pseudo-utilities per variant (font slot / tracking / rounded-full)
+  const base = acc.base;
+  for (const name of ["base", "focus", "active"] as const) {
+    const v = acc[name];
+    const effPx = v.sizePx ?? base.sizePx ?? 16;
+    const effBold = v.bold ?? base.bold ?? false;
+    if (v.sizePx !== undefined || v.bold !== undefined) {
+      v.decls.push([PROP.fontSlot, int(fontSlotFor(effPx, effBold))]);
+    }
+    if (v.trackingWide) {
+      v.decls.push([PROP.tracking, px(0.025 * effPx)]); // Tailwind tracking-wide = 0.025em
+    }
+    if (v.roundedFull) {
+      const w = v.pinnedW ?? base.pinnedW;
+      const h = v.pinnedH ?? base.pinnedH;
+      if (w === undefined || h === undefined) {
+        throw new Error(
+          `psp-ui tailwind: \`rounded-full\` needs build-time known size — add w-N and h-N ` +
+            `to the same literal (got "${literal}").`,
+        );
+      }
+      v.decls.push([PROP.radius, px(Math.min(w, h) / 2)]);
+    }
+  }
+
+  const rec: StyleRecord = {};
+  const baseProps = dedupe(acc.base.decls);
+  if (baseProps.length > 0) rec.base = baseProps;
+  const focusProps = dedupe(acc.focus.decls);
+  if (focusProps.length > 0) rec.focus = focusProps;
+  const activeProps = dedupe(acc.active.decls);
+  if (activeProps.length > 0) rec.active = activeProps;
+  if (sawMotion) {
+    rec.transition = {
+      // A duration/ease/delay-only literal (no transition-property utility)
+      // matches CSS's initial `transition-property: all` — DEFAULT_MASK is
+      // only the `transition` shorthand's property list.
+      mask: tr.mask ?? TRANSITION_MASK_ALL,
+      durMs: tr.durMs ?? 150, // Tailwind default duration
+      delayMs: tr.delayMs ?? 0,
+      easing: tr.easing ?? ENUMS.Easing.EaseInOut,
+    } satisfies StyleTransition;
+  }
+  if (!rec.base && !rec.focus && !rec.active && !rec.transition) return null;
+  return rec;
+}
+
+// ---------------------------------------------------------------------------
+// Table compiler
+// ---------------------------------------------------------------------------
+
+export interface CompiledStyles {
+  /** styleId = index into this list (styles.bin record order). */
+  records: StyleRecord[];
+  /** Raw class literal (as written in source) -> styleId. */
+  ids: Record<string, number>;
+  /** styles.bin bytes (encodeStyleTable). */
+  bin: Uint8Array;
+  /** Font slots referenced by any record (always includes DEFAULT_FONT_SLOT). */
+  usedFontSlots: number[];
+}
+
+/** Compile candidate literals: keep the ones that parse, dedupe identical records. */
+export function compileClasses(literals: Iterable<string>): CompiledStyles {
+  const records: StyleRecord[] = [];
+  const ids: Record<string, number> = {};
+  const byCanon = new Map<string, number>();
+  const slots = new Set<number>([DEFAULT_FONT_SLOT]);
+
+  for (const lit of literals) {
+    if (lit in ids) continue;
+    const rec = parseClassLiteral(lit);
+    if (rec === null) continue;
+    const canon = JSON.stringify(rec);
+    let id = byCanon.get(canon);
+    if (id === undefined) {
+      id = records.length;
+      records.push(rec);
+      byCanon.set(canon, id);
+    }
+    ids[lit] = id;
+    for (const v of [rec.base, rec.focus, rec.active]) {
+      if (!v) continue;
+      for (const p of v) if (p.prop === PROP.fontSlot) slots.add(p.value);
+    }
+  }
+
+  return {
+    records,
+    ids,
+    bin: encodeStyleTable(records),
+    usedFontSlots: [...slots].sort((a, b) => a - b),
+  };
+}
+
+/** The generated `styles.generated.ts` module source. */
+export function generateStylesModule(c: CompiledStyles): string {
+  const L: string[] = [];
+  L.push("// AUTO-GENERATED by psp-ui compiler/tailwind.ts — DO NOT EDIT.");
+  L.push("// Regenerated by every `bun scripts/build.ts <app>` run; excluded from");
+  L.push("// the pass-1 class/charset scan. Keys are class literals EXACTLY as");
+  L.push("// written in source (the renderer looks class attrs up verbatim).");
+  L.push("");
+  L.push("/** class literal -> styleId (record index in ui:styles / styles.bin). */");
+  L.push("export const STYLE_IDS: Record<string, number> = {");
+  for (const [lit, id] of Object.entries(c.ids)) {
+    L.push(`  ${JSON.stringify(lit)}: ${id},`);
+  }
+  L.push("};");
+  L.push("");
+  L.push("/** Number of records in styles.bin (valid styleIds are 0..COUNT-1). */");
+  L.push(`export const STYLE_COUNT = ${c.records.length};`);
+  L.push("");
+  L.push("/** Baked font-atlas slots shipped in the dcpak: slot -> metrics. */");
+  L.push("export const FONT_SLOTS: Record<number, { px: number; bold: boolean }> = {");
+  for (const slot of c.usedFontSlots) {
+    const { px, bold } = fontSlotInfo(slot);
+    L.push(`  ${slot}: { px: ${px}, bold: ${bold} },`);
+  }
+  L.push("};");
+  L.push("");
+  L.push("/** Slot for text with no text-size/font-weight utility (16px regular). */");
+  L.push(`export const DEFAULT_FONT_SLOT = ${DEFAULT_FONT_SLOT};`);
+  L.push("");
+  return L.join("\n");
+}
