@@ -6,7 +6,7 @@
 //     after <For> reorders).
 //   - DOWN/RIGHT → next focusable, UP/LEFT → previous (aliases; clamped at
 //     the ends, no wrap).
-//   - CROSS fires onPress of the focused node, bubbling up to the nearest
+//   - CIRCLE fires onPress of the focused node, bubbling up to the nearest
 //     ancestor with a handler.
 //   - Focus loss on removal [R]: next sibling subtree → previous sibling
 //     subtree → nearest focusable ancestor → none. Computed BEFORE the mirror
@@ -171,5 +171,5 @@ export function handleFrame(buttons: number): void {
   if (pressed === 0) return;
   if (pressed & (BTN.DOWN | BTN.RIGHT)) moveFocus(1);
   if (pressed & (BTN.UP | BTN.LEFT)) moveFocus(-1);
-  if (pressed & BTN.CROSS) firePress();
+  if (pressed & BTN.CIRCLE) firePress();
 }

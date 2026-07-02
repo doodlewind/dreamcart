@@ -65,26 +65,26 @@ interface Spec {
 const SPECS: Spec[] = [
   {
     // hero: underline sweep = 150 ms delay + 700 ms tween ≈ settled by frame
-    // 52. DOWN@58 focuses the CTA (focus:bg-indigo-300, 150 ms), CROSS@76
+    // 52. DOWN@58 focuses the CTA (focus:bg-indigo-300, 150 ms), CIRCLE@76
     // increments Count and nudges the underline (translateX = count*2).
     app: "hero",
-    inputScript: "0:0,58:0x40,62:0,76:0x4000,80:0",
+    inputScript: "0:0,58:0x40,62:0,76:0x2000,80:0",
     capStart: 48,
     capN: 48, // window 48..95
     shots: [
       { name: "boot", frame: 54 }, // settled first paint, sweep done, unfocused
       { name: "focused", frame: 72 }, // CTA focused (indigo-300), settled
-      { name: "pressed", frame: 90 }, // after CROSS: "Count: 1", underline nudged
+      { name: "pressed", frame: 90 }, // after CIRCLE: "Count: 1", underline nudged
     ],
   },
   {
     // cards: nothing focused at boot; RIGHT@20 focuses card 1 (enter-from-end),
     // RIGHT@28 moves to card 2 "Motion" (lift + border transition, 150 ms),
-    // CROSS@44 opens its detail panel (mount fade + translateY spring,
+    // CIRCLE@44 opens its detail panel (mount fade + translateY spring,
     // ~30-40 frames to settle). Ambient gradient streaks drift for 20+ s —
     // never "settled", but deterministic per frame index.
     app: "cards",
-    inputScript: "0:0,20:0x20,24:0,28:0x20,32:0,44:0x4000,48:0",
+    inputScript: "0:0,20:0x20,24:0,28:0x20,32:0,44:0x2000,48:0",
     capStart: 16,
     capN: 80, // window 16..95
     shots: [

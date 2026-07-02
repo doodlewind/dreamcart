@@ -222,7 +222,7 @@ describe("motion", () => {
 
 describe("all-or-nothing rejection [R]", () => {
   const rejected = [
-    "Press X", // ordinary text
+    "Press Circle", // ordinary text
     "Count:", // colon, not a variant
     "logo.png", // asset name
     "p-2 unknown-utility", // one bad token poisons the literal
@@ -250,14 +250,14 @@ describe("compileClasses", () => {
   test("assigns ids, dedupes identical records, encodes styles.bin", () => {
     const c = compileClasses([
       "p-2 bg-white",
-      "Press X", // ignored
+      "Press Circle", // ignored
       "bg-white p-2", // same record as the first -> same id
       "p-4",
     ]);
     expect(c.records.length).toBe(2);
     expect(c.ids["p-2 bg-white"]).toBe(c.ids["bg-white p-2"]);
     expect(c.ids["p-4"]).not.toBe(c.ids["p-2 bg-white"]);
-    expect("Press X" in c.ids).toBeFalse();
+    expect("Press Circle" in c.ids).toBeFalse();
 
     const decoded = decodeStyleTable(c.bin);
     expect(decoded.length).toBe(2);

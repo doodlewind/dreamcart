@@ -68,6 +68,12 @@ export function loadPack(ab: ArrayBuffer): void {
   parse(ab);
 }
 
+/** Test/dev helper: drop the cached parsed pack. App bundles normally eval fresh. */
+export function resetPack(): void {
+  map = null;
+  bytes = null;
+}
+
 function ensureLoaded(): void {
   if (map) return;
   const ab = (globalThis as { __dcpak?: ArrayBuffer }).__dcpak;
@@ -116,10 +122,4 @@ export function dtypeOf(key: string): number {
   const e = map ? map.get(key) : undefined;
   if (!e) throw new Error("dcpak: missing key " + key);
   return e.dtype;
-}
-
-/** Forget the loaded pack (tests). */
-export function resetPack(): void {
-  map = null;
-  bytes = null;
 }

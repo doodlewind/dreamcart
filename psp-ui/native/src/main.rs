@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(alloc_error_handler)]
+#![feature(asm_experimental_arch)]
 #![allow(static_mut_refs)]
 
 //! psp-ui PSP host: boots QuickJS on a 2 MB worker thread, evaluates the
@@ -25,10 +26,10 @@ use core::ffi::c_void;
 use libquickjs_sys::*;
 use psp::sys::{
     self, CtrlMode, DisplayPixelFormat, GuContextType, GuState, GuSyncBehavior, GuSyncMode,
-    SceCtrlData, ShadingModel, TexturePixelFormat, ThreadAttributes,
+    IoOpenFlags, SceCtrlData, ShadingModel, TexturePixelFormat, ThreadAttributes,
 };
 #[cfg(feature = "capture")]
-use psp::sys::{DisplaySetBufSync, IoOpenFlags};
+use psp::sys::DisplaySetBufSync;
 use psp::vram_alloc::get_vram_allocator;
 use psp::{Align16, BUF_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 
@@ -55,6 +56,7 @@ static APP_JS: &str = include_str!(concat!(env!("OUT_DIR"), "/game.js"));
 // the core natively (dcpak.rs) BEFORE JS eval; also exposed read-only to JS
 // as __dcpak. Aliases .rodata — JS must never write through it.
 static APP_DCPAK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/app.dcpak"));
+static PSPUI_TRACE: &str = env!("PSPUI_TRACE");
 
 // Build-time scripted input for deterministic PPSSPPHeadless captures
 // (test/e2e-ppsspp.ts). Baked by build.rs from the PSPUI_CAPTURE_INPUT env;
@@ -85,13 +87,77 @@ extern "C" {
 }
 
 fn psp_main() {
-    unsafe { boot() }
+    unsafe {
+        reset_fpu_status();
+        boot()
+    }
+}
+
+/// Real PSP hardware can start a PSPLINK-loaded user thread with FPU
+/// exceptions enabled. Taffy intentionally uses NaN sentinels for auto/
+/// undefined dimensions; with invalid-operation traps enabled, ordinary
+/// flexbox math over those sentinels raises FPE and the screen stays black.
+/// Clear FCSR so exceptions are masked and NaNs propagate as the layout engine
+/// expects. PPSSPP's software renderer path did not expose this.
+#[inline]
+unsafe fn reset_fpu_status() {
+    core::arch::asm!("ctc1 $zero, $31", options(nostack, nomem));
+}
+
+#[inline]
+fn trace_enabled() -> bool {
+    PSPUI_TRACE == "1"
+}
+
+unsafe fn trace_write(bytes: &[u8]) {
+    let fd = sys::sceIoOpen(
+        b"host0:/psp-ui-trace.txt\0".as_ptr(),
+        IoOpenFlags::WR_ONLY | IoOpenFlags::CREAT | IoOpenFlags::APPEND,
+        0o777,
+    );
+    if fd.0 >= 0 {
+        sys::sceIoWrite(fd, bytes.as_ptr() as *const c_void, bytes.len());
+        sys::sceIoClose(fd);
+    }
+}
+
+unsafe fn trace_reset() {
+    if !trace_enabled() {
+        return;
+    }
+    let fd = sys::sceIoOpen(
+        b"host0:/psp-ui-trace.txt\0".as_ptr(),
+        IoOpenFlags::WR_ONLY | IoOpenFlags::CREAT | IoOpenFlags::TRUNC,
+        0o777,
+    );
+    if fd.0 >= 0 {
+        sys::sceIoClose(fd);
+    }
+}
+
+unsafe fn trace(msg: &str) {
+    if trace_enabled() {
+        trace_write(b"[psp-ui trace] ");
+        trace_write(msg.as_bytes());
+        trace_write(b"\n");
+        psp::dprintln!("[psp-ui trace] {}", msg);
+    }
+}
+
+unsafe fn trace_pair(prefix: &[u8], msg: &str) {
+    if trace_enabled() {
+        trace_write(prefix);
+        trace_write(msg.as_bytes());
+        trace_write(b"\n");
+    }
 }
 
 /// The `psp::module!` main thread has only a 256 KB stack; QuickJS compiling
 /// a bundle overflows it. All real work runs on a 2 MB USER|VFPU worker
 /// (VFPU flag required for sceGum on hardware).
 unsafe fn boot() {
+    trace_reset();
+    trace("boot: creating worker thread");
     let id = sys::sceKernelCreateThread(
         b"psp_ui_main\0".as_ptr(),
         worker_main,
@@ -101,14 +167,18 @@ unsafe fn boot() {
         core::ptr::null_mut(),
     );
     if id.0 >= 0 {
+        trace("boot: starting worker thread");
         sys::sceKernelStartThread(id, 0, core::ptr::null_mut());
         sys::sceKernelWaitThreadEnd(id, core::ptr::null_mut());
     } else {
+        trace("boot: create worker failed, running inline");
         run(); // fallback: small-stack inline
     }
 }
 
 unsafe extern "C" fn worker_main(_argc: usize, _argv: *mut c_void) -> i32 {
+    reset_fpu_status();
+    trace("worker: entered");
     run();
     0
 }
@@ -120,6 +190,7 @@ unsafe fn log_exception(ctx: *mut JSContext) {
     let s = JS_ToCStringLen2(ctx, &mut len, e, 0);
     if !s.is_null() {
         if let Ok(msg) = core::str::from_utf8(core::slice::from_raw_parts(s as *const u8, len)) {
+            trace_pair(b"[psp-ui js error] ", msg);
             psp::dprintln!("[psp-ui js error] {}", msg);
         }
         JS_FreeCString(ctx, s);
@@ -128,33 +199,48 @@ unsafe fn log_exception(ctx: *mut JSContext) {
 }
 
 unsafe fn run() {
+    trace("run: entered");
     psp::enable_home_button();
+    trace("run: home button enabled");
     init_graphics();
+    trace("run: graphics initialized");
 
     // ---- Controller ----
     sys::sceCtrlSetSamplingCycle(0);
     sys::sceCtrlSetSamplingMode(CtrlMode::Analog);
     let mut pad = SceCtrlData::default();
+    trace("run: controller initialized");
 
     // ---- Rust UI core (first allocation initializes the arena) ----
+    trace("run: init ui begin");
     let ui = ffi::init_ui();
+    trace("run: init ui ok");
     // Feed styles.bin + font atlases + images straight from .rodata to the
     // core BEFORE any JS runs (zero QuickJS-heap transit) [R].
+    trace("run: dcpak feed begin");
     let textures = dcpak::feed(ui, APP_DCPAK);
+    trace("run: dcpak feed ok");
 
     // ---- QuickJS ----
+    trace("run: JS_NewRuntime begin");
     let rt = qjs_alloc::new_runtime();
     if rt.is_null() {
         halt("JS_NewRuntime returned null");
     }
+    trace("run: JS_NewRuntime ok");
+    trace("run: JS_NewContext begin");
     let ctx = JS_NewContext(rt);
     if ctx.is_null() {
         halt("JS_NewContext returned null");
     }
+    trace("run: JS_NewContext ok");
     let global = JS_GetGlobalObject(ctx);
+    trace("run: global object ok");
 
     // globalThis.ui — the full HostOps surface + the __textures table.
+    trace("run: register ui begin");
     ffi::register(ctx, global, &textures);
+    trace("run: register ui ok");
 
     // Expose the asset pack read-only as globalThis.__dcpak (zero-copy over
     // .rodata; free_func = None). Web/test hosts feed core through loadStyles/
@@ -169,8 +255,10 @@ unsafe fn run() {
             0,
         );
         JS_SetPropertyStr(ctx, global, b"__dcpak\0".as_ptr() as *const _, ab);
+        trace("run: __dcpak installed");
     }
 
+    trace("run: JS_Eval begin");
     let res = JS_Eval(
         ctx,
         APP_JS.as_ptr() as *const _,
@@ -183,11 +271,13 @@ unsafe fn run() {
         halt("JS_Eval threw");
     }
     JS_FreeValue(ctx, res);
+    trace("run: JS_Eval ok");
 
     let frame_fn = JS_GetPropertyStr(ctx, global, b"frame\0".as_ptr() as *const _);
     if JS_IsUndefined(frame_fn) {
         halt("globalThis.frame is undefined");
     }
+    trace("run: frame lookup ok");
 
     // ---- Fixed-timestep frame loop (~60 Hz via vblank) ----
     // The Rust frame counter is the capture identity (origin/main contract):
@@ -197,21 +287,36 @@ unsafe fn run() {
     #[cfg_attr(not(feature = "capture"), allow(unused_variables, unused_mut))]
     let mut frame_count: u32 = 0;
     loop {
+        if frame_count == 0 {
+            trace("frame 0: begin");
+        }
         // Still read sceCtrl even in capture builds so loop timing is
         // identical; the mask is then overridden by the baked script.
         sys::sceCtrlReadBufferPositive(&mut pad, 1);
+        if frame_count == 0 {
+            trace("frame 0: ctrl read ok");
+        }
         let mask = pad.buttons.bits() as i32;
         #[cfg(feature = "capture")]
         let mask = capture_input_mask(frame_count, mask);
 
         sys::sceGuStart(GuContextType::Direct, &mut LIST as *mut _ as *mut c_void);
+        if frame_count == 0 {
+            trace("frame 0: gu start ok");
+        }
 
         let mut args = [JS_NewInt32(ctx, mask)];
         let r = JS_Call(ctx, frame_fn, global, 1, args.as_mut_ptr());
+        if frame_count == 0 {
+            trace("frame 0: JS_Call returned");
+        }
         if JS_ValueGetTag(r) == JS_TAG_EXCEPTION {
             log_exception(ctx);
         }
         JS_FreeValue(ctx, r); // leak guard: free the return value every frame
+        if frame_count == 0 {
+            trace("frame 0: JS return freed");
+        }
 
         // Drain queued microtask jobs (queueMicrotask polyfill = promise jobs).
         loop {
@@ -220,6 +325,9 @@ unsafe fn run() {
                 break;
             }
         }
+        if frame_count == 0 {
+            trace("frame 0: pending jobs drained");
+        }
 
         // Core frame: animations at fixed dt = 1/60, relayout if dirty, then
         // the DrawList into the open display list. The raw-slice dance keeps
@@ -227,30 +335,54 @@ unsafe fn run() {
         // only reads atlases/textures, never the DrawList's owner mutably).
         let ui = ffi::ui();
         ui.tick();
+        if frame_count == 0 {
+            trace("frame 0: ui tick ok");
+        }
         let (words_ptr, words_len) = {
             let dl = ui.draw();
             (dl.words.as_ptr(), dl.words.len())
         };
+        if frame_count == 0 {
+            trace("frame 0: ui draw ok");
+        }
         ge::render(ffi::ui(), core::slice::from_raw_parts(words_ptr, words_len));
+        if frame_count == 0 {
+            trace("frame 0: rendered");
+        }
 
         sys::sceGuFinish();
+        if frame_count == 0 {
+            trace("frame 0: gu finish ok");
+        }
         sys::sceGuSync(GuSyncMode::Finish, GuSyncBehavior::Wait);
+        if frame_count == 0 {
+            trace("frame 0: gu sync ok");
+        }
         sys::sceDisplayWaitVblankStart();
+        if frame_count == 0 {
+            trace("frame 0: vblank ok");
+        }
         sys::sceGuSwapBuffers();
+        if frame_count == 0 {
+            trace("frame 0: swap ok");
+        }
         // GE has finished reading (sceGuSync above): rewind the per-frame
         // bump vertex arena [R].
         ge::reset_pool();
+        if frame_count == 0 {
+            trace("frame 0: pool reset ok");
+        }
 
         // Capture build only (test/e2e-ppsspp.ts): dump the just-presented
         // display framebuffer for frames CAP_START..CAP_START+CAP_N to
         // ms0:/dc_cap/fNNNN.raw. No-op everywhere but PPSSPPHeadless.
         #[cfg(feature = "capture")]
         cap_dump_frame(frame_count);
-
-        #[cfg(feature = "capture")]
-        {
-            frame_count = frame_count.wrapping_add(1);
+        if frame_count == 0 {
+            trace("frame 0: complete");
         }
+
+        frame_count = frame_count.wrapping_add(1);
     }
 }
 
@@ -401,9 +533,13 @@ unsafe fn cap_dump_frame(frame_count: u32) {
         sys::sceIoWrite(fd, addr as *const c_void, 512 * 272 * 4);
         sys::sceIoClose(fd);
     }
+    if idx + 1 == cap_n {
+        sys::sceKernelExitGame();
+    }
 }
 
 unsafe fn halt(msg: &str) -> ! {
+    trace_pair(b"[psp-ui halt] ", msg);
     psp::dprintln!("[psp-ui halt] {}", msg);
     psp::dprintln!("HOME exits. Last stage stays on screen.");
     loop {

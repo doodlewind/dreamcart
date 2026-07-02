@@ -13,7 +13,7 @@
 //              styling = ternaries of FULL literals, never fragments.
 //   style    — dynamic per-prop overrides; keys are PROP names (spec.ts),
 //              values numbers (px/scalars) or strings the renderer parses.
-//   onPress  — CROSS press while this node is focused (input.ts).
+//   onPress  — CIRCLE press while this node is focused (input.ts).
 //   focusable— joins the focus traversal order.
 //   ref      — Solid ref (receives the JS mirror-node object).
 // `classList` is NOT supported and errors loudly at runtime/compile [R].

@@ -30,6 +30,17 @@ and everything is packed into `dist/<app>.dcpak`. Pass 2 bundles with Bun
 </view>
 ```
 
+Mounting entries should look like ordinary app bootstrap code; the framework
+handles host detection, the generated style table, dcpak image uploads and the
+host frame callback:
+
+```tsx
+import { mount } from "../src/index.ts";
+import App from "./app.tsx";
+
+mount(() => <App />);
+```
+
 Styling rules (compile-time, no runtime CSS): a class literal compiles iff
 *every* token is a supported utility (see DESIGN.md "Tailwind subset (v1)");
 dynamic styling is ternaries of full literals, `style={{...}}`, or `animate()`.
@@ -42,6 +53,7 @@ dynamic styling is ternaries of full literals, `style={{...}}`, or `animate()`.
 bun run test                          # spec contract + tailwind parser tests
 bun scripts/build.ts <app> [--extra-chars=…]  # extra codepoints for the atlases
 bun run psp / bun run dev / bun run wasm      # EBOOT / web host / wasm core
+bun run hw hero --trace              # real PSP via PSPLINK + host0 trace
 bunx tsc --noEmit                     # typecheck (babel owns the JSX transform)
 ```
 

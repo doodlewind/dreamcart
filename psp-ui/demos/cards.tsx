@@ -1,6 +1,6 @@
 // demos/cards.tsx — "card carousel" showcase: three feature cards in a row,
 // LEFT/RIGHT d-pad moves focus (native focus: variants lift + brighten the
-// focused card — zero JS on focus change), CROSS flips a <Show> detail panel
+// focused card — zero JS on focus change), CIRCLE flips a <Show> detail panel
 // that fades in (mount transition) and springs up into place. Two slow
 // gradient streaks drift behind everything (long native tweens started once
 // on mount — deterministic fixed-dt, no per-frame JS).
@@ -128,7 +128,7 @@ export default function Cards() {
         </Show>
       </view>
 
-      <text class="text-xs text-slate-500">LEFT / RIGHT move focus · CROSS toggle details</text>
+      <text class="text-xs text-slate-500">LEFT / RIGHT move focus · CIRCLE toggle details</text>
     </view>
   );
 }

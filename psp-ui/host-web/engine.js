@@ -11,7 +11,7 @@
 // proven dreamcart web/engine.js driver.
 //
 // Keyboard map (also listed on the page):
-//   arrows = d-pad     X / Enter = CROSS   Z = CIRCLE
+//   arrows = d-pad     Enter / Z = CIRCLE  X = CROSS
 //   A = SQUARE         S = TRIANGLE        Shift = SELECT   Space = START
 
 import { createWasmUi, FB_W, FB_H } from "./wasm-ops.js";
@@ -36,7 +36,7 @@ const KEYMAP = {
   ArrowDown: BTN.DOWN,
   ArrowLeft: BTN.LEFT,
   KeyX: BTN.CROSS,
-  Enter: BTN.CROSS,
+  Enter: BTN.CIRCLE,
   KeyZ: BTN.CIRCLE,
   KeyA: BTN.SQUARE,
   KeyS: BTN.TRIANGLE,
