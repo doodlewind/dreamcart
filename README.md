@@ -93,6 +93,18 @@ bun run psp:trace
 On PS Vita Adrenaline, the final path is
 `ux0:pspemu/PSP/GAME/dreamcart-raw-snake-trace/EBOOT.PBP`.
 
+### Debug on real PSP hardware over USB
+Run a freshly compiled game on an actual PSP in seconds — no memory-stick copy:
+
+``` sh
+bun run psp:hw walk3d   # build, then load onto the PSP; press Enter to hot-reload
+```
+
+It serves the cargo output to the PSP as `host0:` (usbhostfs) and `ldstart`s it
+through PSPLINK (pspsh), keeping a tight edit → build → run loop on real silicon.
+Needs a one-time host-tools + PSPLINK setup — see
+[`docs/psp-hardware-debugging.md`](docs/psp-hardware-debugging.md).
+
 ## Play (one command)
 `bun run play <web|psp|3ds> [game]` builds the chosen game and launches the
 matching emulator:

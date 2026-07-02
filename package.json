@@ -21,6 +21,7 @@
     "test:tatical3d-ppsspp": "bun framework/test/tatical3d-ppsspp.ts",
     "build": "bun run bake && bun run typecheck && bun run bundle && bun run web",
     "psp": "bun runtime/build.ts",
+    "psp:hw": "bun scripts/psp-hw.ts",
     "psp:trace": "bun scripts/build-psp-trace.ts",
     "psp:all": "bun scripts/build-psp-all.ts",
     "bsp": "bun scripts/bsp-map.ts",
