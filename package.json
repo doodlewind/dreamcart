@@ -17,6 +17,7 @@
     "test": "bun framework/test/contract.ts && bun framework/test/golden.ts",
     "build": "bun run bake && bun run typecheck && bun run bundle && bun run web",
     "psp": "bun runtime/build.ts",
+    "psp:hw": "bun scripts/psp-hw.ts",
     "psp:trace": "bun scripts/build-psp-trace.ts",
     "psp:all": "bun scripts/build-psp-all.ts",
     "3ds": "bun runtime-3ds/build.ts",
