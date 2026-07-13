@@ -63,7 +63,7 @@ writeFileSync(gamePath, next);
 // 4. bundle + build the PSP EBOOT
 console.log('# bundling + building EBOOT ...');
 await $`bun framework/build.ts`.cwd(root);
-await $`bun runtime/build.ts`.cwd(root).env({ ...process.env, PSPJS_GAME: 'bsp3d.js' });
+await $`bun runtime/build.ts`.cwd(root).env({ ...process.env, DREAMCART_GAME: 'bsp3d.js' });
 
 console.log(`\n✅ Built a playable bsp3d EBOOT for "${map}".`);
 console.log(`   Launch (PPSSPP):  open -a PPSSPPSDL runtime/target/mipsel-sony-psp/debug/EBOOT.PBP`);

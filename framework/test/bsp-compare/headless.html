@@ -14,7 +14,7 @@
 <script>
   (function () {
     try {
-      PSPJS.mount(document.getElementById('screen'));
+      DreamCart.mount(document.getElementById('screen'));
       var q = new URLSearchParams(location.search);
       window.__BSP_MAP = q.get('map') || 'box'; // bsp-compare reads globalThis.__BSP_MAP at load time
       window.__BSP_VIEW = q.get('view') || '';   // '', 'overhead', or 'hero' (local diagnostics)
@@ -45,19 +45,19 @@
       }
       var g = (window.GAMES || {})[gameKey];
       if (!g) { window.__error = gameKey + ' not in GAMES'; return; }
-      if (inputScript) PSPJS.setButtons(maskAt(0));
-      var err = PSPJS.load(g.run, g.dcpak); // draws one frame immediately; g.dcpak -> __dcpak (baked blobs)
+      if (inputScript) DreamCart.setButtons(maskAt(0));
+      var err = DreamCart.load(g.run, g.dcpak); // draws one frame immediately; g.dcpak -> __dcpak (baked blobs)
       if (err) { window.__error = String(err && err.message || err); return; }
       if (inputScript) {
         for (var f = 1; f <= settle; f++) {
-          PSPJS.setButtons(maskAt(f));
-          PSPJS.step();
+          DreamCart.setButtons(maskAt(f));
+          DreamCart.step();
         }
         window.__ready = true;
         return;
       }
-      if (heldBtn) PSPJS.pressVirtual(heldBtn, true);
-      PSPJS.start();
+      if (heldBtn) DreamCart.pressVirtual(heldBtn, true);
+      DreamCart.start();
       var n = 0;
       // When a pose is pinned (?pose=N), don't signal ready until the engine has actually
       // rendered THAT pose (capturePose sets __renderedFrame) AND settled — so the

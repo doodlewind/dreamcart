@@ -773,7 +773,7 @@ Grounded in `web/engine.js`, `web/index.html`, `framework/src/engine.ts`.
   quads:** `gfx.fillRect` must stay literal Canvas2D to keep the existing `.rgbz` goldens
   byte-identical (including the `x|0` truncation at `engine.js:46`); a single element can't
   hold both a `'2d'` and a `'webgl2'` context.
-- **R2 — Keep `PSPJS.mount(el)` unchanged:** have `mount` *create* the GL canvas as a
+- **R2 — Keep `DreamCart.mount(el)` stable:** have `mount` *create* the GL canvas as a
   sibling under the passed HUD canvas (both backing stores 480×272; replicate the CSS box,
   `image-rendering:pixelated`, border-radius so layers register pixel-for-pixel — see C6/§4.3
   background fork).
@@ -818,7 +818,7 @@ Grounded in `framework/test/golden.ts`, `framework/test/contract.ts`, `framework
 - **Per-platform embed asymmetry (verified):** Web (`web/build-games.ts`) auto-enumerates
   all `runtime/src/game/*.js` **after `framework/build.ts` runs**, so a new `cube3d.js` needs
   no edit. PSP (`runtime/build.ts`) and 3DS (`gen-game.ts`) embed exactly **one** game
-  selected by `PSPJS_GAME=cube3d.js` (default `raw-snake.js`) — a 3D game is not special, but
+  selected by `DREAMCART_GAME=cube3d.js` (default `raw-snake.js`) — a 3D game is not special, but
   it is selected, not auto-discovered.
 - **§3.2 snippet is conceptual:** `engine.ts` has no `enc` field or `scene3d` slot today;
   those are real new Engine fields (lazy `CommandEncoder` guarded by

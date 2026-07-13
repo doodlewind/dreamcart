@@ -4,24 +4,24 @@
  * Runs window.GAMES inside the headless, themeable ConsoleShell (a centered
  * handheld): desktop = horizontal PSP-like, mobile = vertical GBA-SP-like
  * (data-layout switched via a media query). The 480x272 PSP screen is a <canvas>
- * mounted into the shell's screen slot via window.PSPJS.mount.
+ * mounted into the shell's screen slot via window.DreamCart.mount.
  *
  * - Game picker over window.GAMES (sorted by .order). ?game=<file> deep-links.
- * - ConsoleShell button presses -> PSPJS.pressVirtual; keyboard is handled inside
- *   engine.js. FPS via PSPJS.onFps. Pause / Step / Reset transport controls.
+ * - ConsoleShell button presses -> DreamCart.pressVirtual; keyboard is handled inside
+ *   engine.js. FPS via DreamCart.onFps. Pause / Step / Reset transport controls.
  * - Code is HIDDEN by default. A "Code" button opens a Modal showing the JS source.
- *   Raw games: editable + Run (re-loads via PSPJS.load + start). Framework games:
- *   read-only. The log console (PSPJS.onLog) lives inside this modal.
+ *   Raw games: editable + Run (re-loads via DreamCart.load + start). Framework games:
+ *   read-only. The log console (DreamCart.onLog) lives inside this modal.
  *
  * engine.js + games.generated.js are loaded as plain <script> tags by the build
- * (deploy-build.ts preScripts) BEFORE this bundle, so window.PSPJS / window.GAMES
+ * (deploy-build.ts preScripts) BEFORE this bundle, so window.DreamCart / window.GAMES
  * exist by the time this component mounts.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layout, Button, Modal, ConsoleShell, type ConsoleLayout } from "../components";
 
 // Minimal typings for the globals engine.js / games.generated.js set.
-interface PSPJS {
+interface DreamCartRuntime {
   W: number;
   H: number;
   BTN: Record<string, number>;
@@ -48,7 +48,7 @@ interface GameDef {
 }
 declare global {
   interface Window {
-    PSPJS?: PSPJS;
+    DreamCart?: DreamCartRuntime;
     GAMES?: Record<string, GameDef>;
   }
 }
@@ -114,7 +114,7 @@ export function PlayPage() {
   /** Load + run a game by manifest key, syncing transport state + the URL. */
   const loadGame = useCallback(
     (name: string, opts?: { push?: boolean }) => {
-      const psp = window.PSPJS;
+      const psp = window.DreamCart;
       const g = games[name];
       if (!psp || !g) return;
       setCurrent(name);
@@ -133,7 +133,7 @@ export function PlayPage() {
 
   // One-time boot: mount the canvas + wire FPS/log sinks + run the initial game.
   useEffect(() => {
-    const psp = window.PSPJS;
+    const psp = window.DreamCart;
     if (!psp || !screenRef.current || booted.current) return;
     booted.current = true;
 
@@ -158,19 +158,19 @@ export function PlayPage() {
   }, []);
 
   const onPress = useCallback((bit: number, down: boolean) => {
-    window.PSPJS?.pressVirtual(bit, down);
+    window.DreamCart?.pressVirtual(bit, down);
   }, []);
 
   // ---- transport controls ----
   const togglePause = () => {
-    const psp = window.PSPJS;
+    const psp = window.DreamCart;
     if (!psp) return;
     const next = !paused;
     psp.setPaused(next);
     setPaused(next);
   };
   const stepOne = () => {
-    const psp = window.PSPJS;
+    const psp = window.DreamCart;
     if (!psp) return;
     psp.step();
     setPaused(true);
@@ -181,7 +181,7 @@ export function PlayPage() {
 
   // Run an edited raw-game source from the Code modal.
   const runDraft = () => {
-    const psp = window.PSPJS;
+    const psp = window.DreamCart;
     if (!psp || !cur || cur.kind !== "raw") return;
     setLogs([]);
     psp.load(draft, cur.dcpak || undefined);

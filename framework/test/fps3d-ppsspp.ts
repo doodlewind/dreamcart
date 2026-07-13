@@ -35,7 +35,7 @@ await $`bun framework/build.ts`.cwd(root).quiet();
 await $`bun web/build-games.ts`.cwd(root).quiet();
 await $`bun runtime/build.ts --features capture`
   .cwd(root)
-  .env({ ...process.env, PSPJS_GAME: 'fps3d.js', PSPJS_CAPTURE_INPUT: inputScript });
+  .env({ ...process.env, DREAMCART_GAME: 'fps3d.js', DREAMCART_CAPTURE_INPUT: inputScript });
 
 console.log('# PSP capture (PPSSPPHeadless software renderer) ...');
 rmSync(dccap, { recursive: true, force: true });

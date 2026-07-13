@@ -16,7 +16,7 @@ This is fully headless and deterministic — no GUI window, no screenshot hotkey
 Accessibility permission. `framework/test/bsp-compare/ppsspp-shoot.ts` does it:
 
 1. Builds the compare EBOOT **with the `capture` cargo feature**
-   (`PSPJS_GAME=bsp-compare.js bun runtime/build.ts --features capture`). That feature adds
+   (`DREAMCART_GAME=bsp-compare.js bun runtime/build.ts --features capture`). That feature adds
    one call per presented frame in `runtime/src/main.rs`:
    `sceIoDevctl("emulator:", 0x20 /* EMIT_SCREENSHOT */, …)`. It is a no-op on real
    hardware and the GUI emulator; only **PPSSPPHeadless** consumes it.

@@ -64,7 +64,7 @@ if (platform === "web") {
     process.exit(1);
   }
   console.log("building PSP EBOOT for " + game + " ...");
-  await $`bun ${root}runtime/build.ts`.env({ ...process.env, PSPJS_GAME: game + ".js" });
+  await $`bun ${root}runtime/build.ts`.env({ ...process.env, DREAMCART_GAME: game + ".js" });
   const eboot = root + "runtime/target/mipsel-sony-psp/debug/EBOOT.PBP";
   console.log("launching PPSSPP: " + game);
   await $`open -a PPSSPPSDL ${eboot}`.nothrow();
@@ -73,7 +73,7 @@ if (platform === "web") {
   const game = resolveGame(gameArg) ?? "raw-snake";
   if (isFw(game)) await ensureBundles();
   console.log("building 3DS .3dsx for " + game + " ...");
-  await $`bun ${root}runtime-3ds/build.ts`.env({ ...process.env, PSPJS_GAME: game + ".js" });
+  await $`bun ${root}runtime-3ds/build.ts`.env({ ...process.env, DREAMCART_GAME: game + ".js" });
   const dsx = root + "runtime-3ds/dreamcart-3ds.3dsx";
   const dirs = ["/Applications", `${process.env.HOME}/Applications`];
   let emuApp = "";

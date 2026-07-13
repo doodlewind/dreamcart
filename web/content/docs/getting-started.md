@@ -76,11 +76,11 @@ game files that ship to PSP run in the browser.
 
 ### PSP only
 
-You can also build the EBOOT for a single game directly. `PSPJS_GAME` selects which
+You can also build the EBOOT for a single game directly. `DREAMCART_GAME` selects which
 game is embedded:
 
 ```sh
-PSPJS_GAME=raw-tetris.js bun run psp     # builds runtime/.../EBOOT.PBP
+DREAMCART_GAME=raw-tetris.js bun run psp # builds runtime/.../EBOOT.PBP
 bun run psp:all                          # build every game into a PSP memory-stick layout
 ```
 
@@ -98,7 +98,7 @@ The 3DS build produces a `.3dsx` via the devkitARM Docker image (no host toolcha
 or sudo needed):
 
 ```sh
-PSPJS_GAME=raw-tetris.js bun run 3ds     # -> runtime-3ds/dreamcart-3ds.3dsx
+DREAMCART_GAME=raw-tetris.js bun run 3ds # -> runtime-3ds/dreamcart-3ds.3dsx
 ```
 
 Run the `.3dsx` in Azahar or on real hardware. See
@@ -185,7 +185,7 @@ function frame(buttons) {
 The header comments are the single source of truth for the menu: `// @title`,
 `// @order`, and `// @controls`. Adding the file is all that's needed — no build
 script edit. Run it with `bun run play web raw-blink` or
-`PSPJS_GAME=raw-blink.js bun run psp`.
+`DREAMCART_GAME=raw-blink.js bun run psp`.
 
 ### A framework game
 

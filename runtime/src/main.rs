@@ -2,8 +2,8 @@
 #![no_main]
 #![allow(static_mut_refs)]
 
-//! psp-js runtime: boots QuickJS, exposes a tiny native 2D graphics + input API
-//! to JavaScript, evaluates the PSPJS_GAME-selected file (see build.rs), then
+//! DreamCart runtime: boots QuickJS, exposes a tiny native 2D graphics + input API
+//! to JavaScript, evaluates the DREAMCART_GAME-selected file (see build.rs), then
 //! drives its `frame(buttons)` function once per vblank while presenting frames
 //! via sceGu.
 
@@ -29,12 +29,12 @@ mod gfx;
 mod gfx3d;
 mod qjs_alloc;
 
-psp::module!("psp_js", 1, 1);
+psp::module!("dreamcart_runtime", 1, 1);
 
 // GE display list buffer (256 KB), 16-byte aligned.
 static mut LIST: Align16<[u32; 0x40000]> = Align16([0; 0x40000]);
 
-// The game source, selected at build time by `PSPJS_GAME` (see build.rs) and
+// The game source, selected at build time by `DREAMCART_GAME` (see build.rs) and
 // NUL-terminated there for JS_Eval (which wants input[len] == '\0').
 static GAME_JS: &str = include_str!(concat!(env!("OUT_DIR"), "/game.js"));
 // The game's binary asset pack (see docs/dcpak-format.md), embedded by build.rs.
@@ -43,9 +43,9 @@ static GAME_JS: &str = include_str!(concat!(env!("OUT_DIR"), "/game.js"));
 // the baked asset modules read their typed-array blobs from it instead of
 // base64-decoding megabyte string literals at boot.
 static GAME_DCPAK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/game.dcpak"));
-static PSPJS_TRACE: &str = env!("PSPJS_TRACE");
+static DREAMCART_TRACE: &str = env!("DREAMCART_TRACE");
 #[cfg(feature = "capture")]
-static PSPJS_CAPTURE_INPUT: &str = env!("PSPJS_CAPTURE_INPUT");
+static DREAMCART_CAPTURE_INPUT: &str = env!("DREAMCART_CAPTURE_INPUT");
 
 // The libquickjs-sys wrapper (src/lib.rs) re-exports JS_GetArrayBuffer but not
 // JS_NewArrayBuffer, which the linked QuickJS C library does provide (quickjs.h).
@@ -74,7 +74,7 @@ fn psp_main() {
 unsafe fn boot() {
     trace("psp_main: creating worker thread");
     let id = sys::sceKernelCreateThread(
-        b"pspjs_main\0".as_ptr(),
+        b"dreamcart_main\0".as_ptr(),
         worker_main,
         32,                // priority
         2 * 1024 * 1024,   // 2 MB stack
@@ -100,35 +100,35 @@ unsafe extern "C" fn worker_main(_argc: usize, _argv: *mut c_void) -> i32 {
 
 #[inline]
 fn trace_enabled() -> bool {
-    PSPJS_TRACE == "1"
+    DREAMCART_TRACE == "1"
 }
 
 unsafe fn trace(msg: &str) {
     if trace_enabled() {
-        psp::dprintln!("[pspjs trace] {}", msg);
+        psp::dprintln!("[dreamcart trace] {}", msg);
     }
 }
 
 unsafe fn trace_i32(label: &str, value: i32) {
     if trace_enabled() {
-        psp::dprintln!("[pspjs trace] {}: {}", label, value);
+        psp::dprintln!("[dreamcart trace] {}: {}", label, value);
     }
 }
 
 unsafe fn trace_u32(label: &str, value: u32) {
     if trace_enabled() {
-        psp::dprintln!("[pspjs trace] {}: 0x{:08x}", label, value);
+        psp::dprintln!("[dreamcart trace] {}: 0x{:08x}", label, value);
     }
 }
 
 unsafe fn trace_usize(label: &str, value: usize) {
     if trace_enabled() {
-        psp::dprintln!("[pspjs trace] {}: {}", label, value);
+        psp::dprintln!("[dreamcart trace] {}: {}", label, value);
     }
 }
 
 unsafe fn trace_halt(msg: &str) -> ! {
-    psp::dprintln!("[pspjs halt] {}", msg);
+    psp::dprintln!("[dreamcart halt] {}", msg);
     psp::dprintln!("HOME exits. Last stage stays on screen.");
     loop {
         sys::sceDisplayWaitVblankStart();
@@ -359,7 +359,7 @@ fn parse_capture_u32(s: &[u8], mut i: usize, end: usize) -> Option<u32> {
 /// `0:0,12:0x20` means settle in the default pose, then hold RIGHT from frame 12.
 #[cfg(feature = "capture")]
 fn capture_input_mask(frame_count: u32, fallback: i32) -> i32 {
-    let s = PSPJS_CAPTURE_INPUT.as_bytes();
+    let s = DREAMCART_CAPTURE_INPUT.as_bytes();
     if s.is_empty() {
         return fallback;
     }

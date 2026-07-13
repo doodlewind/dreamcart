@@ -27,7 +27,7 @@ await $`bun framework/build.ts`.cwd(root).quiet();
 await $`bun web/build-games.ts`.cwd(root).quiet();
 await $`bun runtime/build.ts --features capture`
   .cwd(root)
-  .env({ ...process.env, PSPJS_GAME: 'tatical3d.js' });
+  .env({ ...process.env, DREAMCART_GAME: 'tatical3d.js' });
 
 console.log('# PSP capture (PPSSPPHeadless software renderer) ...');
 rmSync(dccap, { recursive: true, force: true });

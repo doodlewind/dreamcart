@@ -879,8 +879,8 @@
   // Build a WebGL2 canvas stacked UNDER the Canvas2D HUD canvas, same 480x272
   // backing store and same CSS box, so the GL 3D layer shows through wherever the
   // HUD is transparent (docs/3d-design.md §4.3 + §10.1 R2). The public
-  // PSPJS.mount(el) signature is unchanged: the GL canvas is created here, the
-  // caller still only knows about the HUD canvas it passed in.
+  // DreamCart.mount(el) creates the GL canvas here, while the caller still only
+  // knows about the HUD canvas it passed in.
   function mountGLLayer(hud) {
     var c = document.createElement('canvas');
     c.width = W; c.height = H;
@@ -951,7 +951,7 @@
     gfx.clear(0, 0, 0);
   }
 
-  window.PSPJS = {
+  window.DreamCart = {
     W: W, H: H, BTN: BTN,
     mount: mount, load: load, start: start, stop: stop,
     setPaused: setPaused, step: step,

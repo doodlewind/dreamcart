@@ -1,5 +1,5 @@
 // Build the PSP EBOOT.PBP via `cargo psp`, with the toolchain env wired up using
-// Bun shell. Select the game with PSPJS_GAME. Run: bun runtime/build.ts
+// Bun shell. Select the game with DREAMCART_GAME. Run: bun runtime/build.ts
 import { $ } from "bun";
 import { existsSync } from "node:fs";
 import {
@@ -32,9 +32,9 @@ const rustflags = [
   // non-abicalls code" warning PER newlib object — a benign, structural property
   // of the rust-psp + PSPSDK combination that has always held (the EBOOT links
   // and runs). Suppress it by DEFAULT so the noise can't bury a real linker
-  // message; set PSPJS_SHOW_LINKER_MESSAGES=1 to inspect raw linker output. Real
+  // message; set DREAMCART_SHOW_LINKER_MESSAGES=1 to inspect raw linker output. Real
   // link failures (undefined symbols, etc.) are hard errors, unaffected by this.
-  process.env.PSPJS_SHOW_LINKER_MESSAGES === "1" ? undefined : "-A linker-messages",
+  process.env.DREAMCART_SHOW_LINKER_MESSAGES === "1" ? undefined : "-A linker-messages",
   "-A unexpected-cfgs",
   "-A unstable-name-collisions",
 ].filter(Boolean).join(" ");
@@ -72,9 +72,9 @@ function outputProfile(args: string[]): string {
 
 const cargoArgs = Bun.argv.slice(2);
 const profile = outputProfile(cargoArgs);
-const game = process.env.PSPJS_GAME ?? "raw-snake.js";
+const game = process.env.DREAMCART_GAME ?? "raw-snake.js";
 console.log("PSP build: " + game);
-if (process.env.PSPJS_TRACE === "1") console.log("PSP trace: enabled");
+if (process.env.DREAMCART_TRACE === "1") console.log("PSP trace: enabled");
 if (!rustup) {
   console.error("rustup not found; install rustup, then run `bun run bootstrap`");
   process.exit(1);

@@ -3,7 +3,7 @@ target
 mipsel-sony-psp
 *.zip
 dist
-.pspjs-*.workflow.js
+.dreamcart-*.workflow.js
 dist-3ds
 web/games.generated.js
 web/site

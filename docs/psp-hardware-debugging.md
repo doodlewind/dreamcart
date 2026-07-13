@@ -91,7 +91,7 @@ bun run psp:hw --no-build    # reload whatever is already built
 ```
 
 No environment variables required. The tool auto-picks a free TCP port block for
-the link; override the starting port with `PSP_HW_PORT` if you ever need to.
+the link; override the starting port with `DREAMCART_PSP_HW_PORT` if you ever need to.
 
 ## Troubleshooting
 
@@ -114,7 +114,7 @@ different base port. (On this project's dev Mac, Baidu Netdisk squats on 10000.)
 
 **`ldstart … Error: 0x80020148` (`UNSUPPORTED_PRX_TYPE`).**
 You pointed `ldstart` at `EBOOT.PBP`. PSPLINK doesn't unwrap the PBP container —
-load the raw `pspjs-runtime.prx` instead. (`bun run psp:hw` already does this.)
+load the raw `dreamcart-runtime.prx` instead. (`bun run psp:hw` already does this.)
 
 **`ldstart … Error: 0x800200D9` (`MEMBLOCK_ALLOC_FAILED`) when reloading.**
 The previous module didn't free its memory (rust-psp modules don't tear down on
@@ -135,11 +135,11 @@ If you want to drive the chain manually (or on Linux):
 usbhostfs_pc -b 10200 runtime/target/mipsel-sony-psp/debug &
 
 # launch PSPLINK on the PSP, wait for "Connected to device", then:
-pspsh -p 10200 -e "ldstart host0:/pspjs-runtime.prx"    # load + run
+pspsh -p 10200 -e "ldstart host0:/dreamcart-runtime.prx" # load + run
 
 # after rebuilding (bun run psp):
 pspsh -p 10200 -e "reset"                                # clean reboot
-pspsh -p 10200 -e "ldstart host0:/pspjs-runtime.prx"     # run the new build
+pspsh -p 10200 -e "ldstart host0:/dreamcart-runtime.prx" # run the new build
 ```
 
 Handy PSPLINK commands over `pspsh -p <port> -e "<cmd>"`: `modlist` (list loaded
