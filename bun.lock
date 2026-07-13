@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "psp-js",
+      "name": "dreamcart",
       "devDependencies": {
         "@gltf-transform/core": "^4.4.0",
         "@types/react": "^19.2.0",

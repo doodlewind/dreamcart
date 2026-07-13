@@ -24,6 +24,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dreamcart-runtime"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "libquickjs-sys",
+ "linked_list_allocator",
+ "psp",
+]
+
+[[package]]
 name = "kernel32-sys"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -106,16 +116,6 @@ dependencies = [
  "num_enum_derive",
  "paste",
  "unstringify",
-]
-
-[[package]]
-name = "pspjs-runtime"
-version = "0.1.0"
-dependencies = [
- "cc",
- "libquickjs-sys",
- "linked_list_allocator",
- "psp",
 ]
 
 [[package]]

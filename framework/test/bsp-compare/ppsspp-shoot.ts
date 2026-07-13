@@ -35,7 +35,7 @@ const backend = (process.env.CAPTURE_BACKEND
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// --- Build the compare EBOOT (PSPJS_GAME=bsp-compare.js) unless told to skip. ---
+// --- Build the compare EBOOT (DREAMCART_GAME=bsp-compare.js) unless told to skip. ---
 async function buildEboot() {
   if (process.env.BSP_SKIP_BUILD === '1') { console.log('# (skip EBOOT build)'); return; }
   if (map !== 'box') {
@@ -51,7 +51,7 @@ async function buildEboot() {
   // "emulator:" 0x20), which is behind the `capture` cargo feature.
   const feat = backend === 'headless' ? ['--features', 'capture'] : [];
   console.log(`# building compare EBOOT (cargo psp${feat.length ? ' --features capture' : ''}) ...`);
-  await $`bun runtime/build.ts ${feat}`.cwd(root).env({ ...process.env, PSPJS_GAME: 'bsp-compare.js' });
+  await $`bun runtime/build.ts ${feat}`.cwd(root).env({ ...process.env, DREAMCART_GAME: 'bsp-compare.js' });
   if (!existsSync(EBOOT)) throw new Error('EBOOT not produced at ' + EBOOT);
 }
 

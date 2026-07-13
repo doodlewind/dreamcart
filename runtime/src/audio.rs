@@ -567,7 +567,7 @@ pub unsafe fn start_audio_thread() -> i32 {
     build_sine_lut();
     AUDIO_RUN.store(true, Ordering::Release);
     let id = sys::sceKernelCreateThread(
-        b"pspjs_audio\0".as_ptr(),
+        b"dreamcart_audio\0".as_ptr(),
         audio_thread,
         // Priority 33 — just BELOW the JS/render thread (32, main.rs boot()). On the
         // single-core PSP a higher-priority mixer could preempt the vblank-paced 60fps
@@ -653,7 +653,7 @@ pub unsafe fn register(ctx: *mut JSContext, global: JSValue) {
 //    `AudioOutputFrequency::Khz44_1` resolve when you build; the `use` is at the top.)
 //
 // ── HUMAN BUILD + BOOT (the part that cannot be verified headless) ──
-// 5. BUILD: `PSPJS_GAME=flappy bun run psp` (or scripts/psp) to produce an EBOOT that
+// 5. BUILD: `DREAMCART_GAME=flappy bun run psp` (or scripts/psp) to produce an EBOOT that
 //    embeds flappy.js (which references "audio:voices" so its .dcpak carries the
 //    +392-byte voice table). The compiler will catch any libquickjs-sys signature
 //    drift in js_snd_* (JSContext/JSValue/JS_GetArrayBuffer/JS_NewInt32) — these

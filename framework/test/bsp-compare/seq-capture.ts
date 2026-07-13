@@ -67,7 +67,7 @@ try {
   console.log(`# bundling + building bsp3d capture EBOOT (${map}) ...`);
   await $`bun framework/build.ts`.cwd(root).quiet();
   await $`bun web/build-games.ts`.cwd(root).quiet();
-  await $`bun runtime/build.ts --features capture`.cwd(root).env({ ...process.env, PSPJS_GAME: 'bsp3d.js' });
+  await $`bun runtime/build.ts --features capture`.cwd(root).env({ ...process.env, DREAMCART_GAME: 'bsp3d.js' });
 } finally {
   await restoreBsp3d();
 }

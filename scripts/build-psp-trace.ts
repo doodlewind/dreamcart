@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const cargoArgs = Bun.argv.slice(2);
 const profile = outputProfile(cargoArgs);
-const game = process.env.PSPJS_GAME ?? "raw-snake.js";
+const game = process.env.DREAMCART_GAME ?? "raw-snake.js";
 const gameSlug = game.replace(/\.js$/i, "").replace(/[^A-Za-z0-9_-]/g, "_");
 const builtEboot = join(root, "runtime/target/mipsel-sony-psp", profile, "EBOOT.PBP");
 const outRoot = join(root, "dist/psp-trace");
@@ -39,8 +39,8 @@ if (cargoArgs.includes("--help") || cargoArgs.includes("-h")) {
 console.log(`Building PSP trace EBOOT for ${game}...`);
 await $`bun ${join(root, "runtime/build.ts")} ${cargoArgs}`.env({
   ...process.env,
-  PSPJS_TRACE: "1",
-  PSPJS_GAME: game,
+  DREAMCART_TRACE: "1",
+  DREAMCART_GAME: game,
 });
 
 if (!existsSync(builtEboot)) {

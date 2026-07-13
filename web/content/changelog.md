@@ -104,6 +104,6 @@ the same game logic across every platform, and added a dual-screen Android handh
 
 ### Tooling & docs
 
-- **Project rename** psp-js → **DreamCart**, with the `dreamcart.games` site
+- **Project identity** unified under **DreamCart**, with the `dreamcart.games` site
   ([#3](https://github.com/doodlewind/dreamcart/pull/3)).
 - **`tech-explainer` skill** plus the first explainer (depth / reversed-Z).

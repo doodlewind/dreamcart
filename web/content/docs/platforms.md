@@ -66,7 +66,7 @@ A few PSP-specific facts worth knowing when targeting the 32 MB device:
 ### Build a single EBOOT
 
 ```sh
-PSPJS_GAME=raw-tetris.js bun run psp     # builds runtime/target/.../EBOOT.PBP
+DREAMCART_GAME=raw-tetris.js bun run psp # builds runtime/target/.../EBOOT.PBP
 ```
 
 `bun runtime/build.ts` wires the cross-compile toolchain (LLVM for MIPS,
@@ -76,7 +76,7 @@ Pocket Stack cache). Apple's `ar`/`clang` cannot target MIPS, so the build force
 `llvm-ar`/`llvm-ranlib` and a `clang` cross target; getting that wrong shows up as
 `undefined symbol: JS_*`. The benign "linking abicalls code with non-abicalls
 code" warning flood (prebuilt newlib is `+abicalls`, rust-psp is `+noabicalls`)
-is suppressed by default; set `PSPJS_SHOW_LINKER_MESSAGES=1` to see raw linker
+is suppressed by default; set `DREAMCART_SHOW_LINKER_MESSAGES=1` to see raw linker
 output.
 
 Open the result in [PPSSPP](https://www.ppsspp.org/):
@@ -108,10 +108,10 @@ On PS Vita (Adrenaline) the final path is
 The Web host (`web/engine.js`) is a plain vanilla global — no framework, no
 bundler at runtime — that implements the identical `gfx` / input / `frame`
 contract on a Canvas, with WebGL2 backing the optional `g3d` 3D path. It exposes
-`window.PSPJS`:
+`window.DreamCart`:
 
 ```js
-window.PSPJS = {
+window.DreamCart = {
   W: 480, H: 272,
   BTN: { SELECT: 0x01, START: 0x08, UP: 0x10, RIGHT: 0x20, DOWN: 0x40, LEFT: 0x80,
          LTRIGGER: 0x100, RTRIGGER: 0x200, TRIANGLE: 0x1000, CIRCLE: 0x2000,
@@ -167,7 +167,7 @@ The build runs the `devkitpro/devkitarm` toolchain inside Docker, so no host
 toolchain or sudo is needed — just Docker (e.g. OrbStack or Docker Desktop):
 
 ```sh
-PSPJS_GAME=raw-tetris.js bun run 3ds   # -> runtime-3ds/dreamcart-3ds.3dsx
+DREAMCART_GAME=raw-tetris.js bun run 3ds # -> runtime-3ds/dreamcart-3ds.3dsx
 ```
 
 Run the `.3dsx` in [Azahar](https://azahar-emu.org/) (the maintained Citra fork)

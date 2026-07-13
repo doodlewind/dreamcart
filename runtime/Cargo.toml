@@ -1,5 +1,5 @@
 [package]
-name = "pspjs-runtime"
+name = "dreamcart-runtime"
 version = "0.1.0"
 authors = ["Yifeng Wang <doodlewind@gmail.com>"]
 edition = "2018"

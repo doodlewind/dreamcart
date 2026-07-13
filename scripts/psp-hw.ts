@@ -18,7 +18,7 @@ import { createInterface } from "node:readline";
 import { resolvePspSdk } from "./psp-toolchain.ts";
 
 const root = new URL("..", import.meta.url).pathname;
-const PRX = "host0:/pspjs-runtime.prx";
+const PRX = "host0:/dreamcart-runtime.prx";
 
 const argv = Bun.argv.slice(2);
 const flags = new Set(argv.filter((a) => a.startsWith("-")));
@@ -77,11 +77,12 @@ if (!noBuild) {
 }
 
 const targetDir = root + `runtime/target/mipsel-sony-psp/${profile}`;
-const prxPath = targetDir + "/pspjs-runtime.prx";
+const prxPath = targetDir + "/dreamcart-runtime.prx";
 
 // usbhostfs_pc binds base..base+8; pspsh talks to base, base+2, base+3, base+8.
 // Default base 10000 is the PSPLINK standard; auto-scan upward for a free block so
-// a squatter on 10000 (e.g. Baidu Netdisk) doesn't break us. Override: PSP_HW_PORT.
+// a squatter on 10000 (e.g. Baidu Netdisk) doesn't break us. Override:
+// DREAMCART_PSP_HW_PORT.
 function portFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const srv = createServer();
@@ -105,7 +106,7 @@ async function build(): Promise<boolean> {
   console.log(`building ${game} (${profile})…`);
   const cargoArgs = release ? ["--release"] : [];
   const res = await $`bun ${root}runtime/build.ts ${cargoArgs}`
-    .env({ ...process.env, PSPJS_GAME: game + ".js" })
+    .env({ ...process.env, DREAMCART_GAME: game + ".js" })
     .nothrow();
   if (res.exitCode !== 0 || !existsSync(prxPath)) {
     console.error("build failed — not reloading");
@@ -165,7 +166,7 @@ if (existsSync(root + "runtime/target") === false) {
   process.exit(1);
 }
 
-const basePort = await findBasePort(Number(process.env.PSP_HW_PORT ?? 10000));
+const basePort = await findBasePort(Number(process.env.DREAMCART_PSP_HW_PORT ?? 10000));
 
 const existing = (await $`pgrep -x usbhostfs_pc`.nothrow().text()).trim();
 if (existing) {

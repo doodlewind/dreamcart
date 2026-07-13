@@ -1,7 +1,7 @@
 // Embeds the selected game .js into source/game_js.h as a NUL-terminated byte
 // array (JS_Eval needs input[len] == '\0'). Usage: bun runtime-3ds/gen-game.ts [game.js]
 const here = new URL(".", import.meta.url).pathname;
-const game = Bun.argv[2] || process.env.PSPJS_GAME || "raw-snake.js";
+const game = Bun.argv[2] || process.env.DREAMCART_GAME || "raw-snake.js";
 const src = await Bun.file(here + "../runtime/src/game/" + game).text();
 const bytes = new TextEncoder().encode(src);
 

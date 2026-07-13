@@ -1,14 +1,14 @@
 /**
  * ConsoleShell — the headless, themeable handheld. Renders the bezel + a SCREEN
- * SLOT (where /play mounts the 480x272 PSPJS canvas) + d-pad + analog nub + face
+ * SLOT (where /play mounts the 480x272 DreamCart canvas) + d-pad + analog nub + face
  * buttons + shoulders + START/SELECT + brand. Every control fires
- * onPress(bit, down) so the page can wire PSPJS.pressVirtual.
+ * onPress(bit, down) so the page can wire DreamCart.pressVirtual.
  *
  * data-layout: "horizontal" (PSP-like, wide) | "vertical" (GBA-SP-like, narrow).
  * The page picks the layout (e.g. from a ResizeObserver / media query). Themed via
  * [data-theme] [data-part] CSS in base.ts + themes.ts — all four themes restyle it.
  *
- * Button bits use the PSPJS.BTN bitmask (see web/engine.js):
+ * Button bits use the DreamCart.BTN bitmask (see web/engine.js):
  *   SELECT 0x01, START 0x08, UP 0x10, RIGHT 0x20, DOWN 0x40, LEFT 0x80,
  *   LTRIGGER 0x100, RTRIGGER 0x200, TRIANGLE 0x1000, CIRCLE 0x2000,
  *   CROSS 0x4000, SQUARE 0x8000.

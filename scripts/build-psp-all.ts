@@ -367,7 +367,7 @@ for (const [index, game] of games.entries()) {
   rmSync(eboot, { force: true });
   await $`bun ${join(root, "runtime/build.ts")} ${cargoArgs}`.cwd(root).env({
     ...process.env,
-    PSPJS_GAME: `${game}.js`,
+    DREAMCART_GAME: `${game}.js`,
   });
 
   if (!existsSync(eboot)) {

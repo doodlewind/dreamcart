@@ -15,7 +15,7 @@ user to look.
 
 ```bash
 # Build the EBOOT with a specific game embedded (the game is selected at BUILD time).
-PSPJS_GAME=outdoor3d.js bun runtime/build.ts        # -> runtime/target/.../EBOOT.PBP
+DREAMCART_GAME=outdoor3d.js bun runtime/build.ts    # -> runtime/target/.../EBOOT.PBP
 # CRITICAL: builds don't always relink on rapid re-runs. VERIFY which game is embedded:
 strings runtime/target/mipsel-sony-psp/debug/EBOOT.PBP | grep -c "OUTDOOR 3D"   # 1 = yes
 ```

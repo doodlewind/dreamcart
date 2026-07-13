@@ -114,7 +114,7 @@ bun framework/bake/fetch-bsp.ts cs        # the classic CS batch (8 maps + WADs,
 bun framework/bake/test-bsp-maps.ts       # parse + bake + assert every vendored map
 bun framework/bake/bake-bsp.ts de_dust2   # -> framework/src/assets-bsp-de-dust2.ts (gitignored)
 # point framework/games/bsp3d.js at BSP_DE_DUST2, then:
-PSPJS_GAME=bsp3d.js bun runtime/build.ts
+DREAMCART_GAME=bsp3d.js bun runtime/build.ts
 ```
 
 `test-bsp-maps.ts` is a local systematic harness (the maps are copyrighted, so it is not a

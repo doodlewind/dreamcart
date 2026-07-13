@@ -1,4 +1,4 @@
-// psp-js 3DS host: boots QuickJS, exposes the same gfx/log/frame(buttons) API
+// DreamCart 3DS host: boots QuickJS, exposes the same gfx/log/frame(buttons) API
 // the PSP and Web builds provide, and runs the exact same game .js file.
 //
 // The game's 480x272 logical screen is uniform-scaled to fit the 3DS top
@@ -380,7 +380,7 @@ int main(int argc, char **argv) {
     g_scale = 400.0f / LOGIC_W;                 // ~0.833
     g_offy = (240.0f - LOGIC_H * g_scale) / 2.0f;
 
-    printf("psp-js (3DS) booting QuickJS...\n");
+    printf("DreamCart (3DS) booting QuickJS...\n");
     printf("START+SELECT to quit.\n");
 
     JSRuntime *rt = JS_NewRuntime();

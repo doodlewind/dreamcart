@@ -1,8 +1,8 @@
 //! Selects which JS game and trace mode get embedded into the EBOOT at build
 //! time.
 //!
-//! Set `PSPJS_GAME` to a filename in `src/game/` (default `raw-snake.js`):
-//!   PSPJS_GAME=raw-pong.js bun runtime/build.ts
+//! Set `DREAMCART_GAME` to a filename in `src/game/` (default `raw-snake.js`):
+//!   DREAMCART_GAME=raw-pong.js bun runtime/build.ts
 //!
 //! The chosen file is copied to `$OUT_DIR/game.js` with a trailing NUL byte so
 //! `JS_Eval` (which requires `input[len] == '\0'`) can use it directly.
@@ -13,9 +13,9 @@ use std::{env, fs};
 fn main() {
     // Default to the raw low-level Snake demo (a tracked file; framework game
     // bundles are gitignored and require `bun framework/build.ts` first).
-    let game = env::var("PSPJS_GAME").unwrap_or_else(|_| "raw-snake.js".to_string());
-    let trace = env::var("PSPJS_TRACE").unwrap_or_default();
-    let capture_input = env::var("PSPJS_CAPTURE_INPUT").unwrap_or_default();
+    let game = env::var("DREAMCART_GAME").unwrap_or_else(|_| "raw-snake.js".to_string());
+    let trace = env::var("DREAMCART_TRACE").unwrap_or_default();
+    let capture_input = env::var("DREAMCART_CAPTURE_INPUT").unwrap_or_default();
 
     let game_dir = Path::new("src/game");
     let src = game_dir.join(&game);
@@ -36,12 +36,12 @@ fn main() {
     fs::write(&dcpak_out, &dcpak_bytes).unwrap();
 
     // Rebuild when the selection changes or any game file is edited.
-    println!("cargo:rustc-env=PSPJS_GAME={}", game);
-    println!("cargo:rustc-env=PSPJS_TRACE={}", trace);
-    println!("cargo:rustc-env=PSPJS_CAPTURE_INPUT={}", capture_input);
-    println!("cargo:rerun-if-env-changed=PSPJS_GAME");
-    println!("cargo:rerun-if-env-changed=PSPJS_TRACE");
-    println!("cargo:rerun-if-env-changed=PSPJS_CAPTURE_INPUT");
+    println!("cargo:rustc-env=DREAMCART_GAME={}", game);
+    println!("cargo:rustc-env=DREAMCART_TRACE={}", trace);
+    println!("cargo:rustc-env=DREAMCART_CAPTURE_INPUT={}", capture_input);
+    println!("cargo:rerun-if-env-changed=DREAMCART_GAME");
+    println!("cargo:rerun-if-env-changed=DREAMCART_TRACE");
+    println!("cargo:rerun-if-env-changed=DREAMCART_CAPTURE_INPUT");
     if let Ok(entries) = fs::read_dir(game_dir) {
         for e in entries.flatten() {
             println!("cargo:rerun-if-changed={}", e.path().display());

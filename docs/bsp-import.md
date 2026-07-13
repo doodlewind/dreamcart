@@ -50,7 +50,7 @@ Four committed, deterministic, no-network/no-hardware stages over `box.bsp`:
 4. **Walkability** (`bsp-walk.test.ts`) — the shared walker moves the player, keeps it in
    bounds, and a wall stops it (no pass-through); a trajectory golden catches physics drift.
 
-A manual PPSSPP smoke step verifies a real fetched map (`PSPJS_GAME=bsp3d.js` with the
+A manual PPSSPP smoke step verifies a real fetched map (`DREAMCART_GAME=bsp3d.js` with the
 import switched to `c1a0`) boots, textures, and walks at ~60 FPS.
 
 ## WAD textures (classic CS maps)
@@ -68,7 +68,7 @@ flat fallback — geometry + walkability still work.
 bun framework/bake/fetch-bsp.ts cs            # the classic CS batch (8 maps + WADs, gitignored)
 bun framework/bake/test-bsp-maps.ts           # systematic import test: parse+bake+assert every vendored map
 bun framework/bake/bake-bsp.ts de_dust2       # -> framework/src/assets-bsp-de-dust2.ts (gitignored)
-# point framework/games/bsp3d.js at BSP_DE_DUST2, then: PSPJS_GAME=bsp3d.js bun runtime/build.ts
+# point framework/games/bsp3d.js at BSP_DE_DUST2, then: DREAMCART_GAME=bsp3d.js bun runtime/build.ts
 ```
 
 `test-bsp-maps.ts` is a local systematic harness (the maps are copyrighted, so it is NOT a

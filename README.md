@@ -65,10 +65,10 @@ The raw low-level demos live in [`runtime/src/game/`](runtime/src/game/):
 | Tetris | `raw-tetris.js` | LEFT/RIGHT move, DOWN soft-drop, CROSS/UP rotate, START restart |
 | Platformer | `raw-platformer.js` | LEFT/RIGHT run, CROSS jump, START restart |
 
-Select which one to embed in a native build with `PSPJS_GAME`:
+Select which one to embed in a native build with `DREAMCART_GAME`:
 
 ``` sh
-PSPJS_GAME=raw-tetris.js bun run psp     # builds EBOOT.PBP for Tetris
+DREAMCART_GAME=raw-tetris.js bun run psp # builds EBOOT.PBP for Tetris
 ```
 
 Build every raw and framework game into a PSP memory-stick layout:
@@ -152,7 +152,7 @@ horizontal, PSP-like; mobile: vertical, Game Boy SP-like). Four themes ship:
 
 The Playground runs the *same* game files as every other platform: it implements
 the identical `gfx`/`input`/`frame` contract on Canvas/WebGL2
-([`web/engine.js`](web/engine.js), the global `window.PSPJS`) and loads the games
+([`web/engine.js`](web/engine.js), the global `window.DreamCart`) and loads the games
 from a generated manifest ([`web/build-games.ts`](web/build-games.ts) →
 `window.GAMES`). Each game's menu title, order and on-screen controls come from a
 header comment in its own source (`// @title` / `// @order` / `// @controls`) — the
@@ -177,7 +177,7 @@ bun run test           # golden + smoke tests
 
 `bun run build` bundles each `framework/games/*.js` (framework inlined, via
 `Bun.build`) to `runtime/src/game/<name>.js`, so the PSP/Web/3DS build steps embed
-them exactly like the raw demos (e.g. `PSPJS_GAME=rpg.js bun run psp`).
+them exactly like the raw demos (e.g. `DREAMCART_GAME=rpg.js bun run psp`).
 
 ### Golden tests
 `framework/test/golden.ts` renders each framework game's bundle **headlessly under
@@ -283,7 +283,7 @@ Builds a `.3dsx` homebrew app using the `devkitpro/devkitarm` Docker image — n
 host toolchain install or sudo needed (just Docker, e.g. OrbStack/Docker Desktop):
 
 ``` sh
-PSPJS_GAME=raw-tetris.js bun run 3ds   # -> runtime-3ds/dreamcart-3ds.3dsx
+DREAMCART_GAME=raw-tetris.js bun run 3ds # -> runtime-3ds/dreamcart-3ds.3dsx
 ```
 
 Run the `.3dsx` in [Azahar](https://azahar-emu.org/) (the maintained Citra fork)
