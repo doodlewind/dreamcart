@@ -38,7 +38,10 @@ bun run bootstrap
 
 `bun run bootstrap` reports anything it can't auto-install (Homebrew or Docker
 missing, Docker daemon stopped); fix those and re-run. For the Web playground you
-can skip it entirely.
+can skip it entirely. PSP dependencies are pinned in `toolchains/psp.json` and
+installed under `${XDG_CACHE_HOME:-$HOME/.cache}/pocket-stack`, shared with
+PocketJS. Set `PSP_SDK` (or the compatible `PSPDEV` alias) only to deliberately
+override that cache.
 
 ## Run a game
 

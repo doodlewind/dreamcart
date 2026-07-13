@@ -122,8 +122,9 @@ stop, so `modstun` + `ldstart` leaks). Always `reset` before re-loading. That's
 why `bun run psp:hw` resets between reloads.
 
 **Build fails with a missing SDK.**
-Run `bun run bootstrap` once for the checkout — git worktrees don't share the
-downloaded `mipsel-sony-psp/` SDK.
+Run `bun run bootstrap`. DreamCart and PocketJS share the pinned SDK under
+`${XDG_CACHE_HOME:-$HOME/.cache}/pocket-stack`; set `PSP_SDK` (preferred) or
+`PSPDEV` only when deliberately overriding that cache.
 
 ## Doing it by hand
 

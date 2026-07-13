@@ -70,8 +70,9 @@ PSPJS_GAME=raw-tetris.js bun run psp     # builds runtime/target/.../EBOOT.PBP
 ```
 
 `bun runtime/build.ts` wires the cross-compile toolchain (LLVM for MIPS,
-`cargo psp`, the pinned `nightly-2026-05-28` Rust toolchain, and the PSPSDK in
-`mipsel-sony-psp/`). Apple's `ar`/`clang` cannot target MIPS, so the build forces
+`cargo psp`, the `rust-toolchain.toml`-pinned Rust nightly, and the
+checksum-verified PSP SDK resolved from `PSP_SDK`, `PSPDEV`, or the shared
+Pocket Stack cache). Apple's `ar`/`clang` cannot target MIPS, so the build forces
 `llvm-ar`/`llvm-ranlib` and a `clang` cross target; getting that wrong shows up as
 `undefined symbol: JS_*`. The benign "linking abicalls code with non-abicalls
 code" warning flood (prebuilt newlib is `+abicalls`, rust-psp is `+noabicalls`)

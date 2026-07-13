@@ -230,22 +230,37 @@ and installs/configures:
 - **LLVM** (`brew install llvm` — Apple clang can't target MIPS)
 - **PPSSPP** (`brew install --cask ppsspp`) — PSP emulator
 - **Azahar** (downloaded from GitHub releases) — 3DS emulator
-- **Rust** `nightly-2026-05-28` + `rust-src`, and pins the repo override
-- **cargo-psp / prxgen / pack-pbp / mksfo** (built from the `rust-psp` submodule)
-- the **PSPSDK** from `doodlewind/pspdev`
-  (`sdk-noabicalls-normalized-2026-06-19`, clang-built no-abicalls newlib/glue
-  with normalized archive metadata) into `mipsel-sony-psp/`
+- **Rust** `nightly-2026-05-28` + `rust-src` (pinned by `rust-toolchain.toml`)
+- **cargo-psp / prxgen / prxmin / pack-pbp / mksfo** (installed from the pinned
+  `pocket-stack/rust-psp` revision into the shared Pocket Stack cache)
+- the checksum-verified **PSP SDK** from `pocket-stack/pspdev`
+  (`sdk-noabicalls-normalized-2026-06-19`, with normalized archive metadata)
+  into the shared Pocket Stack cache
 - the **`devkitpro/devkitarm`** Docker image (3DS toolchain)
 
 It reports anything it can't auto-install (Homebrew/Docker not present, Docker
 daemon stopped); fix those and re-run. Then everything runs on Bun — there's no
 Python/Make glue.
 
-> The `quickjs-rs` and `rust-psp` submodules point at `doodlewind/*` forks.
+The pinned manifest is [`toolchains/psp.json`](toolchains/psp.json). DreamCart
+and PocketJS both resolve it under
+`${XDG_CACHE_HOME:-$HOME/.cache}/pocket-stack` (or `POCKET_STACK_CACHE_DIR`).
+Set `PSP_SDK=/path/to/mipsel-sony-psp` to use an explicit SDK; `PSPDEV` is also
+accepted for compatibility. An invalid explicit override is an error and never
+silently falls through to the cache. The build exports both names to native
+dependencies. Cached SDKs also carry a manifest-derived receipt, so an old
+unverified `libc.a` directory cannot masquerade as the pinned download.
+
+> The `quickjs-rs` and `rust-psp` submodules point at `pocket-stack/*` forks.
 > Those forks carry DreamCart's PSP C/stdio shims, 32-bit `size_t` ABI/API
 > exports, and PSP nightly/tooling compatibility fixes. LLVM `llvm-ar` is used
 > for the static archive (Apple `ar` silently drops MIPS objects →
 > `undefined symbol: JS_*`).
+>
+> The SDK tag is historical: QuickJS glue is compiled `+noabicalls` during the
+> DreamCart build, while upstream prebuilt newlib remains `+abicalls`. The
+> runtime suppresses that known linker warning by default; it does not claim
+> that every library in the archive is no-abicalls.
 
 ## Run on PSP
 Open the EBOOT in [PPSSPP](https://www.ppsspp.org/):
