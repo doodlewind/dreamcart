@@ -1,0 +1,965 @@
+// DreamCart Web engine — an isomorphic Canvas implementation of the same tiny
+// runtime the PSP and 3DS builds provide. A game is a .js file that uses only:
+//   gfx.clear(r,g,b), gfx.fillRect(x,y,w,h,r,g,b), log(msg)
+//   globalThis.frame = function(buttons){ ... }   // called ~60x/second
+// The button bitmask MUST match every platform (see BTN below), so the exact
+// same game source runs unchanged on Web, PSP, and 3DS.
+(function () {
+  'use strict';
+
+  var W = 480, H = 272;          // logical screen, identical to PSP
+
+  // Button bits — canonical source is framework/src/input.ts (Btn); this plain
+  // script can't import it, so the copy is enforced by framework/test/contract.ts.
+  var BTN = {
+    SELECT: 0x01, START: 0x08,
+    UP: 0x10, RIGHT: 0x20, DOWN: 0x40, LEFT: 0x80,
+    LTRIGGER: 0x100, RTRIGGER: 0x200,
+    TRIANGLE: 0x1000, CIRCLE: 0x2000, CROSS: 0x4000, SQUARE: 0x8000,
+  };
+
+  // Keyboard -> button. Arrows/WASD = d-pad; Z/X/C/V = face; Q/L + E/R = L/R triggers;
+  // Enter = START.
+  var KEYMAP = {
+    ArrowUp: BTN.UP, ArrowRight: BTN.RIGHT, ArrowDown: BTN.DOWN, ArrowLeft: BTN.LEFT,
+    KeyW: BTN.UP, KeyD: BTN.RIGHT, KeyS: BTN.DOWN, KeyA: BTN.LEFT,
+    KeyZ: BTN.CROSS, KeyX: BTN.CIRCLE, KeyC: BTN.SQUARE, KeyV: BTN.TRIANGLE,
+    KeyQ: BTN.LTRIGGER, KeyL: BTN.LTRIGGER, KeyE: BTN.RTRIGGER, KeyR: BTN.RTRIGGER,
+    Enter: BTN.START, Space: BTN.CROSS, ShiftRight: BTN.SELECT,
+  };
+
+  var canvas = null, ctx = null;
+  var glCanvas = null, gl = null; // optional WebGL2 layer for the 3D `g3d` pass
+  var used3dThisFrame = false;    // did g3d.submit run during the current logic frame?
+  var held = 0;                  // current held button bitmask
+  var rafId = 0, runningGame = null, paused = false;
+  var acc = 0, last = 0;
+  var frameCb = null;            // the game's frame(buttons)
+  var logSink = function () {};
+  var fpsSink = function () {};
+  var statsFrames = 0, statsT = 0;
+
+  function rgb(r, g, b) {
+    return 'rgb(' + (r & 255) + ',' + (g & 255) + ',' + (b & 255) + ')';
+  }
+
+  // The native API exposed to the game (mirrors the Rust/C bridges).
+  var gfx = {
+    clear: function (r, g, b) {
+      // In a 3D frame the WebGL layer underneath owns the background, so the
+      // Canvas2D HUD must be TRANSPARENT where nothing is drawn — otherwise an
+      // opaque fill would hide the 3D scene (docs/3d-design.md §10.1 R10).
+      // 2D-only frames (no g3d.submit this frame) keep today's exact opaque fill.
+      if (used3dThisFrame) { ctx.clearRect(0, 0, W, H); return; }
+      ctx.fillStyle = rgb(r, g, b); ctx.fillRect(0, 0, W, H);
+    },
+    fillRect: function (x, y, w, h, r, g, b) {
+      ctx.fillStyle = rgb(r, g, b);
+      ctx.fillRect(x | 0, y | 0, w | 0, h | 0);
+    },
+  };
+
+  // ===========================================================================
+  // 3D layer (`g3d`) — a WebGL2 implementation of the same retained-mesh + one
+  // batched `submit`-per-frame contract the PSP and 3DS hosts provide. The wire
+  // format is framework/src/g3d.ts; the visual target is framework/test/raster3d.ts.
+  // This whole block is optional: if WebGL2 isn't available, window.g3d is left
+  // undefined and the framework skips the 3D pass entirely (capability probe).
+  // ===========================================================================
+
+  // Wire constants — MUST stay byte-identical to framework/src/g3d.ts. Declared
+  // one-per-line `var NAME = 0x..;` so framework/test/contract.ts can grep+assert
+  // parity (its regex forbids digits/newlines between the name and the hex value).
+  var DC3D_MAGIC = 0x44433344;   // 'DC3D' little-endian
+  var DC3D_VERSION = 0x0002;
+  var OP_SET_CAMERA = 0x0001;
+  var OP_DRAW = 0x0002;
+  var OP_IMM_TRIS = 0x0003;
+  var OP_BIND_TEXTURE = 0x0004;
+  var OP_SET_LIGHTS = 0x0005;
+  var OP_DRAW_SKINNED = 0x0006;
+  var OP_SET_FOG = 0x0007;
+  var OP_DRAW_SKIN_ANIM = 0x0009; // v2: native-sampler skin (PSP only); web has no uploadClip so it never receives this — declared for wire-parity
+  var FMT_POS = 0x0001;          // 3 x f32
+  var FMT_COLOR = 0x0002;        // u32 ABGR
+  var FMT_NORMAL = 0x0004;       // 3 x f32
+  var FMT_UV = 0x0008;           // 2 x f32
+  var FMT_WEIGHTS = 0x0010;      // bone weights (count per-mesh)
+
+  // GLSL ES 3.00. u_viewProj is the shared math.ts proj*view (standard Y-up NDC;
+  // NO baked Y-flip — WebGL clip space is already Y-up), so the shader is a plain
+  // MVP. Vertex attributes follow the GE order from framework/src/g3d.ts:
+  // [weights][uv][color][normal][position].
+  var VERT_SRC =
+    '#version 300 es\n' +
+    'layout(location=0) in vec3 a_pos;\n' +
+    'layout(location=1) in vec4 a_color;\n' +
+    'layout(location=2) in vec2 a_uv;\n' +
+    'layout(location=3) in vec3 a_normal;\n' +
+    'layout(location=4) in vec4 a_weights0;\n' +
+    'layout(location=5) in vec4 a_weights1;\n' +
+    'uniform mat4 u_viewProj;\n' +
+    'uniform mat4 u_model;\n' +
+    'uniform int u_useSkin;\n' +
+    'uniform int u_weightCount;\n' +
+    'uniform mat4 u_bones[8];\n' +
+    'uniform int u_useLighting;\n' +
+    'uniform int u_lightCount;\n' +
+    'uniform vec3 u_ambient;\n' +
+    'uniform vec3 u_lightDir[4];\n' +
+    'uniform vec3 u_lightColor[4];\n' +
+    'uniform int u_useFog;\n' +
+    'uniform float u_fogNear;\n' +
+    'uniform float u_fogFar;\n' +
+    'out vec4 v_color;\n' +
+    'out vec2 v_uv;\n' +
+    'out float v_fog;\n' +
+    'void main() {\n' +
+    '  vec4 local = vec4(a_pos, 1.0);\n' +
+    '  vec3 localNormal = a_normal;\n' +
+    '  if (u_useSkin != 0) {\n' +
+    '    vec4 skinned = vec4(0.0);\n' +
+    '    vec3 skinnedNormal = vec3(0.0);\n' +
+    '    if (u_weightCount > 0) { skinned += (u_bones[0] * local) * a_weights0.x; skinnedNormal += (mat3(u_bones[0]) * localNormal) * a_weights0.x; }\n' +
+    '    if (u_weightCount > 1) { skinned += (u_bones[1] * local) * a_weights0.y; skinnedNormal += (mat3(u_bones[1]) * localNormal) * a_weights0.y; }\n' +
+    '    if (u_weightCount > 2) { skinned += (u_bones[2] * local) * a_weights0.z; skinnedNormal += (mat3(u_bones[2]) * localNormal) * a_weights0.z; }\n' +
+    '    if (u_weightCount > 3) { skinned += (u_bones[3] * local) * a_weights0.w; skinnedNormal += (mat3(u_bones[3]) * localNormal) * a_weights0.w; }\n' +
+    '    if (u_weightCount > 4) { skinned += (u_bones[4] * local) * a_weights1.x; skinnedNormal += (mat3(u_bones[4]) * localNormal) * a_weights1.x; }\n' +
+    '    if (u_weightCount > 5) { skinned += (u_bones[5] * local) * a_weights1.y; skinnedNormal += (mat3(u_bones[5]) * localNormal) * a_weights1.y; }\n' +
+    '    if (u_weightCount > 6) { skinned += (u_bones[6] * local) * a_weights1.z; skinnedNormal += (mat3(u_bones[6]) * localNormal) * a_weights1.z; }\n' +
+    '    if (u_weightCount > 7) { skinned += (u_bones[7] * local) * a_weights1.w; skinnedNormal += (mat3(u_bones[7]) * localNormal) * a_weights1.w; }\n' +
+    '    if (skinned.w != 0.0) local = skinned;\n' +
+    '    if (dot(skinnedNormal, skinnedNormal) > 0.0) localNormal = normalize(skinnedNormal);\n' +
+    '  }\n' +
+    '  vec4 world = u_model * local;\n' +
+    '  vec3 lit = vec3(1.0);\n' +
+    '  if (u_useLighting != 0) {\n' +
+    '    vec3 n = normalize(mat3(u_model) * localNormal);\n' +
+    '    lit = u_ambient;\n' +
+    '    for (int i = 0; i < 4; i++) {\n' +
+    '      if (i < u_lightCount) {\n' +
+    '        lit += u_lightColor[i] * max(dot(n, normalize(-u_lightDir[i])), 0.0);\n' +
+    '      }\n' +
+    '    }\n' +
+    '    lit = clamp(lit, vec3(0.0), vec3(2.0));\n' +
+    '  }\n' +
+    '  vec4 clip = u_viewProj * world;\n' +
+    '  gl_Position = clip;\n' +
+    '  v_color = vec4(lit, 1.0) * a_color;\n' +
+    '  v_uv = a_uv;\n' +
+    '  float approxDist = abs(clip.w);\n' +
+    '  v_fog = u_useFog != 0 ? clamp((approxDist - u_fogNear) / max(u_fogFar - u_fogNear, 0.001), 0.0, 1.0) : 0.0;\n' +
+    '}\n';
+  var FRAG_SRC =
+    '#version 300 es\n' +
+    'precision highp float;\n' +
+    'in vec4 v_color;\n' +
+    'in vec2 v_uv;\n' +
+    'in float v_fog;\n' +
+    'uniform vec4 u_tint;\n' +
+    'uniform int u_useTexture;\n' +
+    'uniform sampler2D u_tex;\n' +
+    'uniform vec3 u_fogColor;\n' +
+    'out vec4 outColor;\n' +
+    'void main() {\n' +
+    '  vec4 c = v_color * u_tint;\n' +
+    '  if (u_useTexture != 0) c *= texture(u_tex, v_uv);\n' +
+    '  c.rgb = mix(c.rgb, u_fogColor, v_fog);\n' +
+    '  outColor = c;\n' +
+    '}\n';
+
+  var glProgram = null;
+  var uViewProj = null, uModel = null, uTint = null;
+  var uUseTexture = null, uUseSkin = null, uWeightCount = null, uBones = null;
+  var uUseLighting = null, uLightCount = null, uAmbient = null, uLightDir = null, uLightColor = null;
+  var uUseFog = null, uFogColor = null, uFogNear = null, uFogFar = null;
+  var meshes = [];               // handle -> retained GL mesh (or null when freed)
+  var textures = [];             // handle -> WebGLTexture (or null when freed)
+  var reversedZ = false;         // true once EXT_clip_control gives a real [0,1] range
+  var immVao = null, immVbo = null; // dynamic geometry (IMM_TRIS) scratch
+  var camMat = new Float32Array(16); // current u_viewProj (last SET_CAMERA)
+  var boneMats = new Float32Array(16 * 8);
+  var lightDirs = new Float32Array(3 * 4);
+  var lightColors = new Float32Array(3 * 4);
+  var ambientColor = new Float32Array([1, 1, 1]);
+  var fogColor = new Float32Array([0x10 / 255, 0x14 / 255, 0x1e / 255]);
+  var currentTexture = -1;
+  var currentLighting = false;
+  var currentLightCount = 0;
+
+  function compileShader(type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      logSink('g3d shader error: ' + gl.getShaderInfoLog(s));
+      gl.deleteShader(s);
+      return null;
+    }
+    return s;
+  }
+
+  // Build the GL program + global state once, after a WebGL2 context is acquired.
+  function initGL() {
+    var vs = compileShader(gl.VERTEX_SHADER, VERT_SRC);
+    var fs = compileShader(gl.FRAGMENT_SHADER, FRAG_SRC);
+    if (!vs || !fs) { gl = null; return; }
+    var p = gl.createProgram();
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.bindAttribLocation(p, 0, 'a_pos');
+    gl.bindAttribLocation(p, 1, 'a_color');
+    gl.bindAttribLocation(p, 2, 'a_uv');
+    gl.bindAttribLocation(p, 3, 'a_normal');
+    gl.bindAttribLocation(p, 4, 'a_weights0');
+    gl.bindAttribLocation(p, 5, 'a_weights1');
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      logSink('g3d link error: ' + gl.getProgramInfoLog(p));
+      gl = null; return;
+    }
+    glProgram = p;
+    uViewProj = gl.getUniformLocation(p, 'u_viewProj');
+    uModel = gl.getUniformLocation(p, 'u_model');
+    uTint = gl.getUniformLocation(p, 'u_tint');
+    uUseTexture = gl.getUniformLocation(p, 'u_useTexture');
+    uUseSkin = gl.getUniformLocation(p, 'u_useSkin');
+    uWeightCount = gl.getUniformLocation(p, 'u_weightCount');
+    uBones = gl.getUniformLocation(p, 'u_bones[0]');
+    uUseLighting = gl.getUniformLocation(p, 'u_useLighting');
+    uLightCount = gl.getUniformLocation(p, 'u_lightCount');
+    uAmbient = gl.getUniformLocation(p, 'u_ambient');
+    uLightDir = gl.getUniformLocation(p, 'u_lightDir[0]');
+    uLightColor = gl.getUniformLocation(p, 'u_lightColor[0]');
+    uUseFog = gl.getUniformLocation(p, 'u_useFog');
+    uFogColor = gl.getUniformLocation(p, 'u_fogColor');
+    uFogNear = gl.getUniformLocation(p, 'u_fogNear');
+    uFogFar = gl.getUniformLocation(p, 'u_fogFar');
+
+    // Reversed-Z (the shared projection emits NDC z near->1, far->0 ALWAYS). With
+    // EXT_clip_control we get a true [0,1] clip range (best precision, matches
+    // PSP/3DS). WITHOUT it, plain WebGL2 maps NDC z [-1,1] -> depth [0,1], so the
+    // cube's [0,1] NDC z lands in depth [0.5,1] — lower precision but, crucially,
+    // NEAR still maps to the HIGHER depth value either way. So the depth clear +
+    // func are the SAME with or without the extension: clear to 0 (far), keep the
+    // GREATER (nearer) fragment. (Earlier this fell back to clear-1/LESS, which
+    // assumed a standard-Z projection and rendered the cube inside-out on WebViews
+    // that lack EXT_clip_control — e.g. the Android WebView.)
+    var ext = gl.getExtension('EXT_clip_control');
+    if (ext) {
+      ext.clipControlEXT(ext.LOWER_LEFT_EXT, ext.ZERO_TO_ONE_EXT);
+      reversedZ = true;
+    }
+    gl.enable(gl.DEPTH_TEST);
+    // No back-face culling — match raster3d.ts (depth resolves occlusion).
+    gl.disable(gl.CULL_FACE);
+    gl.useProgram(glProgram);
+    setIdentityBones();
+    gl.uniform1i(uUseTexture, 0);
+    gl.uniform1i(uUseSkin, 0);
+    gl.uniform1i(uWeightCount, 0);
+    gl.uniformMatrix4fv(uBones, false, boneMats);
+    gl.uniform1i(uUseLighting, 0);
+    gl.uniform1i(uLightCount, 0);
+    gl.uniform3fv(uAmbient, ambientColor);
+    gl.uniform3fv(uLightDir, lightDirs);
+    gl.uniform3fv(uLightColor, lightColors);
+    gl.uniform1i(uUseFog, 0);
+    gl.uniform3fv(uFogColor, fogColor);
+    gl.uniform1f(uFogNear, 0);
+    gl.uniform1f(uFogFar, 1);
+    var texLoc = gl.getUniformLocation(p, 'u_tex');
+    gl.uniform1i(texLoc, 0);
+
+    // Dynamic-geometry (IMM_TRIS) scratch: one reused DYNAMIC_DRAW VBO+VAO.
+    immVbo = gl.createBuffer();
+    immVao = gl.createVertexArray();
+    gl.bindVertexArray(immVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, immVbo);
+    setupAttribs(FMT_POS | FMT_COLOR, 0);
+    gl.bindVertexArray(null);
+  }
+
+  function vertexStride(format, weightCount) {
+    var s = 0;
+    if (format & FMT_WEIGHTS) s += (weightCount || 0) * 4;
+    if (format & FMT_UV) s += 8;
+    if (format & FMT_COLOR) s += 4;
+    if (format & FMT_NORMAL) s += 12;
+    if (format & FMT_POS) s += 12;
+    return s;
+  }
+
+  function setupAttribs(format, weightCount) {
+    var stride = vertexStride(format, weightCount);
+    var o = 0;
+    if (format & FMT_WEIGHTS) {
+      gl.enableVertexAttribArray(4);
+      gl.vertexAttribPointer(4, Math.min(weightCount, 4), gl.FLOAT, false, stride, o);
+      if (weightCount > 4) {
+        gl.enableVertexAttribArray(5);
+        gl.vertexAttribPointer(5, Math.min(weightCount - 4, 4), gl.FLOAT, false, stride, o + 16);
+      } else {
+        gl.disableVertexAttribArray(5);
+        gl.vertexAttrib4f(5, 0, 0, 0, 0);
+      }
+      o += weightCount * 4;
+    } else {
+      gl.disableVertexAttribArray(4);
+      gl.disableVertexAttribArray(5);
+      gl.vertexAttrib4f(4, 0, 0, 0, 0);
+      gl.vertexAttrib4f(5, 0, 0, 0, 0);
+    }
+    if (format & FMT_UV) {
+      gl.enableVertexAttribArray(2);
+      gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, o);
+      o += 8;
+    } else {
+      gl.disableVertexAttribArray(2);
+      gl.vertexAttrib2f(2, 0, 0);
+    }
+    if (format & FMT_COLOR) {
+      gl.enableVertexAttribArray(1);
+      // FMT_COLOR is u32 ABGR; little-endian bytes reach WebGL as RGBA.
+      gl.vertexAttribPointer(1, 4, gl.UNSIGNED_BYTE, true, stride, o);
+      o += 4;
+    } else {
+      gl.disableVertexAttribArray(1);
+      gl.vertexAttrib4f(1, 1, 1, 1, 1);
+    }
+    if (format & FMT_NORMAL) {
+      gl.enableVertexAttribArray(3);
+      gl.vertexAttribPointer(3, 3, gl.FLOAT, false, stride, o);
+      o += 12;
+    } else {
+      gl.disableVertexAttribArray(3);
+      gl.vertexAttrib3f(3, 0, 1, 0);
+    }
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, o);
+  }
+
+  var g3d = {
+    // Upload a mesh ONCE; the host COPIES the bytes into a VBO(+IBO) and returns
+    // a small int handle.
+    uploadMesh: function (vertices, indices, format, weightCount) {
+      weightCount = weightCount || 0;
+      var stride = vertexStride(format, weightCount);
+      if (!stride || (format & FMT_POS) === 0) return -1;
+      var vbo = gl.createBuffer();
+      var vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW); // copies the bytes
+      setupAttribs(format, weightCount);
+      var vertexCount = vertices.byteLength / stride | 0;
+      var ibo = null, indexCount = 0;
+      if (indices) {
+        ibo = gl.createBuffer();
+        // The IBO binding is captured in the VAO's element-array state.
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+        indexCount = indices.byteLength / 2 | 0; // Uint16 indices
+      }
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      meshes.push({
+        vao: vao, vbo: vbo, ibo: ibo, indexCount: indexCount, vertexCount: vertexCount,
+        format: format, weightCount: weightCount, hasNormal: (format & FMT_NORMAL) !== 0,
+      });
+      return meshes.length - 1;
+    },
+
+    uploadTexture: function (pixels, w, h, psm) {
+      if (psm !== 3) return -1; // Web preview currently supports the shipped RGBA8888 path.
+      var tex = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      // REPEAT (not CLAMP) to match the PSP GE's default wrap: world-space UVs
+      // (BSP/GoldSrc texel-unit UVs, the OSM facade/pavement tiles) run far outside
+      // [0,1] and must tile, not smear the edge texel across the whole face. Baked
+      // textures are power-of-two (<=256), so REPEAT is NPOT-safe in WebGL2.
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w | 0, h | 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(pixels, 0, (w | 0) * (h | 0) * 4));
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      textures.push(tex);
+      return textures.length - 1;
+    },
+
+    // Release native storage (optional; many games never call it).
+    freeMesh: function (handle) {
+      var m = meshes[handle];
+      if (!m) return;
+      gl.deleteVertexArray(m.vao);
+      gl.deleteBuffer(m.vbo);
+      if (m.ibo) gl.deleteBuffer(m.ibo);
+      meshes[handle] = null;
+    },
+
+    // THE per-frame call: parse the one little-endian command buffer, run the 3D
+    // pass (clear color+depth, replay records), then leave depth DISABLED so the
+    // Canvas2D HUD draws on top. Called once per logic frame by the framework.
+    submit: function (buffer, byteLength) {
+      var dv = new DataView(buffer, 0, byteLength);
+      if (dv.getUint32(0, true) !== DC3D_MAGIC) return; // ignore foreign/garbage
+      var recordCount = dv.getUint16(6, true);
+
+      used3dThisFrame = true;
+      // Clear the Canvas2D HUD layer to TRANSPARENT so the WebGL cube underneath
+      // shows through. submit() runs before the frame's gfx HUD draws, so the HUD
+      // text lands on a fresh transparent layer. (Without this, the opaque black
+      // fill from mount()'s initial gfx.clear hides the 3D layer — 3D games like
+      // cube3d never call gfx.clear themselves.)
+      if (ctx) ctx.clearRect(0, 0, W, H);
+      gl.useProgram(glProgram);
+      gl.viewport(0, 0, W, H);
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+      // Reversed-Z: clear depth to 0 (far), keep the GREATER (nearer) fragment.
+      // Unconditional — near maps to the higher depth value with OR without
+      // EXT_clip_control (see initGL). Background matches raster3d.ts.
+      gl.clearColor(0x10 / 255, 0x14 / 255, 0x1e / 255, 1.0);
+      gl.clearDepth(0.0);
+      gl.depthFunc(gl.GREATER);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      // SET_CAMERA defaults to identity until the first one is seen this frame.
+      identity16(camMat);
+      gl.uniformMatrix4fv(uViewProj, false, camMat);
+      currentTexture = -1;
+      currentLighting = false;
+      currentLightCount = 0;
+      fogColor[0] = 0x10 / 255; fogColor[1] = 0x14 / 255; fogColor[2] = 0x1e / 255;
+      gl.uniform1i(uUseTexture, 0);
+      gl.uniform1i(uUseSkin, 0);
+      gl.uniform1i(uUseLighting, 0);
+      gl.uniform1i(uLightCount, 0);
+      gl.uniform1i(uUseFog, 0);
+      gl.uniform3fv(uFogColor, fogColor);
+
+      var o = 8;
+      for (var r = 0; r < recordCount; r++) {
+        var op = dv.getUint16(o, true);
+        var words = dv.getUint16(o + 2, true);
+        var base = o + 4;
+        o = base + words * 4;
+        if (op === OP_SET_CAMERA) {
+          // 16 f32 column-major view*proj, loaded verbatim (no transpose).
+          var vp = new Float32Array(buffer, base, 16);
+          camMat.set(vp);
+          gl.uniformMatrix4fv(uViewProj, false, camMat);
+        } else if (op === OP_DRAW) {
+          var handle = dv.getUint32(base, true);
+          var tint = dv.getUint32(base + 4, true) >>> 0;
+          var model = new Float32Array(buffer, base + 8, 16);
+          gl.uniformMatrix4fv(uModel, false, model);
+          setTint(tint);
+          drawMesh(meshes[handle], false);
+        } else if (op === OP_BIND_TEXTURE) {
+          bindTexture(dv.getUint32(base, true));
+        } else if (op === OP_SET_LIGHTS) {
+          setLights(dv, base);
+        } else if (op === OP_SET_FOG) {
+          setFog(dv, base);
+        } else if (op === OP_DRAW_SKINNED) {
+          var sh = dv.getUint32(base, true);
+          var st = dv.getUint32(base + 4, true) >>> 0;
+          var bc = dv.getUint32(base + 8, true) >>> 0;
+          var sm = new Float32Array(buffer, base + 12, 16);
+          gl.uniformMatrix4fv(uModel, false, sm);
+          setTint(st);
+          setBones(dv, base + 12 + 64, bc);
+          drawMesh(meshes[sh], true);
+        } else if (op === OP_IMM_TRIS) {
+          drawImm(dv, buffer, base, words);
+        }
+      }
+
+      // HUD pass draws next with depth OFF (gfx.fillRect on the Canvas2D layer).
+      gl.disable(gl.DEPTH_TEST);
+    },
+  };
+
+  // 0xFFFFFFFF -> no tint (1,1,1,1); otherwise unpack ABGR to a normalized vec4.
+  function setTint(abgr) {
+    if (abgr === 0xffffffff) { gl.uniform4f(uTint, 1, 1, 1, 1); return; }
+    var rr = (abgr & 255) / 255;
+    var gg = ((abgr >>> 8) & 255) / 255;
+    var bb = ((abgr >>> 16) & 255) / 255;
+    var aa = ((abgr >>> 24) & 255) / 255;
+    gl.uniform4f(uTint, rr, gg, bb, aa);
+  }
+
+  function drawMesh(m) {
+    if (!m) return;
+    setDrawState(m, arguments.length > 1 ? arguments[1] : false);
+    gl.bindVertexArray(m.vao);
+    if (m.ibo) gl.drawElements(gl.TRIANGLES, m.indexCount, gl.UNSIGNED_SHORT, 0);
+    else gl.drawArrays(gl.TRIANGLES, 0, m.vertexCount);
+    gl.bindVertexArray(null);
+  }
+
+  function setDrawState(m, skinned) {
+    var tex = currentTexture >= 0 ? textures[currentTexture] : null;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(uUseTexture, tex ? 1 : 0);
+    gl.uniform1i(uUseSkin, skinned ? 1 : 0);
+    gl.uniform1i(uWeightCount, skinned ? (m.weightCount || 0) : 0);
+    gl.uniform1i(uUseLighting, currentLighting && m.hasNormal ? 1 : 0);
+  }
+
+  function bindTexture(handle) {
+    if (handle === 0xffffffff || !textures[handle]) {
+      currentTexture = -1;
+      return;
+    }
+    currentTexture = handle | 0;
+  }
+
+  function setLights(dv, base) {
+    currentLighting = true;
+    currentLightCount = Math.min(dv.getUint32(base, true) >>> 0, 4);
+    abgrToVec3(dv.getUint32(base + 4, true) >>> 0, ambientColor, 0);
+    for (var i = 0; i < 4; i++) {
+      if (i < currentLightCount) {
+        var lo = base + 8 + i * 16;
+        abgrToVec3(dv.getUint32(lo, true) >>> 0, lightColors, i * 3);
+        lightDirs[i * 3] = dv.getFloat32(lo + 4, true);
+        lightDirs[i * 3 + 1] = dv.getFloat32(lo + 8, true);
+        lightDirs[i * 3 + 2] = dv.getFloat32(lo + 12, true);
+      } else {
+        lightColors[i * 3] = 0; lightColors[i * 3 + 1] = 0; lightColors[i * 3 + 2] = 0;
+        lightDirs[i * 3] = 0; lightDirs[i * 3 + 1] = -1; lightDirs[i * 3 + 2] = 0;
+      }
+    }
+    gl.uniform1i(uLightCount, currentLightCount);
+    gl.uniform3fv(uAmbient, ambientColor);
+    gl.uniform3fv(uLightDir, lightDirs);
+    gl.uniform3fv(uLightColor, lightColors);
+  }
+
+  function setFog(dv, base) {
+    var color = dv.getUint32(base, true) >>> 0;
+    if (color === 0xffffffff) {
+      gl.uniform1i(uUseFog, 0);
+      return;
+    }
+    abgrToVec3(color, fogColor, 0);
+    gl.uniform3fv(uFogColor, fogColor);
+    gl.uniform1f(uFogNear, dv.getFloat32(base + 4, true));
+    gl.uniform1f(uFogFar, dv.getFloat32(base + 8, true));
+    gl.uniform1i(uUseFog, 1);
+  }
+
+  function setIdentityBones() {
+    for (var i = 0; i < 8; i++) {
+      var o = i * 16;
+      boneMats[o] = 1; boneMats[o + 1] = 0; boneMats[o + 2] = 0; boneMats[o + 3] = 0;
+      boneMats[o + 4] = 0; boneMats[o + 5] = 1; boneMats[o + 6] = 0; boneMats[o + 7] = 0;
+      boneMats[o + 8] = 0; boneMats[o + 9] = 0; boneMats[o + 10] = 1; boneMats[o + 11] = 0;
+      boneMats[o + 12] = 0; boneMats[o + 13] = 0; boneMats[o + 14] = 0; boneMats[o + 15] = 1;
+    }
+  }
+
+  function setBones(dv, base, boneCount) {
+    setIdentityBones();
+    var n = Math.min(boneCount, 8);
+    for (var i = 0; i < n; i++) {
+      var s = base + i * 48;
+      var d = i * 16;
+      boneMats[d] = dv.getFloat32(s, true);
+      boneMats[d + 1] = dv.getFloat32(s + 4, true);
+      boneMats[d + 2] = dv.getFloat32(s + 8, true);
+      boneMats[d + 3] = 0;
+      boneMats[d + 4] = dv.getFloat32(s + 12, true);
+      boneMats[d + 5] = dv.getFloat32(s + 16, true);
+      boneMats[d + 6] = dv.getFloat32(s + 20, true);
+      boneMats[d + 7] = 0;
+      boneMats[d + 8] = dv.getFloat32(s + 24, true);
+      boneMats[d + 9] = dv.getFloat32(s + 28, true);
+      boneMats[d + 10] = dv.getFloat32(s + 32, true);
+      boneMats[d + 11] = 0;
+      boneMats[d + 12] = dv.getFloat32(s + 36, true);
+      boneMats[d + 13] = dv.getFloat32(s + 40, true);
+      boneMats[d + 14] = dv.getFloat32(s + 44, true);
+      boneMats[d + 15] = 1;
+    }
+    gl.uniformMatrix4fv(uBones, false, boneMats);
+  }
+
+  function abgrToVec3(abgr, out, off) {
+    out[off] = (abgr & 255) / 255;
+    out[off + 1] = ((abgr >>> 8) & 255) / 255;
+    out[off + 2] = ((abgr >>> 16) & 255) / 255;
+  }
+
+  // OP_IMM_TRIS: inline dynamic geometry. payload = u32 vertexCount, u32 format,
+  // then 4-byte-padded interleaved vertex bytes. Used rarely, but supports the
+  // same non-skinned vertex layouts as retained meshes.
+  function drawImm(dv, buffer, base, words) {
+    var vertexCount = dv.getUint32(base, true);
+    var format = dv.getUint32(base + 4, true);
+    if ((format & FMT_POS) === 0 || (format & FMT_COLOR) === 0) return; // unsupported -> safe skip
+    var byteLength = words * 4 - 8; // payloadWords includes the 2 header words
+    if (byteLength <= 0 || vertexCount === 0) return;
+    var verts = new Uint8Array(buffer, base + 8, byteLength);
+    gl.bindVertexArray(immVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, immVbo);
+    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+    setupAttribs(format, 0);
+    gl.uniformMatrix4fv(uModel, false, IDENTITY16); // IMM verts are world-space
+    gl.uniform1i(uUseSkin, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
+    gl.bindVertexArray(null);
+  }
+
+  var IDENTITY16 = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  function identity16(m) {
+    m[0] = 1; m[1] = 0; m[2] = 0; m[3] = 0;
+    m[4] = 0; m[5] = 1; m[6] = 0; m[7] = 0;
+    m[8] = 0; m[9] = 0; m[10] = 1; m[11] = 0;
+    m[12] = 0; m[13] = 0; m[14] = 0; m[15] = 1;
+  }
+
+  // ===========================================================================
+  // Audio layer (`snd`) — a WebAudio implementation of the DreamCart sound
+  // contract (framework/src/audio.ts RawSnd). The framework's SoundBank batches a
+  // game's play()/loop() calls into one little-endian DCAU buffer per frame and
+  // hands it to snd.submit(); here we decode it and schedule WebAudio oscillators
+  // / noise buffers so the sound is audible by ear on the Web build. defineVoices
+  // installs the baked, integer-quantized voice table once.
+  //
+  // Wire constants — MUST stay byte-identical to framework/src/audio.ts (DCAU_*)
+  // and the baked-table magic in framework/bake/sound-defs.ts (DCAV_*).
+  var DCAU_MAGIC = 0x55414344; // 'DCAU'
+  var DCAU_VERSION = 0x0001;
+  var SND_OP_TRIGGER = 0x0001;
+  var SND_OP_SET_LOOP = 0x0002;
+  var SND_OP_MASTER = 0x0003;
+  var DCAV_MAGIC = 0x56414344; // 'DCAV' baked voice table
+  var DCAV_VERSION = 0x0001;   // baked voice-table layout version (parity-guarded)
+  var VOICE_BYTES = 24;
+  var SND_SR = 44100;          // matches sound-defs.ts SAMPLE_RATE / audio.rs
+
+  var audioCtx = null, masterGain = null, audioVoices = [], loopNodes = {};
+
+  function ensureAudioCtx() {
+    if (audioCtx) return audioCtx;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { audioCtx = new AC(); } catch (e) { return null; }
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 1;
+    masterGain.connect(audioCtx.destination);
+    return audioCtx;
+  }
+
+  // Parse the baked DCAV voice table into plain JS objects (floats reconstructed
+  // from the integer fields purely for the WebAudio preview — the synth-side ints
+  // never leave the wire on PSP).
+  function parseVoiceTable(buffer) {
+    var dv = new DataView(buffer);
+    // Reject a bad magic OR an unknown version (a layout bump must fail loudly,
+    // not mis-parse the 24-byte records). Header: u32 magic, u16 version, u16 count.
+    if (dv.getUint32(0, true) !== DCAV_MAGIC) return [];
+    if (dv.getUint16(4, true) !== DCAV_VERSION) return [];
+    var count = dv.getUint16(6, true);
+    var out = [];
+    for (var i = 0; i < count; i++) {
+      var o = 8 + i * VOICE_BYTES;
+      out.push({
+        wave: dv.getUint8(o + 0),
+        duty: dv.getUint8(o + 1) / 255,
+        freq: dv.getUint16(o + 2, true),
+        sweep: dv.getInt16(o + 4, true),
+        dur: dv.getUint16(o + 6, true) / SND_SR,
+        attack: dv.getUint16(o + 8, true) / SND_SR,
+        decay: dv.getUint16(o + 10, true) / SND_SR,
+        release: dv.getUint16(o + 12, true) / SND_SR,
+        sustain: dv.getUint16(o + 14, true) / 32767,
+        gain: dv.getUint16(o + 16, true) / 32767,
+      });
+    }
+    return out;
+  }
+
+  var noiseBuf = null;
+  function getNoiseBuffer() {
+    if (noiseBuf) return noiseBuf;
+    var n = SND_SR; // 1s of white noise, looped
+    noiseBuf = audioCtx.createBuffer(1, n, SND_SR);
+    var d = noiseBuf.getChannelData(0);
+    var s = 22222;
+    for (var i = 0; i < n; i++) { s = (s * 1103515245 + 12345) & 0x7fffffff; d[i] = (s / 0x40000000) - 1; }
+    return noiseBuf;
+  }
+  var WAVE_NAMES = ['square', 'sawtooth', 'sine']; // 0,1,2; 3 = noise
+
+  // Build one voice's source + envelope graph, started at audioCtx time `t0`.
+  function scheduleVoice(v, pitch, gain, loop) {
+    if (!audioCtx) return null;
+    var t0 = audioCtx.currentTime;
+    var env = audioCtx.createGain();
+    env.connect(masterGain);
+    var src, freq = v.freq * pitch;
+    if (v.wave === 3) {
+      src = audioCtx.createBufferSource();
+      src.buffer = getNoiseBuffer();
+      src.loop = true;
+    } else {
+      src = audioCtx.createOscillator();
+      src.type = WAVE_NAMES[v.wave] || 'square';
+      src.frequency.setValueAtTime(freq, t0);
+      if (v.sweep) src.frequency.linearRampToValueAtTime(Math.max(20, freq + v.sweep), t0 + v.dur);
+    }
+    src.connect(env);
+    var peak = Math.max(0.0001, v.gain * gain);
+    var sus = peak * v.sustain;
+    env.gain.setValueAtTime(0, t0);
+    env.gain.linearRampToValueAtTime(peak, t0 + v.attack);
+    env.gain.linearRampToValueAtTime(sus, t0 + v.attack + v.decay);
+    if (!loop) {
+      var relStart = Math.max(t0 + v.attack + v.decay, t0 + v.dur - v.release);
+      env.gain.setValueAtTime(sus, relStart);
+      env.gain.linearRampToValueAtTime(0, relStart + v.release);
+      src.start(t0);
+      src.stop(t0 + v.dur + 0.02);
+    } else {
+      src.start(t0);
+    }
+    return { src: src, env: env };
+  }
+
+  var snd = {
+    defineVoices: function (buffer) {
+      ensureAudioCtx();
+      audioVoices = parseVoiceTable(buffer);
+      return audioVoices.length;
+    },
+    submit: function (buffer, byteLength) {
+      if (!ensureAudioCtx()) return;
+      // Browsers gate audio until a user gesture; resume opportunistically.
+      if (audioCtx.state === 'suspended') { try { audioCtx.resume(); } catch (e) {} }
+      var dv = new DataView(buffer, 0, byteLength);
+      if (dv.getUint32(0, true) !== DCAU_MAGIC) return;
+      var ops = dv.getUint16(6, true);
+      for (var i = 0; i < ops; i++) {
+        var o = 8 + i * 8;
+        var op = dv.getUint16(o, true);
+        var vi = dv.getUint16(o + 2, true);
+        var pitch = dv.getUint16(o + 4, true) / 256;
+        var gain = dv.getUint16(o + 6, true) / 255;
+        if (op === SND_OP_MASTER) {
+          if (masterGain) masterGain.gain.value = gain;
+        } else if (op === SND_OP_TRIGGER) {
+          var v = audioVoices[vi];
+          if (v) scheduleVoice(v, pitch || 1, gain, false);
+        } else if (op === SND_OP_SET_LOOP) {
+          var ex = loopNodes[vi];
+          if (gain <= 0) {
+            if (ex) { try { ex.env.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.05); ex.src.stop(audioCtx.currentTime + 0.08); } catch (e) {} loopNodes[vi] = null; }
+          } else if (!ex) {
+            var lv = audioVoices[vi];
+            if (lv) loopNodes[vi] = scheduleVoice(lv, pitch || 1, gain, true);
+          }
+        }
+      }
+    },
+    poll: function () { var n = 0; for (var k in loopNodes) if (loopNodes[k]) n++; return n; },
+  };
+
+  function installGlobals() {
+    window.gfx = gfx;
+    // Only expose g3d when a WebGL2 context was acquired in mount(); otherwise
+    // leave it undefined so the framework skips the 3D pass (capability probe).
+    if (gl) window.g3d = g3d; else { try { delete window.g3d; } catch (e) { window.g3d = undefined; } }
+    // Expose the WebAudio sound contract (no-op for games that never use it).
+    window.snd = snd;
+    window.log = function (msg) { logSink(String(msg)); };
+    // games read globalThis.frame; clear any previous one before (re)loading.
+    try { delete window.frame; } catch (e) { window.frame = undefined; }
+  }
+
+  // Decode a base64 string (the manifest's per-game dcpak) into an ArrayBuffer.
+  function b64ToArrayBuffer(b64) {
+    if (!b64) return undefined;
+    var bin = atob(b64);
+    var n = bin.length;
+    var u8 = new Uint8Array(n);
+    for (var i = 0; i < n; i++) u8[i] = bin.charCodeAt(i);
+    return u8.buffer;
+  }
+
+  // Load (or reload) a game from source. `dcpak` is the game's binary asset pack
+  // (base64 string from the manifest, or an ArrayBuffer). Returns null on success.
+  function load(src, dcpak) {
+    stop();
+    installGlobals();
+    // Expose the asset pack as globalThis.__dcpak BEFORE eval (the baked asset
+    // modules read it at module-eval time). See docs/dcpak-format.md. Set every
+    // load — to the decoded pack, or undefined for asset-free games — so a stale
+    // pack never carries across a reload.
+    try {
+      window.__dcpak = (dcpak instanceof ArrayBuffer) ? dcpak : b64ToArrayBuffer(dcpak);
+    } catch (e) { window.__dcpak = undefined; }
+    // Run the game body in a fresh function scope so its top-level vars don't
+    // leak or collide on reload; the game assigns globalThis.frame itself.
+    try {
+      // eslint-disable-next-line no-new-func
+      var run = new Function(src + '\n//# sourceURL=game.js');
+      run();
+    } catch (e) {
+      logSink('LOAD ERROR: ' + (e && e.stack ? e.stack : e));
+      return e;
+    }
+    if (typeof window.frame !== 'function') {
+      var err = new Error('game did not define globalThis.frame');
+      logSink('ERROR: ' + err.message);
+      return err;
+    }
+    frameCb = window.frame;
+    runningGame = src;
+    // Draw one frame immediately so the canvas isn't blank before start().
+    safeFrame();
+    return null;
+  }
+
+  function safeFrame() {
+    if (!frameCb) return;
+    // Reset the 3D flag BEFORE the game frame: a 3D game's g3d.submit sets it
+    // true (so the HUD gfx.clear goes transparent); a 2D-only frame leaves it
+    // false (so gfx.clear keeps its opaque fill, byte-identical to today).
+    used3dThisFrame = false;
+    try { frameCb(held); }
+    catch (e) { logSink('FRAME ERROR: ' + (e && e.stack ? e.stack : e)); }
+  }
+
+  function tick(now) {
+    rafId = requestAnimationFrame(tick);
+    if (paused) { last = now; return; }
+    var dt = now - last; last = now;
+    if (dt > 250) dt = 250;       // avoid spiral after tab was hidden
+    acc += dt;
+    var STEP = 1000 / 60, steps = 0;
+    while (acc >= STEP && steps < 4) { safeFrame(); acc -= STEP; steps++; statsFrames++; }
+    // fps once per second
+    statsT += dt;
+    if (statsT >= 1000) { fpsSink(Math.round(statsFrames * 1000 / statsT)); statsFrames = 0; statsT = 0; }
+  }
+
+  function start() {
+    if (rafId) return;
+    paused = false; last = performance.now(); acc = 0;
+    rafId = requestAnimationFrame(tick);
+  }
+  function stop() {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    paused = false;
+  }
+  function setPaused(p) { paused = !!p; if (paused) fpsSink(0); }
+  function step() { paused = true; safeFrame(); }   // single-frame advance
+
+  // ---- input ----
+  function onKey(down) {
+    return function (e) {
+      var bit = KEYMAP[e.code];
+      if (bit === undefined) return;
+      e.preventDefault();
+      if (down) held |= bit; else held &= ~bit;
+    };
+  }
+  function pressVirtual(bit, down) { if (down) held |= bit; else held &= ~bit; }
+  function setButtons(mask) { held = mask & 0xffff; }
+
+  // Build a WebGL2 canvas stacked UNDER the Canvas2D HUD canvas, same 480x272
+  // backing store and same CSS box, so the GL 3D layer shows through wherever the
+  // HUD is transparent (docs/3d-design.md §4.3 + §10.1 R2). The public
+  // DreamCart.mount(el) creates the GL canvas here, while the caller still only
+  // knows about the HUD canvas it passed in.
+  function mountGLLayer(hud) {
+    var c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    // Stack: GL canvas underneath (kept in normal flow), the HUD canvas absolutely
+    // overlaid on top. The two are kept the same size+position by syncStack()
+    // below — robust to however the host page sizes the HUD (a CSS rule on the web
+    // playground, an inline letterbox style in the Android WebView).
+    var parent = hud.parentNode;
+    if (!parent) return; // detached HUD canvas — can't stack a sibling
+    // Try to acquire WebGL2 BEFORE touching the DOM layout, so a missing context
+    // leaves the existing 2D-only page byte-identical to today.
+    try {
+      // preserveDrawingBuffer: headless captures read the canvas through the compositor,
+      // which otherwise returns a cleared/last-composited buffer non-deterministically.
+      gl = c.getContext('webgl2', { antialias: false, depth: true, alpha: false, preserveDrawingBuffer: true });
+    } catch (e) { gl = null; }
+    if (!gl) return; // no WebGL2 -> leave g3d undefined; framework skips 3D
+
+    var pcs = window.getComputedStyle(parent);
+    if (pcs.position === 'static') parent.style.position = 'relative';
+    parent.insertBefore(c, hud); // GL canvas takes the HUD's place in flow
+    hud.style.position = 'absolute';
+    // The HUD must be transparent so the GL layer shows through in 3D frames; the
+    // GL layer owns the (cleared) background. The GL canvas inherits the existing
+    // stylesheet's #000 background, so 2D-only frames look identical to today.
+    hud.style.background = 'transparent';
+    glCanvas = c;
+
+    // Keep the two layers registered. The web playground sizes the canvas via a
+    // CSS rule (no inline style) — both canvases inherit it, so we leave the GL
+    // canvas alone. The Android WebView (and any host) instead sizes the HUD with
+    // an inline style.width/height (its fit() letterboxes the fixed 480x272 to the
+    // physical display); we MIRROR that inline size onto the GL canvas, then pin
+    // the HUD over it. A ResizeObserver re-runs this whenever the HUD box changes.
+    function syncStack() {
+      if (hud.style.width) c.style.width = hud.style.width;
+      if (hud.style.height) c.style.height = hud.style.height;
+      hud.style.left = c.offsetLeft + 'px';
+      hud.style.top = c.offsetTop + 'px';
+    }
+    syncStack();
+    if (window.ResizeObserver) {
+      try { new ResizeObserver(syncStack).observe(hud); } catch (e) {}
+    }
+    window.addEventListener('resize', syncStack);
+
+    initGL();
+    if (!gl && glCanvas) { // initGL failed (shader/link) — tear the layer back down
+      parent.removeChild(c);
+      hud.style.position = '';
+      hud.style.left = '';
+      hud.style.top = '';
+      hud.style.background = '';
+      glCanvas = null;
+    }
+  }
+
+  function mount(theCanvas) {
+    canvas = theCanvas;
+    canvas.width = W; canvas.height = H;
+    ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    mountGLLayer(canvas);          // create the optional WebGL2 layer underneath
+    window.addEventListener('keydown', onKey(true));
+    window.addEventListener('keyup', onKey(false));
+    // lose focus -> release all buttons
+    window.addEventListener('blur', function () { held = 0; });
+    gfx.clear(0, 0, 0);
+  }
+
+  window.DreamCart = {
+    W: W, H: H, BTN: BTN,
+    mount: mount, load: load, start: start, stop: stop,
+    setPaused: setPaused, step: step,
+    pressVirtual: pressVirtual,
+    setButtons: setButtons,
+    getButtons: function () { return held; },
+    onLog: function (cb) { logSink = cb; },
+    onFps: function (cb) { fpsSink = cb; },
+    isPaused: function () { return paused; },
+  };
+})();
