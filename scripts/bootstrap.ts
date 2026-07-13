@@ -2,15 +2,24 @@
 // step checks first and skips if already done. Run: bun run bootstrap
 //
 // Sets up: bun deps, submodules, LLVM, PPSSPP, Azahar (3DS emulator),
-// Rust nightly + rust-src, cargo-psp/prxgen/pack-pbp/mksfo, the normalized
-// no-abicalls PSPSDK, and the devkitARM docker image. Prereqs it can't
+// Rust nightly + rust-src, cargo-psp/prxgen/pack-pbp/mksfo, the pinned PSP SDK,
+// and the devkitARM docker image. Prereqs it can't
 // auto-install (Bun, Homebrew, Docker daemon) are detected and reported.
 import { $ } from "bun";
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
+import {
+  ensurePspSdk,
+  hasPinnedPspTools,
+  publishStagedDirectory,
+  PSP_TOOLCHAIN,
+  pspToolchainPaths,
+  withArtifactLock,
+  writePinnedPspToolsReceipt,
+} from "./psp-toolchain.ts";
 
 const root = new URL("..", import.meta.url).pathname;
 const home = process.env.HOME!;
-const TOOLCHAIN = "nightly-2026-05-28";
+const TOOLCHAIN = PSP_TOOLCHAIN.rust.toolchain;
 const arch = process.arch === "arm64" ? "arm64" : "x86_64";
 
 const brew = Bun.which("brew");
@@ -63,48 +72,75 @@ await installAzahar();
 // 5) Rust nightly toolchain
 console.log("rust:");
 if (!rustup) {
-  rec("rustup", "warn", "not found — install from https://rustup.rs, then re-run");
+  rec("rustup", "fail", "not found — install from https://rustup.rs, then re-run");
 } else {
   const haveTc = await run($`${rustup} toolchain list`.env({ ...process.env }));
   const tcList = (await $`${rustup} toolchain list`.nothrow().quiet().text().catch(() => "")) || "";
   if (haveTc && tcList.includes(TOOLCHAIN)) rec("nightly toolchain", "skip", TOOLCHAIN);
   else {
-    const okTc = await run($`${rustup} toolchain install ${TOOLCHAIN} --component rust-src --profile minimal`);
+    const okTc = await run($`${rustup} toolchain install ${TOOLCHAIN} --profile minimal`);
     rec("nightly toolchain", okTc ? "ok" : "fail", TOOLCHAIN);
   }
-  // rust-src component (in case toolchain existed without it)
-  await run($`${rustup} component add rust-src --toolchain ${TOOLCHAIN}`);
-  // pin the override for this repo and runtime subdir
-  if (await run($`${rustup} override set ${TOOLCHAIN}`.cwd(root))) rec("rustup override (repo)", "ok");
-  await run($`${rustup} override set ${TOOLCHAIN}`.cwd(root + "runtime"));
+  // Components may be missing even when the toolchain itself already exists.
+  for (const component of PSP_TOOLCHAIN.rust.components) {
+    const okComponent = await run($`${rustup} component add ${component} --toolchain ${TOOLCHAIN}`);
+    rec(`Rust component ${component}`, okComponent ? "skip" : "fail", TOOLCHAIN);
+  }
+  rec("repo toolchain pin", "skip", "rust-toolchain.toml");
 }
 
-// 6) cargo-psp + prxgen/pack-pbp/mksfo on PATH
+// 6) cargo-psp + packaging tools in the shared Pocket Stack cache
 console.log("cargo-psp tools:");
-const tools = ["cargo-psp", "prxgen", "pack-pbp", "mksfo"];
-if (!cargo && !rustup) {
-  rec("cargo-psp tools", "warn", "cargo not found");
-} else if (!existsSync(root + "rust-psp/cargo-psp/Cargo.toml")) {
-  rec("cargo-psp tools", "warn", "rust-psp submodule missing (run setup)");
+const toolchainPaths = pspToolchainPaths();
+const toolsBin = toolchainPaths.toolsBin;
+const toolsRoot = toolchainPaths.toolsRoot;
+if (hasPinnedPspTools(toolsRoot)) {
+  rec("cargo-psp tools", "skip", toolsBin);
+} else if (!cargo && !rustup) {
+  rec("cargo-psp tools", "fail", "cargo and rustup not found");
 } else {
-  const built = rustup
-    ? await run($`${rustup} run stable cargo build --release --bins`.cwd(root + "rust-psp/cargo-psp"))
-    : await run($`${cargo} build --release --bins`.cwd(root + "rust-psp/cargo-psp"));
-  if (built) {
-    for (const t of tools) await run($`cp ${root}rust-psp/cargo-psp/target/release/${t} ${home}/.cargo/bin/${t}`);
-    rec("cargo-psp tools", "ok");
-  } else rec("cargo-psp tools", "fail", "build failed");
+  try {
+    const installed = await withArtifactLock(
+      `${toolchainPaths.cacheRoot}/psp/.locks/cargo-psp-${PSP_TOOLCHAIN.rustPsp.rev}.lock`,
+      async () => {
+        if (hasPinnedPspTools(toolsRoot)) return false;
+        const staging = `${toolsRoot}.stage-${process.pid}-${Math.random().toString(16).slice(2)}`;
+        rmSync(staging, { recursive: true, force: true });
+        try {
+          const built = rustup
+            ? await run(
+              $`${rustup} run ${TOOLCHAIN} cargo install --git ${PSP_TOOLCHAIN.rustPsp.repository} --rev ${PSP_TOOLCHAIN.rustPsp.rev} --locked --root ${staging} ${PSP_TOOLCHAIN.cargoPsp.package}`,
+            )
+            : await run(
+              $`${cargo} install --git ${PSP_TOOLCHAIN.rustPsp.repository} --rev ${PSP_TOOLCHAIN.rustPsp.rev} --locked --root ${staging} ${PSP_TOOLCHAIN.cargoPsp.package}`,
+            );
+          if (!built || !hasPinnedPspTools(staging)) {
+            throw new Error("cargo install did not produce tools from the pinned revision for this host");
+          }
+          // The receipt is supplementary; exact .crates2.json metadata is
+          // validated before it can be written or published.
+          writePinnedPspToolsReceipt(staging);
+          publishStagedDirectory(staging, toolsRoot);
+          return true;
+        } finally {
+          rmSync(staging, { recursive: true, force: true });
+        }
+      },
+    );
+    rec("cargo-psp tools", installed ? "ok" : "skip", toolsBin);
+  } catch (error) {
+    rec("cargo-psp tools", "fail", error instanceof Error ? error.message : String(error));
+  }
 }
 
-// 7) PSPSDK (clang-built no-abicalls newlib/glue + normalized archive metadata)
+// 7) Verified PSP SDK. QuickJS glue is built no-abicalls by runtime/build.ts;
+// the SDK's upstream newlib remains abicalls, as described there.
 console.log("pspsdk:");
-if (existsSync(root + "mipsel-sony-psp/psp/lib/libc.a")) {
-  rec("PSPSDK", "skip");
-} else {
-  const url = "https://github.com/doodlewind/pspdev/releases/download/sdk-noabicalls-normalized-2026-06-19/mipsel-sony-psp.zip";
-  const okDl = await run($`curl -fsSL -o /tmp/psp-sdk.zip ${url}`);
-  const okUz = okDl && (await run($`unzip -q -o /tmp/psp-sdk.zip -d ${root}`));
-  rec("PSPSDK", okUz ? "ok" : "fail");
+try {
+  const { sdk, installed } = await ensurePspSdk();
+  rec("PSPSDK", installed ? "ok" : "skip", `${sdk.source}: ${sdk.root}`);
+} catch (error) {
+  rec("PSPSDK", "fail", error instanceof Error ? error.message : String(error));
 }
 
 // 8) devkitARM docker image (3DS toolchain)

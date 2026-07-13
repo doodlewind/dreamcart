@@ -5,6 +5,11 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
+import {
+  PSP_TOOLCHAIN,
+  pspToolchainPaths,
+  resolvePspSdk,
+} from "./psp-toolchain.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const runtimeGameDir = join(root, "runtime/src/game");
@@ -55,6 +60,8 @@ function folderName(game: string): string {
 }
 
 function commandPath(name: string): string | null {
+  const cached = join(pspToolchainPaths().toolsBin, name);
+  if (PSP_TOOLCHAIN.cargoPsp.tools.includes(name)) return existsSync(cached) ? cached : null;
   return Bun.which(name) ?? (home !== "" && existsSync(join(home, ".cargo/bin", name)) ? join(home, ".cargo/bin", name) : null);
 }
 
@@ -76,7 +83,11 @@ function checkPspSetup(): void {
   const missing: string[] = [];
   if (!existsSync(join(root, "quickjs-rs/libquickjs-sys/Cargo.toml"))) missing.push("quickjs-rs submodule");
   if (!existsSync(join(root, "rust-psp/psp/Cargo.toml"))) missing.push("rust-psp submodule");
-  if (!existsSync(join(root, "mipsel-sony-psp/psp/lib/libc.a"))) missing.push("PSPSDK");
+  try {
+    resolvePspSdk();
+  } catch (error) {
+    missing.push(error instanceof Error ? error.message : "PSPSDK");
+  }
   if (!commandPath("rustup")) missing.push("rustup");
   if (!commandPath("cargo-psp")) missing.push("cargo-psp");
   if (!commandPath("mksfo")) missing.push("mksfo");

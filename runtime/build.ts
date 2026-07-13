@@ -2,16 +2,28 @@
 // Bun shell. Select the game with PSPJS_GAME. Run: bun runtime/build.ts
 import { $ } from "bun";
 import { existsSync } from "node:fs";
+import {
+  pspBuildEnvironment,
+  PSP_TOOLCHAIN,
+  requirePspTools,
+  resolvePspSdk,
+} from "../scripts/psp-toolchain.ts";
 
 const runtimeDir = new URL(".", import.meta.url).pathname; // .../runtime/
-const root = new URL("..", import.meta.url).pathname; // repo root
-const sdk = root + "mipsel-sony-psp";
 const llvm = existsSync("/opt/homebrew/opt/llvm/bin") ? "/opt/homebrew/opt/llvm/bin" : "/usr/local/opt/llvm/bin";
 const home = process.env.HOME ?? "";
 const pspTarget = runtimeDir + "targets/mipsel-sony-psp.json";
 
-const TOOLCHAIN = "nightly-2026-05-28";
+let sdk: ReturnType<typeof resolvePspSdk>;
+try {
+  sdk = resolvePspSdk();
+  requirePspTools();
+} catch (error) {
+  console.error(`DreamCart PSP build: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+}
 const rustup = Bun.which("rustup") ?? (existsSync(`${home}/.cargo/bin/rustup`) ? `${home}/.cargo/bin/rustup` : null);
+const toolchainEnv = pspBuildEnvironment(sdk);
 const rustflags = [
   process.env.RUSTFLAGS,
   // The prebuilt PSPSDK newlib (libc.a/libm.a) is compiled +abicalls, while the
@@ -27,8 +39,8 @@ const rustflags = [
   "-A unstable-name-collisions",
 ].filter(Boolean).join(" ");
 const env = {
-  ...process.env,
-  PATH: `${llvm}:${home}/.cargo/bin:${process.env.PATH}`,
+  ...toolchainEnv,
+  PATH: `${llvm}:${home}/.cargo/bin:${toolchainEnv.PATH}`,
   RUSTFLAGS: rustflags,
   CRATE_CC_NO_DEFAULTS: "1",
   TARGET_CC: "clang",
@@ -37,7 +49,7 @@ const env = {
   // backend selecting unsupported GP-relative accesses for large C sources.
   TARGET_CFLAGS:
     `-target mipsel-sony-psp -mcpu=mips2 -msingle-float -mlittle-endian -mno-abicalls -fno-pic -G0 -mno-check-zero-division ` +
-    `-fno-stack-protector -I${sdk}/psp/include -I${sdk}/psp/sdk/include`,
+    `-fno-stack-protector -I${sdk.root}/psp/include -I${sdk.root}/psp/sdk/include`,
   // CRITICAL: archive MIPS objects with llvm-ar (Apple ar drops them -> undefined JS_*).
   AR_mipsel_sony_psp: `${llvm}/llvm-ar`,
   RANLIB_mipsel_sony_psp: `${llvm}/llvm-ranlib`,
@@ -64,8 +76,8 @@ const game = process.env.PSPJS_GAME ?? "raw-snake.js";
 console.log("PSP build: " + game);
 if (process.env.PSPJS_TRACE === "1") console.log("PSP trace: enabled");
 if (!rustup) {
-  console.error("rustup not found; run `bun run bootstrap` first");
+  console.error("rustup not found; install rustup, then run `bun run bootstrap`");
   process.exit(1);
 }
-await $`${rustup} run ${TOOLCHAIN} cargo psp ${cargoArgs}`.cwd(runtimeDir).env(env);
+await $`${rustup} run ${PSP_TOOLCHAIN.rust.toolchain} cargo psp ${cargoArgs}`.cwd(runtimeDir).env(env);
 console.log(`output: runtime/target/mipsel-sony-psp/${profile}/EBOOT.PBP`);

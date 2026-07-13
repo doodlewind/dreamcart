@@ -15,6 +15,7 @@ import { $ } from "bun";
 import { existsSync, readdirSync } from "node:fs";
 import { createServer } from "node:net";
 import { createInterface } from "node:readline";
+import { resolvePspSdk } from "./psp-toolchain.ts";
 
 const root = new URL("..", import.meta.url).pathname;
 const PRX = "host0:/pspjs-runtime.prx";
@@ -66,9 +67,13 @@ if (!usbhostfs || !pspsh) {
   process.exit(1);
 }
 
-if (!noBuild && !existsSync(root + "mipsel-sony-psp/psp/lib/libc.a")) {
-  console.error("PSP SDK not found — run `bun run bootstrap` once for this checkout.");
-  process.exit(1);
+if (!noBuild) {
+  try {
+    resolvePspSdk();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 }
 
 const targetDir = root + `runtime/target/mipsel-sony-psp/${profile}`;
