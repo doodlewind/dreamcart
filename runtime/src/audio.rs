@@ -394,7 +394,19 @@ unsafe fn drain_commands() {
                 let slot = alloc_voice();
                 start_voice(slot, def, c.pitch, c.gain, true);
             } else {
-                // re-parameterize gain/pitch of the running loop
+                // re-parameterize gain AND pitch of the running loop. The
+                // speed-modulated engine loop (racing3d/car3d) re-sends SET_LOOP
+                // with a new pitch_q8 as speed changes; recompute the Q16 phase
+                // step from the def's base freq × the new pitch so the loop
+                // actually retunes (LOOP-path bug fix — the old code dropped
+                // c.pitch, so a running loop was stuck at its start pitch). We
+                // retune `step` in place WITHOUT resetting `phase`, so there's no
+                // click/discontinuity, and re-spread the sweep over the duration.
+                let d = TABLE[VOICES[found].def];
+                let base_freq = (d.freq as i32 * c.pitch as i32) >> 8;
+                VOICES[found].step = phase_step(base_freq.max(1));
+                let dur = d.dur.max(1) as i32;
+                VOICES[found].sweep_step = (phase_step(d.sweep as i32) as i32) / dur;
                 VOICES[found].gain_q15 = (c.gain as i32 * 32767) >> 8;
             }
         } else if op == SND_OP_MASTER {

@@ -283,7 +283,13 @@ export class SoundBank {
   private enc = new AudioEncoder();
   private sfxMap: Record<string, number> = {};
   private loopMap: Record<string, number> = {};
-  private loopState: Record<string, { idx: number; on: boolean; pitchQ8: number; gainQ8: number }> = {};
+  // Per-loop desired state (idx + on/pitch/gain set by loop()/stopLoop()) PLUS
+  // the last state actually written to the wire (sentOn/sentPitchQ8/sentGainQ8),
+  // so flush() emits a SET_LOOP only on a real delta — see flush()'s comment.
+  private loopState: Record<string, {
+    idx: number; on: boolean; pitchQ8: number; gainQ8: number;
+    sentOn: boolean; sentPitchQ8: number; sentGainQ8: number;
+  }> = {};
   private stepVoice: number;
   private stepClips: string[] | null;
   private masterQ8: number;
@@ -312,7 +318,12 @@ export class SoundBank {
     for (const [id, voice] of Object.entries(spec.loops ?? {})) {
       const idx = voiceIndex(voice);
       this.loopMap[id] = idx;
-      this.loopState[id] = { idx, on: false, pitchQ8: PITCH_ONE, gainQ8: GAIN_ONE };
+      this.loopState[id] = {
+        idx, on: false, pitchQ8: PITCH_ONE, gainQ8: GAIN_ONE,
+        // sentOn:false / sentGainQ8:0 == "never started on the wire", so an
+        // idle loop that is never started emits NOTHING (no gain==0 spam).
+        sentOn: false, sentPitchQ8: PITCH_ONE, sentGainQ8: 0,
+      };
     }
     this.stepVoice = voiceIndex(spec.steps?.voice ?? 'footstep');
     this.stepClips = spec.steps?.clips ?? null;
@@ -414,15 +425,30 @@ export class SoundBank {
       this.enc.master(this.masterQ8);
       this.firstFlush = false;
     }
+    // Emit a SET_LOOP only on a DELTA from what we last put on the wire. A held
+    // throttle (same quantized pitch) emits nothing; a stopLoop emits exactly ONE
+    // gain==0 op and then stays silent; an idle-from-boot loop emits nothing at
+    // all. This keeps the native command ring frugal and the .snd.json stream
+    // compact (no perpetual gain==0 spam). The deterministic HUD scalars (active/
+    // vu) still track the DESIRED state every frame, independent of wire traffic.
     let activeLoops = 0;
     for (const id in this.loopState) {
       const st = this.loopState[id];
       if (st.on) {
         activeLoops++;
-        this.enc.setLoop(st.idx, st.pitchQ8, st.gainQ8);
         if (st.gainQ8 > this.vu) this.vu = st.gainQ8;
-      } else {
-        this.enc.setLoop(st.idx, st.pitchQ8, 0);
+      }
+      // The wire op we WOULD send this frame: gain==0 means "stopped".
+      const wantGainQ8 = st.on ? st.gainQ8 : 0;
+      const wantPitchQ8 = st.on ? st.pitchQ8 : st.sentPitchQ8;
+      const changed = st.on !== st.sentOn
+        || wantGainQ8 !== st.sentGainQ8
+        || (st.on && wantPitchQ8 !== st.sentPitchQ8);
+      if (changed) {
+        this.enc.setLoop(st.idx, wantPitchQ8, wantGainQ8);
+        st.sentOn = st.on;
+        st.sentPitchQ8 = wantPitchQ8;
+        st.sentGainQ8 = wantGainQ8;
       }
     }
     // active = one-shots issued THIS frame + currently-playing loops. Resetting

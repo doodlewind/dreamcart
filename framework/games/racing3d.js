@@ -15,15 +15,24 @@ import {
 import { ActionMap } from '../src/action';
 import { CharController, Collide } from '../src/controller';
 import { loadScene } from '../src/scene-desc';
+import { SoundBank } from '../src/audio';
+import { voiceTable } from '../src/assets-audio';
 
 /** @import { UpdateContext, Graphics, Node3D, Scene3D } from '../src/index' */
 
+const MAX_SPEED = 26; // matches the controller's maxSpeed
 
 class RacingScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
   /** @type {Node3D} */ car = /** @type {any} */ (null);
   /** @type {CharController} */ ctrl = /** @type {any} */ (null);
   /** @type {ActionMap} */ act = /** @type {any} */ (null);
+  /** @type {SoundBank} */ snd = /** @type {any} */ (null);
+  // Last quantized engine pitch (Q8.8 integer) actually sent to the loop, and
+  // whether the loop is currently running. We only re-issue loop()/stopLoop()
+  // when one of these CHANGES, so a held throttle never spams the command ring.
+  enginePitchQ8 = -1;
+  engineOn = false;
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -56,12 +65,49 @@ class RacingScene extends Scene {
       STEER: { axis: 'lx', axisButtons: [Btn.Left, Btn.Right] },
       RESET: { buttons: [Btn.Start] },
     });
+
+    // Engine loop: a single sustained 'engine' voice whose pitch tracks speed.
+    // No HUD is added (the golden pixels must stay byte-exact) — the only new,
+    // additive artifact is the .snd.json event stream recording the SET_LOOP.
+    this.snd = new SoundBank({ loops: { engine: 'engine' }, master: 0.8 });
+    if (typeof snd !== 'undefined' && snd) snd.defineVoices(voiceTable());
+    ctx.engine.audio = this.snd;
+
     ctx.engine.scene3d = this.world;
   }
 
   reset() {
     const s = this.ctrl.s;
     s.x = 0; s.z = 0; s.heading = 0; s.speed = 0;
+    if (this.snd) this.snd.stopLoop('engine');
+    this.enginePitchQ8 = -1;
+    this.engineOn = false;
+  }
+
+  /**
+   * Drive the engine loop from speed. Idle (speed ~0) stops the loop; otherwise
+   * pitch = 0.6 + speed/MAX_SPEED, quantized to Q8.8. We only call loop()/
+   * stopLoop() when the QUANTIZED pitch or the on/off state changes, so a held
+   * throttle issues at most one op per quantization step — never per frame.
+   * @param {number} speed
+   */
+  driveEngine(speed) {
+    if (!this.snd) return;
+    if (speed <= 0.05) {
+      if (this.engineOn) {
+        this.snd.stopLoop('engine');
+        this.engineOn = false;
+        this.enginePitchQ8 = -1;
+      }
+      return;
+    }
+    const pitch = 0.6 + speed / MAX_SPEED;
+    const pitchQ8 = Math.round(pitch * 256);
+    if (!this.engineOn || pitchQ8 !== this.enginePitchQ8) {
+      this.snd.loop('engine', { pitch });
+      this.engineOn = true;
+      this.enginePitchQ8 = pitchQ8;
+    }
   }
 
   /** @param {UpdateContext} ctx */
@@ -76,6 +122,9 @@ class RacingScene extends Scene {
     this.car.position = new Vec3(s.x, 0.4, s.z);
     this.car.rotation = Quat.fromEuler(0, s.heading, 0);
     this.ctrl.applyCam(this.world.camera);
+
+    // Audio only (invisible): retune/stop the engine loop from current speed.
+    this.driveEngine(s.speed);
   }
 
   /** @param {Graphics} g */

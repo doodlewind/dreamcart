@@ -15,12 +15,15 @@ import { CharController, Collide } from '../src/controller';
 import { ActionMap } from '../src/action';
 import { KENNEY_CAR } from '../src/assets-kenney-car';
 import { NATURE_PROPS } from '../src/assets-kenney-nature';
+import { SoundBank } from '../src/audio';
+import { voiceTable } from '../src/assets-audio';
 
 /** @import { UpdateContext, Graphics, Node3D as N3D } from '../src/index' */
 
 
 const WHEEL_RADIUS = 0.3; // baked wheel hub sits at y=0.3 -> ~0.3 radius
 const MAX_STEER = 0.5; // rad
+const MAX_SPEED = 26; // matches the controller's maxSpeed
 
 class CarScene extends Scene {
   /** @type {Scene3D} */ world = /** @type {any} */ (null);
@@ -28,9 +31,14 @@ class CarScene extends Scene {
   /** @type {{ node: N3D, front: boolean }[]} */ wheels = [];
   /** @type {CharController} */ ctrl = /** @type {any} */ (null);
   /** @type {ActionMap} */ act = /** @type {any} */ (null);
+  /** @type {SoundBank} */ snd = /** @type {any} */ (null);
   roll = 0;
   steer = 0;
   fps = new Fps();
+  // See racing3d.js: re-issue the engine loop only on quantized-pitch / on-off
+  // change so a held throttle never floods the audio command ring.
+  enginePitchQ8 = -1;
+  engineOn = false;
 
   /** @param {UpdateContext} ctx */
   onEnter(ctx) {
@@ -90,6 +98,14 @@ class CarScene extends Scene {
       STEER: { axis: 'lx', axisButtons: [Btn.Left, Btn.Right] },
       RESET: { buttons: [Btn.Start] },
     });
+
+    // Engine loop (same pattern as racing3d): one sustained 'engine' voice whose
+    // pitch tracks ctrl.s.speed. No HUD change — golden pixels stay byte-exact;
+    // the only new artifact is the additive .snd.json event stream.
+    this.snd = new SoundBank({ loops: { engine: 'engine' }, master: 0.8 });
+    if (typeof snd !== 'undefined' && snd) snd.defineVoices(voiceTable());
+    ctx.engine.audio = this.snd;
+
     ctx.engine.scene3d = this.world;
   }
 
@@ -98,6 +114,34 @@ class CarScene extends Scene {
     s.x = 0; s.z = 0; s.heading = 0; s.speed = 0;
     this.roll = 0;
     this.steer = 0;
+    if (this.snd) this.snd.stopLoop('engine');
+    this.enginePitchQ8 = -1;
+    this.engineOn = false;
+  }
+
+  /**
+   * Drive the engine loop from speed (see racing3d.driveEngine — identical
+   * policy). Only re-issues loop()/stopLoop() on a quantized-pitch or on/off
+   * change, so the command ring can't overflow under a held throttle.
+   * @param {number} speed
+   */
+  driveEngine(speed) {
+    if (!this.snd) return;
+    if (speed <= 0.05) {
+      if (this.engineOn) {
+        this.snd.stopLoop('engine');
+        this.engineOn = false;
+        this.enginePitchQ8 = -1;
+      }
+      return;
+    }
+    const pitch = 0.6 + speed / MAX_SPEED;
+    const pitchQ8 = Math.round(pitch * 256);
+    if (!this.engineOn || pitchQ8 !== this.enginePitchQ8) {
+      this.snd.loop('engine', { pitch });
+      this.engineOn = true;
+      this.enginePitchQ8 = pitchQ8;
+    }
   }
 
   /** @param {UpdateContext} ctx */
@@ -123,6 +167,9 @@ class CarScene extends Scene {
     this.car.position = new Vec3(s.x, 0, s.z);
     this.car.rotation = Quat.fromEuler(0, s.heading, 0);
     this.ctrl.applyCam(this.world.camera);
+
+    // Audio only (invisible): retune/stop the engine loop from current speed.
+    this.driveEngine(s.speed);
   }
 
   /** @param {Graphics} g */
